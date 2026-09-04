@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <title>Kiki Immersion</title>
   <style>
-    :root { --paper:#EFEBE3; --ink:#141413; }
+    :root { --paper:#EFEBE3; --ink:#1.2.03; }
     html,body { margin:0; background:var(--paper); color:var(--ink);
       font-family: "Iowan Old Style", Palatino, "Songti SC", serif; }
     main { max-width: 34rem; margin: 3rem auto; padding: 0 1.5rem 4rem; }
@@ -34,7 +34,7 @@
 <body>
 <main>
   <h1>Kiki Immersion</h1>
-  <p class="note">v1.1.0 — YouTube captions for touch immersion. No translation.</p>
+  <p class="note">v1.2.0 — YouTube captions for touch immersion. No translation.</p>
   <div class="row">
     <input type="checkbox" id="enabled" />
     <label for="enabled" style="margin:0">Enable overlay</label>
@@ -83,9 +83,17 @@
     <label for="aiEnabled" style="margin:0">Use AI when Yomitan has no entry</label>
   </div>
 
+  <h2>Backup</h2>
+  <p class="note">Plain JSON. Includes fonts, AI URL / model / key, prompts, and toggles. Reinstall then Import.</p>
+  <div class="row">
+    <button type="button" id="exportCfg" style="margin-top:0">Export</button>
+    <button type="button" id="importCfg" style="margin-top:0">Import</button>
+    <input id="importFile" type="file" accept="application/json,.json,.txt" hidden />
+  </div>
+
   <h2>About</h2>
   <div class="about">
-    <p>Kiki Immersion 1.0.0</p>
+    <p>Kiki Immersion 1.2.0</p>
     <img src="../icons/about.jpg" alt="Kiki watching television" />
     <p>A small watcher. Large type. One line at a time.</p>
   </div>

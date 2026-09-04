@@ -132,4 +132,82 @@ document.getElementById("aiTest").addEventListener("click", async () => {
   });
 });
 
+function collectConfig(cb) {
+  chrome.storage.local.get(null, (local) => {
+    cb({
+      kiki: 1,
+      enabled: document.getElementById("enabled").checked,
+      hideNativeCaptions: document.getElementById("hideNativeCaptions").checked,
+      fontSize: Number(document.getElementById("fontSize").value) || 28,
+      fontFamily: sel.value,
+      apiBase: document.getElementById("apiBase").value.trim(),
+      apiKey: document.getElementById("apiKey").value,
+      apiModel: document.getElementById("apiModel").value.trim(),
+      aiLang: document.getElementById("aiLang").value,
+      promptZh: document.getElementById("promptZh").value,
+      promptEn: document.getElementById("promptEn").value,
+      aiEnabled: document.getElementById("aiEnabled").checked,
+      aiTested: !!local.aiTested
+    });
+  });
+}
+document.getElementById("exportCfg").addEventListener("click", () => {
+  collectConfig((cfg) => {
+    const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "kiki-immersion.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+});
+document.getElementById("importCfg").addEventListener("click", () => {
+  document.getElementById("importFile").click();
+});
+document.getElementById("importFile").addEventListener("change", (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const cfg = JSON.parse(String(reader.result));
+      document.getElementById("enabled").checked = cfg.enabled !== false;
+      document.getElementById("hideNativeCaptions").checked = cfg.hideNativeCaptions !== false;
+      document.getElementById("fontSize").value = cfg.fontSize || 28;
+      if (cfg.fontFamily) fillSelect([...FALLBACK, cfg.fontFamily], cfg.fontFamily);
+      preview.style.fontSize = (cfg.fontSize || 28) + "px";
+      preview.style.fontFamily = sel.value;
+      document.getElementById("apiBase").value = cfg.apiBase || "";
+      document.getElementById("apiKey").value = cfg.apiKey || "";
+      document.getElementById("apiModel").value = cfg.apiModel || "";
+      document.getElementById("aiLang").value = cfg.aiLang || "zh";
+      if (cfg.promptZh) document.getElementById("promptZh").value = cfg.promptZh;
+      if (cfg.promptEn) document.getElementById("promptEn").value = cfg.promptEn;
+      chrome.storage.sync.set({
+        enabled: cfg.enabled !== false,
+        hideNativeCaptions: cfg.hideNativeCaptions !== false,
+        fontSize: Number(cfg.fontSize) || 28,
+        fontFamily: cfg.fontFamily || sel.value
+      });
+      chrome.storage.local.set({
+        apiBase: cfg.apiBase || "",
+        apiKey: cfg.apiKey || "",
+        apiModel: cfg.apiModel || "",
+        aiLang: cfg.aiLang || "zh",
+        promptZh: cfg.promptZh || PROMPT_ZH,
+        promptEn: cfg.promptEn || PROMPT_EN,
+        aiTested: !!cfg.aiTested,
+        aiEnabled: !!(cfg.aiTested && cfg.aiEnabled)
+      }, () => {
+        setAiSwitch(!!cfg.aiTested, !!(cfg.aiTested && cfg.aiEnabled));
+        document.getElementById("aiStatus").textContent = "imported";
+      });
+    } catch (err) {
+      alert("Invalid config: " + err);
+    }
+  };
+  reader.readAsText(file);
+});
+
 load();

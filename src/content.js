@@ -360,7 +360,7 @@
     const el = $("#kiki-ai");
     if (!el) return;
     el.hidden = false;
-    el.querySelector(".kiki-ai-bd").textContent = text;
+    el.querySelector(".kiki-ai-bd").textContent = String(text || "").replace(/\*\*/g, "");
   }
 
   function askAi(word, sentence) {
@@ -382,8 +382,61 @@
 
   function bindZones(root) {
     root.querySelectorAll(".kiki-zone").forEach((z) => {
-      z.addEventListener("pointerdown", onZonePointer, { passive: false });
+      z.addEventListener("pointerdown", onZonePointer, { passive: false, capture: true });
+      z.addEventListener("dblclick", (e) => { e.preventDefault(); e.stopPropagation(); }, true);
     });
+    bindNativeGuard();
+  }
+
+  function bindNativeGuard() {
+    if (bindNativeGuard._on) return;
+    bindNativeGuard._on = true;
+    const stealTypes = ["pointerdown", "pointerup", "pointercancel", "touchstart", "touchend", "touchcancel", "click", "dblclick"];
+    stealTypes.forEach((type) => {
+      document.addEventListener(type, onNativeGuard, { capture: true, passive: false });
+    });
+  }
+
+  function onNativeGuard(e) {
+    if (!STATE.enabled) return;
+    const p = playerEl();
+    if (!p || !p.contains(e.target)) return;
+    if (e.target.closest("#kiki-captions") || e.target.closest("#kiki-ai") || e.target.closest("#kiki-track-menu")) return;
+    if (e.target.closest("#kiki-btn-toggle") || e.target.closest("#kiki-btn-track")) return;
+    if (document.documentElement.classList.contains("kiki-show-chrome") && e.target.closest(".ytp-chrome-bottom, .ytp-chrome-top, .ytp-popup")) return;
+    const r = p.getBoundingClientRect();
+    if (r.width < 8) return;
+    const y = (e.clientY - r.top) / r.height;
+    if (e.clientY == null && e.touches && e.touches[0]) {
+      /* touchstart */
+    }
+    const cx = e.clientX != null ? e.clientX : e.changedTouches?.[0]?.clientX;
+    const cy = e.clientY != null ? e.clientY : e.changedTouches?.[0]?.clientY;
+    if (cx == null) return;
+    const yn = (cy - r.top) / r.height;
+    if (yn > 0.82) return;
+    if (e.cancelable) e.preventDefault();
+    e.stopImmediatePropagation();
+    if (e.type === "pointerdown") {
+      const fake = { currentTarget: zoneFromPoint(p, cx, cy), target: e.target, preventDefault() {}, stopPropagation() {} };
+      if (fake.currentTarget) onZonePointer(fake);
+    }
+    document.querySelectorAll(".ytp-doubletap-ui, .ytp-doubletap-ui-legacy, .ytp-doubletap-overlay").forEach((n) => n.remove());
+  }
+
+  function zoneFromPoint(p, cx, cy) {
+    const r = p.getBoundingClientRect();
+    const x = (cx - r.left) / r.width;
+    const y = (cy - r.top) / r.height;
+    const top = y < 0.22;
+    let name = "fs";
+    if (top && x < 0.18) name = "hd";
+    else if (top && x > 0.82) name = "ctrl";
+    else if (top) name = "pause";
+    else if (x < 0.18) name = "left";
+    else if (x > 0.82) name = "right";
+    else name = "fs";
+    return p.querySelector(`.kiki-zone[data-zone="${name}"]`);
   }
 
   function onZonePointer(e) {

@@ -144,26 +144,55 @@ html.kiki-show-chrome .ytp-gradient-bottom {
 
 #kiki-ai {
   position: absolute;
-  right: 4%;
-  top: 18%;
-  width: min(360px, 46%);
-  max-height: 48%;
-  overflow: auto;
+  left: 50%;
+  bottom: calc(7% + var(--kiki-font, 28px) * 2.6 + 18px);
+  transform: translateX(-50%);
+  width: 760px;
+  max-width: 92%;
+  max-height: 54%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   pointer-events: auto;
-  z-index: 4;
+  z-index: 5;
   background: var(--kiki-paper);
   color: var(--kiki-ink);
   border: 1px solid var(--kiki-ink);
-  padding: 0.7rem 0.85rem 0.9rem;
-  font-size: 15px;
+  padding: 0.8rem 1.1rem 1.05rem;
+  font-size: 24px;
   line-height: 1.45;
+  box-sizing: border-box;
 }
 #kiki-ai .kiki-ai-hd {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.5rem;
   opacity: 0.7;
+}
+#kiki-ai .kiki-ai-bd {
+  font-size: 24px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+html.kiki-lock-chrome .ytp-doubletap-ui,
+html.kiki-lock-chrome .ytp-doubletap-ui-legacy,
+html.kiki-lock-chrome .ytp-doubletap-overlay,
+html.kiki-lock-chrome .ytp-doubletap-seek-chapter,
+html.kiki-lock-chrome .ytp-doubletap-overlay-inner,
+html.kiki-lock-chrome .ytp-bezel,
+html.kiki-lock-chrome .ytp-skip-intro,
+html.kiki-lock-chrome .ytp-fastseek-overlay {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+html.kiki-lock-chrome .html5-video-player,
+html.kiki-lock-chrome video.html5-main-video,
+html.kiki-lock-chrome .html5-video-container {
+  touch-action: none !important;
 }
 #kiki-toast {
   position: absolute;
