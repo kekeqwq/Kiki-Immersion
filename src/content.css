@@ -117,8 +117,9 @@ html.kiki-show-chrome .ytp-gradient-bottom {
   max-width: 100%;
   padding: 0.28em 0.7em;
   margin: 0.12em 0;
-  background: color-mix(in srgb, var(--kiki-paper) 86%, transparent);
-  border: 1px solid rgba(20, 20, 19, 0.18);
+  color: var(--kiki-ink);
+  background: color-mix(in srgb, var(--kiki-paper) calc(var(--kiki-bg-alpha, 86) * 1%), transparent);
+  border: 1px solid color-mix(in srgb, var(--kiki-ink) 18%, transparent);
   line-height: 1.35;
   letter-spacing: 0.01em;
   font-size: var(--kiki-font, 28px);
@@ -156,9 +157,9 @@ html.kiki-show-chrome .ytp-gradient-bottom {
   overscroll-behavior: contain;
   pointer-events: auto;
   z-index: 5;
-  background: var(--kiki-paper);
   color: var(--kiki-ink);
-  border: 1px solid var(--kiki-ink);
+  background: color-mix(in srgb, var(--kiki-paper) calc(var(--kiki-bg-alpha, 86) * 1%), transparent);
+  border: 1px solid color-mix(in srgb, var(--kiki-ink) 18%, transparent);
   padding: 0.8rem 1.1rem 1.05rem;
   font-size: 24px;
   line-height: 1.45;

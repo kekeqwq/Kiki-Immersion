@@ -49,13 +49,60 @@ function setAiSwitch(tested, enabled) {
   box.checked = !!(tested && enabled);
 }
 
+function hexish(v, fallback) {
+  const s = String(v || "").trim();
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s) ? s : fallback;
+}
+
+function paintPreview() {
+  const color = hexish(document.getElementById("captionColor").value, "#141413");
+  const bg = hexish(document.getElementById("captionBg").value, "#EFEBE3");
+  const a = Number(document.getElementById("captionBgAlpha").value);
+  document.getElementById("alphaLabel").textContent = a + "%";
+  preview.style.fontFamily = sel.value;
+  preview.style.fontSize = (document.getElementById("fontSize").value || 28) + "px";
+  preview.style.color = color;
+  preview.style.background = colorMix(bg, a);
+}
+
+function colorMix(hex, alpha) {
+  const h = hexish(hex, "#EFEBE3").slice(1);
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${(alpha || 0) / 100})`;
+}
+
+function bindColor(textId, pickId) {
+  const text = document.getElementById(textId);
+  const pick = document.getElementById(pickId);
+  const syncPick = () => {
+    const v = hexish(text.value, pick.value || "#000000");
+    if (v.length === 4) {
+      pick.value = "#" + v[1] + v[1] + v[2] + v[2] + v[3] + v[3];
+    } else pick.value = v;
+  };
+  text.addEventListener("input", () => { syncPick(); paintPreview(); });
+  pick.addEventListener("input", () => { text.value = pick.value; paintPreview(); });
+  return syncPick;
+}
+
+const syncColorPick = bindColor("captionColor", "captionColorPick");
+const syncBgPick = bindColor("captionBg", "captionBgPick");
+
 function load() {
   chrome.storage.sync.get(null, (s) => {
     document.getElementById("enabled").checked = s.enabled !== false;
     document.getElementById("hideNativeCaptions").checked = s.hideNativeCaptions !== false;
     document.getElementById("fontSize").value = s.fontSize || 28;
+    document.getElementById("captionColor").value = s.captionColor || "#141413";
+    document.getElementById("captionBg").value = s.captionBg || "#EFEBE3";
+    document.getElementById("captionBgAlpha").value = s.captionBgAlpha != null ? s.captionBgAlpha : 86;
     fillSelect(FALLBACK, s.fontFamily || "Georgia");
-    preview.style.fontSize = (s.fontSize || 28) + "px";
+    syncColorPick();
+    syncBgPick();
+    paintPreview();
   });
   chrome.storage.local.get(null, (s) => {
     document.getElementById("apiBase").value = s.apiBase || "https://api.openai.com/v1";
@@ -68,17 +115,19 @@ function load() {
     document.getElementById("aiStatus").textContent = s.aiTested ? "tested" : "";
   });
 }
-sel.addEventListener("change", () => { preview.style.fontFamily = sel.value; });
-document.getElementById("fontSize").addEventListener("input", () => {
-  preview.style.fontSize = document.getElementById("fontSize").value + "px";
-});
+sel.addEventListener("change", paintPreview);
+document.getElementById("fontSize").addEventListener("input", paintPreview);
+document.getElementById("captionBgAlpha").addEventListener("input", paintPreview);
 document.getElementById("scanFonts").addEventListener("click", scanLocal);
 document.getElementById("save").addEventListener("click", () => {
   chrome.storage.sync.set({
     enabled: document.getElementById("enabled").checked,
     hideNativeCaptions: document.getElementById("hideNativeCaptions").checked,
     fontSize: Number(document.getElementById("fontSize").value) || 28,
-    fontFamily: sel.value
+    fontFamily: sel.value,
+    captionColor: hexish(document.getElementById("captionColor").value, "#141413"),
+    captionBg: hexish(document.getElementById("captionBg").value, "#EFEBE3"),
+    captionBgAlpha: Number(document.getElementById("captionBgAlpha").value)
   });
   chrome.storage.local.get(["aiTested"], (s) => {
     chrome.storage.local.set({
@@ -140,6 +189,9 @@ function collectConfig(cb) {
       hideNativeCaptions: document.getElementById("hideNativeCaptions").checked,
       fontSize: Number(document.getElementById("fontSize").value) || 28,
       fontFamily: sel.value,
+      captionColor: hexish(document.getElementById("captionColor").value, "#141413"),
+      captionBg: hexish(document.getElementById("captionBg").value, "#EFEBE3"),
+      captionBgAlpha: Number(document.getElementById("captionBgAlpha").value),
       apiBase: document.getElementById("apiBase").value.trim(),
       apiKey: document.getElementById("apiKey").value,
       apiModel: document.getElementById("apiModel").value.trim(),
@@ -176,8 +228,12 @@ document.getElementById("importFile").addEventListener("change", (e) => {
       document.getElementById("hideNativeCaptions").checked = cfg.hideNativeCaptions !== false;
       document.getElementById("fontSize").value = cfg.fontSize || 28;
       if (cfg.fontFamily) fillSelect([...FALLBACK, cfg.fontFamily], cfg.fontFamily);
-      preview.style.fontSize = (cfg.fontSize || 28) + "px";
-      preview.style.fontFamily = sel.value;
+      document.getElementById("captionColor").value = cfg.captionColor || "#141413";
+      document.getElementById("captionBg").value = cfg.captionBg || "#EFEBE3";
+      document.getElementById("captionBgAlpha").value = cfg.captionBgAlpha != null ? cfg.captionBgAlpha : 86;
+      syncColorPick();
+      syncBgPick();
+      paintPreview();
       document.getElementById("apiBase").value = cfg.apiBase || "";
       document.getElementById("apiKey").value = cfg.apiKey || "";
       document.getElementById("apiModel").value = cfg.apiModel || "";
@@ -188,7 +244,10 @@ document.getElementById("importFile").addEventListener("change", (e) => {
         enabled: cfg.enabled !== false,
         hideNativeCaptions: cfg.hideNativeCaptions !== false,
         fontSize: Number(cfg.fontSize) || 28,
-        fontFamily: cfg.fontFamily || sel.value
+        fontFamily: cfg.fontFamily || sel.value,
+        captionColor: hexish(cfg.captionColor, "#141413"),
+        captionBg: hexish(cfg.captionBg, "#EFEBE3"),
+        captionBgAlpha: Number(cfg.captionBgAlpha != null ? cfg.captionBgAlpha : 86)
       });
       chrome.storage.local.set({
         apiBase: cfg.apiBase || "",

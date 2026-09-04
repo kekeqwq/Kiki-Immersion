@@ -4,6 +4,9 @@
     fontSize: 28,
     fontFamily: "Iowan Old Style, Palatino Linotype, Palatino, Songti SC, serif",
     hideNativeCaptions: true,
+    captionColor: "#141413",
+    captionBg: "#EFEBE3",
+    captionBgAlpha: 86,
     preferredLangs: ["en-US", "en-GB", "en"],
     cues: [],
     tracks: [],
@@ -91,8 +94,7 @@
       host.appendChild(root);
       bindZones(root);
     }
-    root.style.setProperty("--kiki-font", `${STATE.fontSize}px`);
-    root.style.setProperty("--kiki-family", STATE.fontFamily);
+    paintRoot(root);
     root.style.display = STATE.enabled ? "" : "none";
     document.documentElement.classList.toggle("kiki-hide-native", STATE.enabled && STATE.hideNativeCaptions);
     document.documentElement.classList.toggle("kiki-lock-chrome", !!STATE.enabled);
@@ -233,6 +235,7 @@
       line.appendChild(w);
     });
     box.appendChild(line);
+    requestAnimationFrame(placeAi);
   }
 
   function onWordPointer(e) {
@@ -361,6 +364,19 @@
     if (!el) return;
     el.hidden = false;
     el.querySelector(".kiki-ai-bd").textContent = String(text || "").replace(/\*\*/g, "");
+    placeAi();
+  }
+
+  function placeAi() {
+    const root = $("#kiki-root");
+    const cap = $("#kiki-captions");
+    const ai = $("#kiki-ai");
+    if (!root || !cap || !ai || ai.hidden) return;
+    const rr = root.getBoundingClientRect();
+    const cr = cap.getBoundingClientRect();
+    const gap = 18;
+    const bottom = Math.max(72, rr.bottom - cr.top + gap);
+    ai.style.bottom = bottom + "px";
   }
 
   function askAi(word, sentence) {
@@ -816,18 +832,27 @@
     syncChromeButtons();
   }
 
+  function paintRoot(root) {
+    if (!root) return;
+    root.style.setProperty("--kiki-font", `${STATE.fontSize}px`);
+    root.style.setProperty("--kiki-family", STATE.fontFamily);
+    root.style.setProperty("--kiki-ink", STATE.captionColor || "#141413");
+    root.style.setProperty("--kiki-paper", STATE.captionBg || "#EFEBE3");
+    root.style.setProperty("--kiki-bg-alpha", String(STATE.captionBgAlpha ?? 86));
+  }
+
   function applySettings(s) {
     if (s.enabled != null) STATE.enabled = s.enabled;
     if (s.fontSize != null) STATE.fontSize = s.fontSize;
     if (s.fontFamily != null) STATE.fontFamily = s.fontFamily;
     if (s.hideNativeCaptions != null) STATE.hideNativeCaptions = s.hideNativeCaptions;
-    const root = $("#kiki-root");
-    if (root) {
-      root.style.setProperty("--kiki-font", `${STATE.fontSize}px`);
-      root.style.setProperty("--kiki-family", STATE.fontFamily);
-    }
+    if (s.captionColor) STATE.captionColor = s.captionColor;
+    if (s.captionBg) STATE.captionBg = s.captionBg;
+    if (s.captionBgAlpha != null) STATE.captionBgAlpha = Number(s.captionBgAlpha);
+    paintRoot($("#kiki-root"));
     applyEnabled();
     renderCue(STATE.idx);
+    placeAi();
   }
 
   injectPage();
@@ -860,6 +885,7 @@
   });
 
   setInterval(tick, 120);
+  window.addEventListener("resize", () => requestAnimationFrame(placeAi));
 
   document.addEventListener("click", (e) => {
     const menu = $("#kiki-track-menu");
