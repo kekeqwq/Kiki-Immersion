@@ -194,7 +194,15 @@
         if (!tracks.length) {
           try { tracks = (await androidTracks(videoId())).map(summarize); } catch {}
         }
-        reply(d.id, { ok: true, type: "list", tracks, videoId: videoId() });
+        const pr = playerResponse();
+        let audioLang = pr?.videoDetails?.defaultAudioLanguage || pr?.microformat?.playerMicroformatRenderer?.audioLanguage || "";
+        let currentLang = "";
+        try {
+          const p = player();
+          const cur = p && p.getOption && p.getOption("captions", "track");
+          currentLang = cur?.languageCode || cur?.language || "";
+        } catch {}
+        reply(d.id, { ok: true, type: "list", tracks, videoId: videoId(), audioLang, currentLang });
       } else if (d.type === "fetch") {
         const out = await loadCaption(d.lang);
         reply(d.id, { ok: true, type: "fetch", raw: out.raw, via: out.via });

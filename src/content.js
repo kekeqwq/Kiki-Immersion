@@ -15,6 +15,9 @@
     pausedForLookup: false,
     lookupEl: null,
     aiEnabled: false,
+    aiToken: 0,
+    audioLang: "",
+    currentLang: "",
     fs: false,
     videoId: null,
     tapTimer: null,
@@ -275,6 +278,7 @@
   }
 
   function closeLookup() {
+    STATE.aiToken++;
     clearTimeout(scheduleAiFallback._t);
     const active = STATE.lookupEl;
     STATE.lookupEl = null;
@@ -332,23 +336,38 @@
   }
 
   function yomitanOpen() {
-    const frames = [...document.querySelectorAll("iframe")];
-    return !!(
-      document.querySelector("iframe[src*='yomitan']") ||
-      document.querySelector("iframe[src*='yomichan']") ||
-      document.querySelector(".yomitan-popup") ||
-      frames.some((f) => (f.id || f.className || f.src || "").toLowerCase().includes("yomitan"))
-    );
+    const nodes = document.querySelectorAll("iframe, [id*='yomitan' i], [class*='yomitan' i], [id*='yomichan' i], [class*='yomichan' i]");
+    for (const n of nodes) {
+      const blob = `${n.id || ""} ${n.className || ""} ${n.src || ""} ${n.title || ""}`.toLowerCase();
+      if (!/yomitan|yomichan/.test(blob)) continue;
+      if (n.hidden) continue;
+      const st = window.getComputedStyle(n);
+      if (st.display === "none" || st.visibility === "hidden" || Number(st.opacity) === 0) continue;
+      const r = n.getBoundingClientRect();
+      if (r.width >= 60 && r.height >= 60) return true;
+    }
+    return false;
   }
 
   function scheduleAiFallback(word, sentence) {
     clearTimeout(scheduleAiFallback._t);
     if (!STATE.aiEnabled) return;
-    scheduleAiFallback._t = setTimeout(() => {
-      if (STATE.lookupEl && STATE.lookupEl.textContent === word && !yomitanOpen()) {
-        askAi(word, sentence);
+    const token = STATE.aiToken;
+    let tries = 0;
+    const tick = () => {
+      if (token !== STATE.aiToken || !STATE.lookupEl || STATE.lookupEl.textContent !== word) return;
+      if (yomitanOpen()) {
+        hideAi();
+        return;
       }
-    }, 900);
+      tries += 1;
+      if (tries < 8) {
+        scheduleAiFallback._t = setTimeout(tick, 220);
+        return;
+      }
+      askAi(word, sentence, token);
+    };
+    scheduleAiFallback._t = setTimeout(tick, 220);
   }
 
   function hideAi() {
@@ -379,16 +398,85 @@
     ai.style.bottom = bottom + "px";
   }
 
-  function askAi(word, sentence) {
-    showAi("…");
-    chrome.runtime.sendMessage({ type: "kiki-ai-explain", word, sentence }, (res) => {
-      if (!STATE.lookupEl) return;
-      if (chrome.runtime.lastError) {
-        showAi(chrome.runtime.lastError.message);
+  function askAi(word, sentence, token) {
+    if (token == null) token = STATE.aiToken;
+    chrome.storage.local.get(null, async (cfg) => {
+      if (token !== STATE.aiToken || !STATE.lookupEl) return;
+      if (yomitanOpen()) { hideAi(); return; }
+      const chain = providerChain(cfg);
+      if (!chain.length) {
+        showAi("没有可用的 API / 模型");
         return;
       }
-      if (!res || !res.ok) showAi(res?.error || "AI failed");
-      else showAi(res.text);
+      for (let i = 0; i < chain.length; i++) {
+        const step = chain[i];
+        if (token !== STATE.aiToken || !STATE.lookupEl) return;
+        if (yomitanOpen()) { hideAi(); return; }
+        showAi(step.startMsg);
+        const res = await sendTry({ ...step, word, sentence });
+        if (token !== STATE.aiToken || !STATE.lookupEl) return;
+        if (res && res.ok) {
+          showAi(res.text);
+          return;
+        }
+        const why = shortErr(res && res.error);
+        const next = chain[i + 1];
+        showAi(next ? `${why}\n${next.retryMsg}` : `${why}\n所有已配置接口都不可用`);
+      }
+    });
+  }
+
+  function providerChain(cfg) {
+    const slots = normalizeProviders(cfg);
+    const out = [];
+    slots.forEach((p, pi) => {
+      p.models.forEach((model, mi) => {
+        out.push({
+          base: p.base,
+          key: p.key,
+          model,
+          startMsg: pi === 0 && mi === 0 ? "…" : `正在用 ${model}`,
+          retryMsg: mi + 1 < p.models.length
+            ? `模型 ${model} 不可用，正在重试 ${p.models[mi + 1]}`
+            : `该 API 下模型都不可用，正在重试下一家`
+        });
+      });
+    });
+    return out;
+  }
+
+  function normalizeProviders(cfg) {
+    if (Array.isArray(cfg.providers) && cfg.providers.length) {
+      return cfg.providers
+        .map((p) => ({
+          base: (p.base || "").trim(),
+          key: (p.key || "").trim(),
+          models: (p.models || []).map((m) => String(m || "").trim()).filter(Boolean).slice(0, 5)
+        }))
+        .filter((p) => p.base && p.key && p.models.length);
+    }
+    const models = [cfg.apiModel].filter(Boolean);
+    if (cfg.apiBase && cfg.apiKey && models.length) {
+      return [{ base: cfg.apiBase, key: cfg.apiKey, models }];
+    }
+    return [];
+  }
+
+  function shortErr(e) {
+    const s = String(e || "请求失败");
+    if (/location is not supported/i.test(s)) return "该服务商不支持当前地区";
+    if (/quota|billing|insufficient/i.test(s)) return "额度不足或未结算";
+    if (/401|unauthorized|invalid api key/i.test(s)) return "API key 无效";
+    if (/429|rate limit/i.test(s)) return "请求过于频繁";
+    return s.slice(0, 180);
+  }
+
+  function sendTry(payload) {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: "kiki-ai-try", ...payload }, (res) => {
+        if (chrome.runtime.lastError) resolve({ ok: false, error: chrome.runtime.lastError.message });
+        else resolve(res || { ok: false, error: "no response" });
+      });
     });
   }
 
@@ -730,16 +818,25 @@
     }
   }
 
+  function langPrefix(code) {
+    return String(code || "").toLowerCase().split(/[-_]/)[0];
+  }
+
   function scoreTrack(t) {
     let s = 0;
     const lang = (t.languageCode || "").toLowerCase();
     const vss = (t.vssId || "").toLowerCase();
-    if (!t.isAsr) s += 100;
-    if (lang === "en-us" || vss.includes(".en-us") || vss === ".en-us") s += 50;
-    else if (lang === "en-gb" || vss.includes(".en-gb")) s += 48;
-    else if (lang === "en" || vss === ".en" || vss === "a.en") s += 40;
-    else if (lang.startsWith("en")) s += 30;
-    if (/english/i.test(t.name) && !/comment|song|forced|desc/i.test(t.name)) s += 8;
+    const prefix = langPrefix(lang);
+    const audio = langPrefix(STATE.audioLang);
+    const current = langPrefix(STATE.currentLang);
+    if (!t.isAsr) s += 80;
+    if (current && (prefix === current || lang === STATE.currentLang.toLowerCase())) s += 120;
+    if (audio && prefix === audio) s += 90;
+    if (!audio && !current) {
+      if (lang === "en-us" || vss.includes(".en-us")) s += 50;
+      else if (lang === "en-gb" || vss.includes(".en-gb")) s += 48;
+      else if (prefix === "en") s += 40;
+    } else if (prefix === "en" && audio && audio !== "en") s -= 20;
     if (/comment|description|song|karaoke|forced/i.test(t.name)) s -= 40;
     return s;
   }
@@ -787,6 +884,8 @@
       return;
     }
     STATE.tracks = data.tracks;
+    STATE.audioLang = data.audioLang || "";
+    STATE.currentLang = data.currentLang || "";
     const preferred = pickDefault(STATE.tracks);
     await applyTrack(preferred, false);
   }

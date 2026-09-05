@@ -57,14 +57,32 @@ async function chat({ base, key, model, system, user }) {
   return out.trim();
 }
 
+function firstConfigured(cfg) {
+  if (Array.isArray(cfg.providers)) {
+    for (const p of cfg.providers) {
+      const models = (p.models || []).map((m) => String(m || "").trim()).filter(Boolean);
+      if (p.base && p.key && models[0]) return { base: p.base, key: p.key, model: models[0] };
+    }
+  }
+  if (cfg.apiBase && cfg.apiKey && cfg.apiModel) {
+    return { base: cfg.apiBase, key: cfg.apiKey, model: cfg.apiModel };
+  }
+  return null;
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
   if (!msg || !msg.type) return;
-  if (msg.type === "kiki-ai-test" || msg.type === "kiki-ai-explain") {
+  if (msg.type === "kiki-ai-test" || msg.type === "kiki-ai-try" || msg.type === "kiki-ai-explain") {
     (async () => {
       const cfg = await chrome.storage.local.get(null);
-      const key = cfg.apiKey;
-      const model = cfg.apiModel;
-      const base = cfg.apiBase;
+      let key = msg.key || cfg.apiKey;
+      let model = msg.model || cfg.apiModel;
+      let base = msg.base || cfg.apiBase;
+      if (msg.type === "kiki-ai-test") {
+        const first = firstConfigured(cfg);
+        if (!first) throw new Error("missing key or model");
+        key = first.key; model = first.model; base = first.base;
+      }
       if (!key || !model) throw new Error("missing key or model");
       if (msg.type === "kiki-ai-test") {
         const out = await chat({

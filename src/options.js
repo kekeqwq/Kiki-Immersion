@@ -49,6 +49,52 @@ function setAiSwitch(tested, enabled) {
   box.checked = !!(tested && enabled);
 }
 
+function emptyProviders() {
+  return [0, 1, 2].map(() => ({ base: "", key: "", models: ["", "", "", "", ""] }));
+}
+
+function fillProviders(s) {
+  let list = emptyProviders();
+  if (Array.isArray(s.providers) && s.providers.length) {
+    s.providers.slice(0, 3).forEach((p, i) => {
+      list[i].base = p.base || "";
+      list[i].key = p.key || "";
+      (p.models || []).slice(0, 5).forEach((m, j) => { list[i].models[j] = m || ""; });
+    });
+  } else {
+    list[0].base = s.apiBase || "https://api.openai.com/v1";
+    list[0].key = s.apiKey || "";
+    list[0].models[0] = s.apiModel || "";
+  }
+  const host = document.getElementById("providers");
+  host.innerHTML = "";
+  list.forEach((p, i) => {
+    const wrap = document.createElement("div");
+    wrap.style.borderTop = i ? "1px solid #141413" : "none";
+    wrap.style.paddingTop = i ? "0.8rem" : "0";
+    wrap.style.marginTop = i ? "0.8rem" : "0";
+    wrap.innerHTML = `
+      <label class="field">服务商 ${i + 1} base URL</label>
+      <input class="p-base" type="text" placeholder="${i ? "可留空" : "https://api.openai.com/v1"}" />
+      <label class="field">服务商 ${i + 1} API key</label>
+      <input class="p-key" type="password" />
+      ${[0,1,2,3,4].map((j) => `<label class="field">模型 ${j + 1}</label><input class="p-model" data-i="${j}" type="text" placeholder="${j ? "可留空" : "gpt-4o-mini / grok-3"}" />`).join("")}
+    `;
+    wrap.querySelector(".p-base").value = p.base;
+    wrap.querySelector(".p-key").value = p.key;
+    wrap.querySelectorAll(".p-model").forEach((el, j) => { el.value = p.models[j] || ""; });
+    host.appendChild(wrap);
+  });
+}
+
+function readProviders() {
+  return [...document.querySelectorAll("#providers > div")].map((wrap) => ({
+    base: wrap.querySelector(".p-base").value.trim(),
+    key: wrap.querySelector(".p-key").value.trim(),
+    models: [...wrap.querySelectorAll(".p-model")].map((el) => el.value.trim())
+  }));
+}
+
 function hexish(v, fallback) {
   const s = String(v || "").trim();
   return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s) ? s : fallback;
@@ -105,9 +151,7 @@ function load() {
     paintPreview();
   });
   chrome.storage.local.get(null, (s) => {
-    document.getElementById("apiBase").value = s.apiBase || "https://api.openai.com/v1";
-    document.getElementById("apiKey").value = s.apiKey || "";
-    document.getElementById("apiModel").value = s.apiModel || "gpt-4o-mini";
+    fillProviders(s);
     document.getElementById("aiLang").value = s.aiLang || "zh";
     document.getElementById("promptZh").value = s.promptZh || PROMPT_ZH;
     document.getElementById("promptEn").value = s.promptEn || PROMPT_EN;
@@ -130,10 +174,12 @@ document.getElementById("save").addEventListener("click", () => {
     captionBgAlpha: Number(document.getElementById("captionBgAlpha").value)
   });
   chrome.storage.local.get(["aiTested"], (s) => {
+    const providers = readProviders();
     chrome.storage.local.set({
-      apiBase: document.getElementById("apiBase").value.trim(),
-      apiKey: document.getElementById("apiKey").value.trim(),
-      apiModel: document.getElementById("apiModel").value.trim(),
+      providers,
+      apiBase: providers[0]?.base || "",
+      apiKey: providers[0]?.key || "",
+      apiModel: providers[0]?.models?.[0] || "",
       aiLang: document.getElementById("aiLang").value,
       promptZh: document.getElementById("promptZh").value,
       promptEn: document.getElementById("promptEn").value,
@@ -148,16 +194,17 @@ document.getElementById("save").addEventListener("click", () => {
 document.getElementById("aiTest").addEventListener("click", async () => {
   const status = document.getElementById("aiStatus");
   status.textContent = "testing…";
-  const base = document.getElementById("apiBase").value.trim();
+  const providers = readProviders();
   try {
     if (chrome.permissions && chrome.permissions.request) {
       await chrome.permissions.request({ origins: ["https://*/*", "http://127.0.0.1/*"] });
     }
   } catch {}
   chrome.storage.local.set({
-    apiBase: base,
-    apiKey: document.getElementById("apiKey").value.trim(),
-    apiModel: document.getElementById("apiModel").value.trim(),
+    providers,
+    apiBase: providers[0]?.base || "",
+    apiKey: providers[0]?.key || "",
+    apiModel: providers[0]?.models?.[0] || "",
     aiLang: document.getElementById("aiLang").value,
     promptZh: document.getElementById("promptZh").value,
     promptEn: document.getElementById("promptEn").value
@@ -192,9 +239,10 @@ function collectConfig(cb) {
       captionColor: hexish(document.getElementById("captionColor").value, "#141413"),
       captionBg: hexish(document.getElementById("captionBg").value, "#EFEBE3"),
       captionBgAlpha: Number(document.getElementById("captionBgAlpha").value),
-      apiBase: document.getElementById("apiBase").value.trim(),
-      apiKey: document.getElementById("apiKey").value,
-      apiModel: document.getElementById("apiModel").value.trim(),
+      providers: readProviders(),
+      apiBase: (readProviders()[0] || {}).base || "",
+      apiKey: (readProviders()[0] || {}).key || "",
+      apiModel: ((readProviders()[0] || {}).models || [])[0] || "",
       aiLang: document.getElementById("aiLang").value,
       promptZh: document.getElementById("promptZh").value,
       promptEn: document.getElementById("promptEn").value,
@@ -234,9 +282,7 @@ document.getElementById("importFile").addEventListener("change", (e) => {
       syncColorPick();
       syncBgPick();
       paintPreview();
-      document.getElementById("apiBase").value = cfg.apiBase || "";
-      document.getElementById("apiKey").value = cfg.apiKey || "";
-      document.getElementById("apiModel").value = cfg.apiModel || "";
+      fillProviders(cfg);
       document.getElementById("aiLang").value = cfg.aiLang || "zh";
       if (cfg.promptZh) document.getElementById("promptZh").value = cfg.promptZh;
       if (cfg.promptEn) document.getElementById("promptEn").value = cfg.promptEn;
@@ -250,9 +296,10 @@ document.getElementById("importFile").addEventListener("change", (e) => {
         captionBgAlpha: Number(cfg.captionBgAlpha != null ? cfg.captionBgAlpha : 86)
       });
       chrome.storage.local.set({
-        apiBase: cfg.apiBase || "",
-        apiKey: cfg.apiKey || "",
-        apiModel: cfg.apiModel || "",
+        providers: cfg.providers || readProviders(),
+        apiBase: cfg.apiBase || (cfg.providers && cfg.providers[0] && cfg.providers[0].base) || "",
+        apiKey: cfg.apiKey || (cfg.providers && cfg.providers[0] && cfg.providers[0].key) || "",
+        apiModel: cfg.apiModel || (cfg.providers && cfg.providers[0] && cfg.providers[0].models && cfg.providers[0].models[0]) || "",
         aiLang: cfg.aiLang || "zh",
         promptZh: cfg.promptZh || PROMPT_ZH,
         promptEn: cfg.promptEn || PROMPT_EN,
