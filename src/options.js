@@ -74,11 +74,11 @@ function fillProviders(s) {
     wrap.style.paddingTop = i ? "0.8rem" : "0";
     wrap.style.marginTop = i ? "0.8rem" : "0";
     wrap.innerHTML = `
-      <label class="field">服务商 ${i + 1} base URL</label>
-      <input class="p-base" type="text" placeholder="${i ? "可留空" : "https://api.openai.com/v1"}" />
-      <label class="field">服务商 ${i + 1} API key</label>
+      <label class="field">Provider ${i + 1} base URL</label>
+      <input class="p-base" type="text" placeholder="${i ? "optional" : "https://api.openai.com/v1"}" />
+      <label class="field">Provider ${i + 1} API key</label>
       <input class="p-key" type="password" />
-      ${[0,1,2,3,4].map((j) => `<label class="field">模型 ${j + 1}</label><input class="p-model" data-i="${j}" type="text" placeholder="${j ? "可留空" : "gpt-4o-mini / grok-3"}" />`).join("")}
+      ${[0,1,2,3,4].map((j) => `<label class="field">Model ${j + 1}</label><input class="p-model" data-i="${j}" type="text" placeholder="${j ? "optional" : "gpt-4o-mini / grok-3"}" />`).join("")}
     `;
     wrap.querySelector(".p-base").value = p.base;
     wrap.querySelector(".p-key").value = p.key;
@@ -251,6 +251,12 @@ function collectConfig(cb) {
     });
   });
 }
+document.getElementById("clearCache").addEventListener("click", () => {
+  chrome.runtime.sendMessage({ type: "kiki-clear-cache" }, () => {
+    document.getElementById("clearCache").textContent = "Cleared";
+    setTimeout(() => (document.getElementById("clearCache").textContent = "Clear caption cache"), 900);
+  });
+});
 document.getElementById("exportCfg").addEventListener("click", () => {
   collectConfig((cfg) => {
     const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: "application/json" });

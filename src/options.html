@@ -84,7 +84,7 @@
 <body>
 <main>
   <h1>Kiki Immersion</h1>
-  <p class="lede">v1.4.0 — YouTube captions for touch immersion. No translation.</p>
+  <p class="lede">v1.5.0 — YouTube captions for touch immersion. No translation.</p>
 
   <section>
     <h2>Overlay</h2>
@@ -124,7 +124,7 @@
 
   <section>
     <h2>AI fallback</h2>
-    <p class="note">最多三家 OpenAI 兼容接口，每家最多五个模型。Yomitan 查到词就不请求 AI。Yomitan 没有条目时按服务商 1→2→3、模型 1→5 重试。空项跳过。</p>
+    <p class="note">Up to three OpenAI-compatible providers, five models each. Yomitan wins when it has an entry. Otherwise providers 1→3 and models 1→5. Empty slots are skipped.</p>
     <div id="providers"></div>
     <label class="field" for="aiLang">Explain in</label>
     <select id="aiLang">
@@ -144,8 +144,9 @@
 
   <section>
     <h2>Backup</h2>
-    <p class="note">Plain JSON: fonts, colors, AI URL / model / key, prompts, toggles. Reinstall then Import.</p>
+    <p class="note">Clear caption cache reloads tracks for the open YouTube tab (fixes a video stuck on the wrong language). Export is plain JSON: fonts, colors, API keys, prompts, toggles.</p>
     <div class="actions">
+      <button type="button" id="clearCache">Clear caption cache</button>
       <button type="button" id="exportCfg">Export</button>
       <button type="button" id="importCfg">Import</button>
       <input id="importFile" type="file" accept="application/json,.json,.txt" hidden />
@@ -159,7 +160,7 @@
   <section>
     <h2>About</h2>
     <div class="about">
-      <p>Kiki Immersion 1.4.0</p>
+      <p>Kiki Immersion 1.5.0</p>
       <img src="../icons/about.jpg" alt="Kiki watching television" />
       <p>A small watcher. Large type. One line at a time.</p>
     </div>

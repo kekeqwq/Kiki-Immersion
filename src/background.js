@@ -72,6 +72,13 @@ function firstConfigured(cfg) {
 
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
   if (!msg || !msg.type) return;
+  if (msg.type === "kiki-clear-cache") {
+    chrome.tabs.query({ url: ["https://www.youtube.com/*", "https://youtube.com/*", "https://m.youtube.com/*"] }, (tabs) => {
+      for (const tab of tabs) chrome.tabs.sendMessage(tab.id, { type: "kiki-clear-cache" }, () => void chrome.runtime.lastError);
+      send({ ok: true });
+    });
+    return true;
+  }
   if (msg.type === "kiki-ai-test" || msg.type === "kiki-ai-try" || msg.type === "kiki-ai-explain") {
     (async () => {
       const cfg = await chrome.storage.local.get(null);

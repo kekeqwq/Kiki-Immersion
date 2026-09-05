@@ -206,6 +206,11 @@
       } else if (d.type === "fetch") {
         const out = await loadCaption(d.lang);
         reply(d.id, { ok: true, type: "fetch", raw: out.raw, via: out.via });
+      } else if (d.type === "clear") {
+        window.__kikiLastBody = "";
+        sourceUrl = "";
+        lastUrl = "";
+        reply(d.id, { ok: true, type: "clear" });
       }
     } catch (e) {
       reply(d.id, { ok: false, type: d.type, error: String(e && e.message ? e.message : e) });

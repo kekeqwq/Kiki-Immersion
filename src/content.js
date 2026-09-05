@@ -20,6 +20,7 @@
     currentLang: "",
     fs: false,
     videoId: null,
+    forceReload: false,
     tapTimer: null,
     lastTap: null,
     req: 0
@@ -257,6 +258,10 @@
   }
 
   function openLookup(word, e) {
+    STATE.aiToken++;
+    clearTimeout(scheduleAiFallback._t);
+    const prev = STATE.lookupEl;
+    if (prev && prev !== word) dismissYomitan(prev);
     document.querySelectorAll(".kiki-word.kiki-active").forEach((n) => n.classList.remove("kiki-active"));
     word.classList.add("kiki-active");
     STATE.lookupEl = word;
@@ -264,17 +269,21 @@
     if (v && !v.paused) v.pause();
     STATE.pausedForLookup = true;
     hideAi();
-    revealYomitanFrames();
-    const range = document.createRange();
-    range.selectNodeContents(word);
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
+    setAiTitle("KIKI");
+    const token = STATE.aiToken;
     const x = e?.clientX || word.getBoundingClientRect().left;
     const y = e?.clientY || word.getBoundingClientRect().top;
-    word.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y }));
-    word.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y }));
-    scheduleAiFallback(word.textContent, sentenceText());
+    setTimeout(() => {
+      if (token !== STATE.aiToken || STATE.lookupEl !== word) return;
+      const range = document.createRange();
+      range.selectNodeContents(word);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      word.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y }));
+      word.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y }));
+      scheduleAiFallback(word.textContent, sentenceText(), token);
+    }, prev && prev !== word ? 140 : 0);
   }
 
   function closeLookup() {
@@ -349,10 +358,10 @@
     return false;
   }
 
-  function scheduleAiFallback(word, sentence) {
+  function scheduleAiFallback(word, sentence, token) {
     clearTimeout(scheduleAiFallback._t);
     if (!STATE.aiEnabled) return;
-    const token = STATE.aiToken;
+    if (token == null) token = STATE.aiToken;
     let tries = 0;
     const tick = () => {
       if (token !== STATE.aiToken || !STATE.lookupEl || STATE.lookupEl.textContent !== word) return;
@@ -370,19 +379,26 @@
     scheduleAiFallback._t = setTimeout(tick, 220);
   }
 
+  function setAiTitle(title) {
+    const hd = $("#kiki-ai .kiki-ai-hd");
+    if (hd) hd.textContent = title || "KIKI";
+  }
+
   function hideAi() {
     const el = $("#kiki-ai");
     if (el) {
       el.hidden = true;
       el.querySelector(".kiki-ai-bd").textContent = "";
+      setAiTitle("KIKI");
     }
   }
 
-  function showAi(text) {
+  function showAi(text, model) {
     const el = $("#kiki-ai");
     if (!el) return;
     el.hidden = false;
     el.querySelector(".kiki-ai-bd").textContent = String(text || "").replace(/\*\*/g, "");
+    setAiTitle(model ? `KIKI — ${model}` : "KIKI");
     placeAi();
   }
 
@@ -405,7 +421,7 @@
       if (yomitanOpen()) { hideAi(); return; }
       const chain = providerChain(cfg);
       if (!chain.length) {
-        showAi("没有可用的 API / 模型");
+        showAi("No API / model configured");
         return;
       }
       for (let i = 0; i < chain.length; i++) {
@@ -416,12 +432,12 @@
         const res = await sendTry({ ...step, word, sentence });
         if (token !== STATE.aiToken || !STATE.lookupEl) return;
         if (res && res.ok) {
-          showAi(res.text);
+          showAi(res.text, step.model);
           return;
         }
         const why = shortErr(res && res.error);
         const next = chain[i + 1];
-        showAi(next ? `${why}\n${next.retryMsg}` : `${why}\n所有已配置接口都不可用`);
+        showAi(next ? `${why}\n${next.retryMsg}` : `${why}\nAll configured endpoints failed`);
       }
     });
   }
@@ -435,10 +451,10 @@
           base: p.base,
           key: p.key,
           model,
-          startMsg: pi === 0 && mi === 0 ? "…" : `正在用 ${model}`,
+          startMsg: pi === 0 && mi === 0 ? "…" : `Trying ${model}`,
           retryMsg: mi + 1 < p.models.length
-            ? `模型 ${model} 不可用，正在重试 ${p.models[mi + 1]}`
-            : `该 API 下模型都不可用，正在重试下一家`
+            ? `${model} failed, retrying ${p.models[mi + 1]}`
+            : `${model} failed, trying the next API`
         });
       });
     });
@@ -464,10 +480,10 @@
 
   function shortErr(e) {
     const s = String(e || "请求失败");
-    if (/location is not supported/i.test(s)) return "该服务商不支持当前地区";
-    if (/quota|billing|insufficient/i.test(s)) return "额度不足或未结算";
-    if (/401|unauthorized|invalid api key/i.test(s)) return "API key 无效";
-    if (/429|rate limit/i.test(s)) return "请求过于频繁";
+    if (/location is not supported/i.test(s)) return "This provider does not support the current region";
+    if (/quota|billing|insufficient/i.test(s)) return "Quota or billing error";
+    if (/401|unauthorized|invalid api key/i.test(s)) return "Invalid API key";
+    if (/429|rate limit/i.test(s)) return "Rate limited";
     return s.slice(0, 180);
   }
 
@@ -847,6 +863,7 @@
   }
 
   async function applyTrack(track, userPicked) {
+    try { await pageCall("clear", {}, 1500); } catch {}
     STATE.trackKey = trackKey(track);
     if (userPicked) chrome.storage.sync.set({ lastTrackLang: track.languageCode, lastTrackAsr: !!track.isAsr });
     try {
@@ -897,7 +914,7 @@
   async function onNavigate() {
     const id = videoIdFromUrl();
     if (!id) return;
-    if (id === STATE.videoId && STATE.cues.length) return;
+    if (!STATE.forceReload && id === STATE.videoId && STATE.cues.length) return;
     STATE.videoId = id;
     STATE.cues = [];
     STATE.idx = -1;
@@ -953,6 +970,24 @@
     renderCue(STATE.idx);
     placeAi();
   }
+
+  async function clearCaptionCache() {
+    STATE.forceReload = true;
+    STATE.videoId = null;
+    STATE.cues = [];
+    STATE.tracks = [];
+    STATE.trackKey = null;
+    STATE.audioLang = "";
+    STATE.currentLang = "";
+    try { await pageCall("clear", {}, 1500); } catch {}
+    toast("cache cleared");
+    await onNavigate();
+    STATE.forceReload = false;
+  }
+
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg && msg.type === "kiki-clear-cache") clearCaptionCache();
+  });
 
   injectPage();
 
