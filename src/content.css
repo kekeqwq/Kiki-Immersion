@@ -70,19 +70,6 @@ html.kiki-hide-native .caption-window {
   display: none !important;
 }
 
-html.kiki-suppress-yomitan iframe[src*="chrome-extension"],
-html.kiki-suppress-yomitan [id*="yomitan" i],
-html.kiki-suppress-yomitan [class*="yomitan" i],
-html.kiki-suppress-yomitan [id*="yomichan" i],
-html.kiki-suppress-yomitan [class*="yomichan" i],
-html.kiki-suppress-yomitan yomitan-popup,
-html.kiki-suppress-yomitan yomichan-popup {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
 #kiki-root {
   position: absolute;
   inset: 0;

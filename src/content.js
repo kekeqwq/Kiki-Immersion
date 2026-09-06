@@ -112,14 +112,6 @@
       `;
       host.appendChild(root);
       bindZones(root);
-      const ai = root.querySelector("#kiki-ai");
-      if (ai) {
-        ai.addEventListener("pointerdown", (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          closeLookup();
-        });
-      }
     }
     paintRoot(root);
     root.style.display = STATE.enabled ? "" : "none";
@@ -242,26 +234,12 @@
     }
   }
 
-  let suppressTimer = null;
-  function isYomitanSuppressed() {
-    return document.documentElement.classList.contains("kiki-suppress-yomitan");
-  }
-
-  function suppressYomitan(duration = 600) {
-    document.documentElement.classList.add("kiki-suppress-yomitan");
-    clearTimeout(suppressTimer);
-    if (duration > 0) {
-      suppressTimer = setTimeout(() => {
-        if (!isAiOpen()) {
-          document.documentElement.classList.remove("kiki-suppress-yomitan");
-        }
-      }, duration);
-    }
-  }
-
-  function unsuppressYomitan() {
-    clearTimeout(suppressTimer);
-    document.documentElement.classList.remove("kiki-suppress-yomitan");
+  function isYomitan(n) {
+    if (!n) return false;
+    const cls = typeof n.className === "string" ? n.className : (n.className?.baseVal || "");
+    const blob = `${n.id || ""} ${cls} ${n.src || ""} ${n.title || ""} ${n.tagName || ""}`.toLowerCase();
+    return /yomitan|yomichan/.test(blob) ||
+      (n.tagName === "IFRAME" && String(n.src || "").startsWith("chrome-extension://"));
   }
 
   function renderCue(i) {
@@ -296,7 +274,7 @@
       });
       w.addEventListener("mousemove", (e) => {
         if (!e.isTrusted) return;
-        if (isAiOpen() || isYomitanSuppressed() || !STATE.lookupEl || STATE.lookupEl !== w) {
+        if (isAiOpen() || !STATE.lookupEl || STATE.lookupEl !== w) {
           e.stopPropagation();
         }
       });
@@ -368,7 +346,6 @@
       return;
     }
 
-    suppressYomitan(0);
     dismissYomitan(STATE.lookupEl);
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges();
@@ -378,7 +355,6 @@
   }
 
   function openLookup(word, e) {
-    unsuppressYomitan();
     STATE.aiToken++;
     const prev = STATE.lookupEl;
     if (prev && prev !== word) dismissYomitan(prev);
@@ -419,7 +395,6 @@
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges();
     hideAi();
-    suppressYomitan(600);
     dismissYomitan(active);
     const v = videoEl();
     if (v) v.play().catch(() => {});
@@ -432,7 +407,6 @@
   }
 
   function revealYomitanFrames() {
-    unsuppressYomitan();
     const unhide = (n) => {
       try {
         n.style.removeProperty("display");
@@ -442,9 +416,7 @@
       } catch {}
     };
     document.querySelectorAll("iframe, [id*='yomitan' i], [class*='yomitan' i], [id*='yomichan' i], [class*='yomichan' i], yomitan-popup, yomichan-popup").forEach((n) => {
-      const blob = `${n.id || ""} ${n.className || ""} ${n.src || ""} ${n.title || ""} ${n.tagName || ""}`.toLowerCase();
-      if (!blob.includes("yomitan") && !blob.includes("yomichan") && !blob.includes("chrome-extension")) return;
-      unhide(n);
+      if (isYomitan(n)) unhide(n);
     });
   }
 
@@ -469,12 +441,6 @@
       } catch {}
     };
 
-    const isYomitan = (n) => {
-      const blob = `${n.id || ""} ${n.className || ""} ${n.src || ""} ${n.title || ""} ${n.tagName || ""}`.toLowerCase();
-      return /yomitan|yomichan/.test(blob) ||
-        (n.tagName === "IFRAME" && /chrome-extension:/.test(n.src || "") && /popup|frame|float/i.test(n.src || blob));
-    };
-
     document.querySelectorAll("iframe, [id*='yomitan' i], [class*='yomitan' i], [id*='yomichan' i], [class*='yomichan' i], yomitan-popup, yomichan-popup").forEach((n) => {
       if (isYomitan(n)) {
         if (n.tagName === "IFRAME") {
@@ -483,11 +449,6 @@
         hideNode(n);
       }
     });
-    setTimeout(() => {
-      fireEsc(document);
-      document.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: 8, clientY: 8, view: window }));
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: 8, clientY: 8, view: window }));
-    }, 40);
   }
 
   function yomitanOpen() {
