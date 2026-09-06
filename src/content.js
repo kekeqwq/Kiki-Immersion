@@ -112,6 +112,14 @@
       `;
       host.appendChild(root);
       bindZones(root);
+      const ai = root.querySelector("#kiki-ai");
+      if (ai) {
+        ai.addEventListener("pointerdown", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          closeLookup();
+        });
+      }
     }
     paintRoot(root);
     root.style.display = STATE.enabled ? "" : "none";
@@ -234,6 +242,28 @@
     }
   }
 
+  let suppressTimer = null;
+  function isYomitanSuppressed() {
+    return document.documentElement.classList.contains("kiki-suppress-yomitan");
+  }
+
+  function suppressYomitan(duration = 600) {
+    document.documentElement.classList.add("kiki-suppress-yomitan");
+    clearTimeout(suppressTimer);
+    if (duration > 0) {
+      suppressTimer = setTimeout(() => {
+        if (!isAiOpen()) {
+          document.documentElement.classList.remove("kiki-suppress-yomitan");
+        }
+      }, duration);
+    }
+  }
+
+  function unsuppressYomitan() {
+    clearTimeout(suppressTimer);
+    document.documentElement.classList.remove("kiki-suppress-yomitan");
+  }
+
   function renderCue(i) {
     const box = $("#kiki-captions");
     if (!box) return;
@@ -242,6 +272,13 @@
     const src = STATE.cues[i].text;
     const line = document.createElement("div");
     line.className = "kiki-line";
+    line.addEventListener("pointerdown", (e) => {
+      if (e.target === line && isAiOpen()) {
+        e.stopPropagation();
+        e.preventDefault();
+        closeLookup();
+      }
+    });
     tokenize(src).forEach((tok) => {
       if (!tok.word) {
         line.appendChild(document.createTextNode(tok.t));
@@ -251,10 +288,18 @@
       w.className = "kiki-word";
       w.textContent = tok.t;
       w.addEventListener("pointerdown", onWordPointer, { passive: false });
-      w.addEventListener("click", (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-      }, { passive: false });
+      ["click", "mousedown", "mouseup", "pointerup"].forEach((evt) => {
+        w.addEventListener(evt, (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        }, { passive: false });
+      });
+      w.addEventListener("mousemove", (e) => {
+        if (!e.isTrusted) return;
+        if (isAiOpen() || isYomitanSuppressed() || !STATE.lookupEl || STATE.lookupEl !== w) {
+          e.stopPropagation();
+        }
+      });
       line.appendChild(w);
     });
     const btn = document.createElement("button");
@@ -275,23 +320,13 @@
 
   function onWordPointer(e) {
     e.stopPropagation();
-    if (e.pointerType === "touch" || e.pointerType === "pen") e.preventDefault();
+    e.preventDefault();
     const word = e.currentTarget;
     const clickedWordText = (word.textContent || "").trim().toLowerCase();
     const currentActiveText = (STATE.lookupWord || (STATE.lookupEl && STATE.lookupEl.textContent) || "").trim().toLowerCase();
 
     if (isAiOpen()) {
-      const isTargetWord =
-        STATE.lookupEl === word ||
-        word.classList.contains("kiki-active") ||
-        (currentActiveText && currentActiveText === clickedWordText);
-
-      if (isTargetWord) {
-        closeLookup();
-        return;
-      }
       closeLookup();
-      openLookup(word, e);
       return;
     }
 
@@ -333,6 +368,7 @@
       return;
     }
 
+    suppressYomitan(0);
     dismissYomitan(STATE.lookupEl);
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges();
@@ -342,6 +378,7 @@
   }
 
   function openLookup(word, e) {
+    unsuppressYomitan();
     STATE.aiToken++;
     const prev = STATE.lookupEl;
     if (prev && prev !== word) dismissYomitan(prev);
@@ -382,6 +419,7 @@
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges();
     hideAi();
+    suppressYomitan(600);
     dismissYomitan(active);
     const v = videoEl();
     if (v) v.play().catch(() => {});
@@ -394,12 +432,19 @@
   }
 
   function revealYomitanFrames() {
-    document.querySelectorAll("iframe, [id*='yomitan'], [class*='yomitan'], [id*='yomichan'], [class*='yomichan']").forEach((n) => {
-      const blob = ((n.id || "") + (n.className || "") + (n.src || "") + (n.title || "")).toLowerCase();
-      if (!n.src?.startsWith("chrome-extension://") && !blob.includes("yomitan") && !blob.includes("yomichan")) return;
-      n.style.removeProperty("display");
-      n.style.removeProperty("visibility");
-      n.removeAttribute("hidden");
+    unsuppressYomitan();
+    const unhide = (n) => {
+      try {
+        n.style.removeProperty("display");
+        n.style.removeProperty("visibility");
+        n.style.removeProperty("opacity");
+        n.removeAttribute("hidden");
+      } catch {}
+    };
+    document.querySelectorAll("iframe, [id*='yomitan' i], [class*='yomitan' i], [id*='yomichan' i], [class*='yomichan' i], yomitan-popup, yomichan-popup").forEach((n) => {
+      const blob = `${n.id || ""} ${n.className || ""} ${n.src || ""} ${n.title || ""} ${n.tagName || ""}`.toLowerCase();
+      if (!blob.includes("yomitan") && !blob.includes("yomichan") && !blob.includes("chrome-extension")) return;
+      unhide(n);
     });
   }
 
@@ -414,18 +459,29 @@
     } catch {}
     fireEsc(document);
     fireEsc(window);
-    document.querySelectorAll("iframe").forEach((f) => {
-      const blob = ((f.id || "") + (f.className || "") + (f.src || "") + (f.title || "")).toLowerCase();
-      if (f.src?.startsWith("chrome-extension://") || blob.includes("yomitan") || blob.includes("yomichan")) {
-        try { fireEsc(f.contentWindow || f); } catch {}
-        f.style.setProperty("display", "none", "important");
-        f.style.setProperty("visibility", "hidden", "important");
-        f.setAttribute("hidden", "");
+
+    const hideNode = (n) => {
+      try {
+        n.style.setProperty("display", "none", "important");
+        n.style.setProperty("visibility", "hidden", "important");
+        n.style.setProperty("opacity", "0", "important");
+        n.setAttribute("hidden", "");
+      } catch {}
+    };
+
+    const isYomitan = (n) => {
+      const blob = `${n.id || ""} ${n.className || ""} ${n.src || ""} ${n.title || ""} ${n.tagName || ""}`.toLowerCase();
+      return /yomitan|yomichan/.test(blob) ||
+        (n.tagName === "IFRAME" && /chrome-extension:/.test(n.src || "") && /popup|frame|float/i.test(n.src || blob));
+    };
+
+    document.querySelectorAll("iframe, [id*='yomitan' i], [class*='yomitan' i], [id*='yomichan' i], [class*='yomichan' i], yomitan-popup, yomichan-popup").forEach((n) => {
+      if (isYomitan(n)) {
+        if (n.tagName === "IFRAME") {
+          try { fireEsc(n.contentWindow || n); } catch {}
+        }
+        hideNode(n);
       }
-    });
-    document.querySelectorAll("[id*='yomitan'], [class*='yomitan'], [id*='yomichan'], [class*='yomichan']").forEach((n) => {
-      n.style.setProperty("display", "none", "important");
-      n.style.setProperty("visibility", "hidden", "important");
     });
     setTimeout(() => {
       fireEsc(document);

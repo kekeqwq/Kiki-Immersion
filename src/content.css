@@ -70,6 +70,19 @@ html.kiki-hide-native .caption-window {
   display: none !important;
 }
 
+html.kiki-suppress-yomitan iframe[src*="chrome-extension"],
+html.kiki-suppress-yomitan [id*="yomitan" i],
+html.kiki-suppress-yomitan [class*="yomitan" i],
+html.kiki-suppress-yomitan [id*="yomichan" i],
+html.kiki-suppress-yomitan [class*="yomichan" i],
+html.kiki-suppress-yomitan yomitan-popup,
+html.kiki-suppress-yomitan yomichan-popup {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 #kiki-root {
   position: absolute;
   inset: 0;
@@ -134,7 +147,7 @@ html.kiki-show-chrome .ytp-gradient-bottom {
   color: var(--kiki-ink);
   background: color-mix(in srgb, var(--kiki-paper) calc(var(--kiki-bg-alpha, 86) * 1%), transparent);
   border: 1px solid color-mix(in srgb, var(--kiki-ink) 18%, transparent);
-  border-radius: 10px;
+  border-radius: 18px;
   line-height: 1.35;
   letter-spacing: 0.01em;
   font-size: var(--kiki-font, 28px);
@@ -149,7 +162,7 @@ html.kiki-show-chrome .ytp-gradient-bottom {
   height: max(1.35em, 44px);
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--kiki-ink) 45%, transparent);
-  border-radius: 8px;
+  border-radius: 12px;
   background: transparent;
   color: var(--kiki-ink);
   font: inherit;
@@ -168,7 +181,7 @@ html.kiki-show-chrome .ytp-gradient-bottom {
   padding: 0.04em 0.08em;
   margin: 0 0.06em;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 6px;
   border-bottom: 1px solid transparent;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
@@ -197,7 +210,7 @@ html.kiki-show-chrome .ytp-gradient-bottom {
   color: var(--kiki-ink);
   background: color-mix(in srgb, var(--kiki-paper) calc(var(--kiki-bg-alpha, 86) * 1%), transparent);
   border: 1px solid color-mix(in srgb, var(--kiki-ink) 18%, transparent);
-  border-radius: 12px;
+  border-radius: 20px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
   padding: 0.8rem 1.1rem 1.05rem;
   font-size: 24px;
