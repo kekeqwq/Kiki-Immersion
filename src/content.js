@@ -15,6 +15,7 @@
     pausedForLookup: false,
     lookupEl: null,
     aiEnabled: false,
+    aiHold: false,
     aiToken: 0,
     audioLang: "",
     currentLang: "",
@@ -348,35 +349,43 @@
     const nodes = document.querySelectorAll("iframe, [id*='yomitan' i], [class*='yomitan' i], [id*='yomichan' i], [class*='yomichan' i]");
     for (const n of nodes) {
       const blob = `${n.id || ""} ${n.className || ""} ${n.src || ""} ${n.title || ""}`.toLowerCase();
-      if (!/yomitan|yomichan/.test(blob)) continue;
+      const looks = /yomitan|yomichan/.test(blob) || (n.tagName === "IFRAME" && /chrome-extension:/.test(n.src || "") && /popup|frame/i.test(n.src || blob));
+      if (!looks) continue;
       if (n.hidden) continue;
       const st = window.getComputedStyle(n);
       if (st.display === "none" || st.visibility === "hidden" || Number(st.opacity) === 0) continue;
       const r = n.getBoundingClientRect();
-      if (r.width >= 60 && r.height >= 60) return true;
+      if (r.width >= 80 && r.height >= 80) return true;
     }
     return false;
   }
 
-  function scheduleAiFallback(word, sentence, token) {
-    clearTimeout(scheduleAiFallback._t);
-    if (!STATE.aiEnabled) return;
-    if (token == null) token = STATE.aiToken;
-    let tries = 0;
-    const tick = () => {
-      if (token !== STATE.aiToken || !STATE.lookupEl || STATE.lookupEl.textContent !== word) return;
+  function watchLookup(word, sentence, token) {
+    clearInterval(watchLookup._iv);
+    let ticks = 0;
+    let started = false;
+    watchLookup._iv = setInterval(() => {
+      if (token !== STATE.aiToken || !STATE.lookupEl || STATE.lookupEl.textContent !== word) {
+        clearInterval(watchLookup._iv);
+        return;
+      }
       if (yomitanOpen()) {
         hideAi();
+        STATE.aiHold = true;
         return;
       }
-      tries += 1;
-      if (tries < 8) {
-        scheduleAiFallback._t = setTimeout(tick, 220);
-        return;
+      ticks += 1;
+      if (!STATE.aiEnabled || started || STATE.aiHold) return;
+      if (ticks >= 12) {
+        started = true;
+        askAi(word, sentence, token);
       }
-      askAi(word, sentence, token);
-    };
-    scheduleAiFallback._t = setTimeout(tick, 220);
+    }, 250);
+  }
+
+  function scheduleAiFallback(word, sentence, token) {
+    STATE.aiHold = false;
+    watchLookup(word, sentence, token);
   }
 
   function setAiTitle(title) {
@@ -417,8 +426,8 @@
   function askAi(word, sentence, token) {
     if (token == null) token = STATE.aiToken;
     chrome.storage.local.get(null, async (cfg) => {
-      if (token !== STATE.aiToken || !STATE.lookupEl) return;
-      if (yomitanOpen()) { hideAi(); return; }
+      if (token !== STATE.aiToken || !STATE.lookupEl || STATE.aiHold) return;
+      if (yomitanOpen()) { hideAi(); STATE.aiHold = true; return; }
       const chain = providerChain(cfg);
       if (!chain.length) {
         showAi("No API / model configured");
@@ -863,21 +872,27 @@
   }
 
   async function applyTrack(track, userPicked) {
-    try { await pageCall("clear", {}, 1500); } catch {}
     STATE.trackKey = trackKey(track);
     if (userPicked) chrome.storage.sync.set({ lastTrackLang: track.languageCode, lastTrackAsr: !!track.isAsr });
-    try {
-      const res = await pageCall("fetch", { baseUrl: track.baseUrl, lang: track.languageCode || "en" }, 18000);
-      STATE.cues = parseAny(res.raw || "");
-      STATE.idx = -1;
-      renderCue(-1);
-      const kind = track.isAsr ? "auto" : "official";
-      if (!STATE.cues.length) toast("caption empty");
-      else toast(`${kind}: ${STATE.cues.length} lines`);
-    } catch (e) {
-      console.warn("[kiki] fetch", e);
-      toast("caption fetch failed");
+    let lastErr = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        if (attempt) await sleep(400 * attempt);
+        const res = await pageCall("fetch", { baseUrl: track.baseUrl, lang: track.languageCode || "en" }, 18000);
+        STATE.cues = parseAny(res.raw || "");
+        STATE.idx = -1;
+        renderCue(-1);
+        const kind = track.isAsr ? "auto" : "official";
+        if (!STATE.cues.length) throw new Error("parsed empty");
+        toast(`${kind}: ${STATE.cues.length} lines`);
+        lastErr = null;
+        break;
+      } catch (e) {
+        lastErr = e;
+        console.warn("[kiki] fetch", e);
+      }
     }
+    if (lastErr) toast("caption fetch failed");
     renderTrackMenu();
   }
 

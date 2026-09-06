@@ -124,65 +124,88 @@
 
   async function fetchExact(url) {
     selfFetching++;
+    const errors = [];
     try {
-      const u = new URL(url, location.href);
-      u.searchParams.set("fmt", "json3");
-      const res = await origFetch.call(window, u.toString(), { credentials: "include", cache: "no-store" });
-      const txt = await res.text();
-      if (!res.ok) throw new Error("http " + res.status);
-      if (!txt || !txt.trim()) throw new Error("empty body");
-      return txt;
+      for (const fmt of ["json3", "srv3", "vtt", "srv1"]) {
+        try {
+          const u = new URL(url, location.href);
+          u.searchParams.set("fmt", fmt);
+          u.searchParams.delete("tlang");
+          const res = await origFetch.call(window, u.toString(), { credentials: "include", cache: "no-store" });
+          const txt = await res.text();
+          if (!res.ok) {
+            errors.push(fmt + ":http " + res.status);
+            continue;
+          }
+          if (!txt || !txt.trim()) {
+            errors.push(fmt + ":empty");
+            continue;
+          }
+          return txt;
+        } catch (e) {
+          errors.push(fmt + ":" + (e && e.message ? e.message : e));
+        }
+      }
+      throw new Error(errors.join(" | ") || "empty body");
     } finally {
       selfFetching--;
     }
   }
 
-  async function androidTracks(id) {
-    const key = (window.ytcfg && window.ytcfg.get && window.ytcfg.get("INNERTUBE_API_KEY")) || "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
+  async function innertubeTracks(id) {
+    const key = (window.ytcfg && window.ytcfg.get && window.ytcfg.get("INNERTUBE_API_KEY")) || "";
+    const clientName = (window.ytcfg && window.ytcfg.get && window.ytcfg.get("INNERTUBE_CLIENT_NAME")) || "WEB";
+    const clientVersion = (window.ytcfg && window.ytcfg.get && window.ytcfg.get("INNERTUBE_CLIENT_VERSION")) || "2.20260901.00.00";
+    if (!key || !id) return [];
     const res = await origFetch.call(window, "https://www.youtube.com/youtubei/v1/player?prettyPrint=false&key=" + encodeURIComponent(key), {
       method: "POST",
       credentials: "include",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        context: {
-          client: {
-            clientName: "ANDROID",
-            clientVersion: "19.29.37",
-            androidSdkVersion: 30,
-            hl: "en",
-            gl: "US"
-          }
-        },
+        context: { client: { clientName, clientVersion, hl: document.documentElement.lang || "en" } },
         videoId: id,
         contentCheckOk: true,
         racyCheckOk: true
       })
     });
+    if (!res.ok) return [];
     return tracksFrom(await res.json());
   }
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-  async function loadCaption(wantLang) {
+  async function loadCaption(wantLang, baseUrl) {
+    const errors = [];
     if (window.__kikiLastBody && window.__kikiLastBody.trim().length > 20) {
       return { raw: window.__kikiLastBody, via: "wire-body" };
     }
+    if (baseUrl) {
+      try { return { raw: await fetchExact(baseUrl), via: "track-url" }; }
+      catch (e) { errors.push(String(e.message || e)); }
+    }
     nudgeCaptions(wantLang);
-    for (let i = 0; i < 16; i++) {
-      if (sourceUrl) break;
-      if (i === 3 || i === 8) nudgeCaptions(wantLang);
-      await sleep(350);
+    for (let i = 0; i < 12; i++) {
+      if (sourceUrl || lastUrl) break;
+      if (i === 2 || i === 6) nudgeCaptions(wantLang);
+      await sleep(280);
     }
     const url = sourceUrl || lastUrl;
-    if (url) return { raw: await fetchExact(url), via: "captured-pot" };
-
-    const tracks = await androidTracks(videoId());
-    const pick =
-      tracks.find((t) => (t.languageCode || "").startsWith(wantLang || "en") && t.kind !== "asr") ||
-      tracks.find((t) => (t.languageCode || "").startsWith(wantLang || "en")) ||
-      tracks[0];
-    if (!pick || !pick.baseUrl) throw new Error("no captured timedtext");
-    return { raw: await fetchExact(pick.baseUrl), via: "android" };
+    if (url) {
+      try { return { raw: await fetchExact(url), via: "captured-pot" }; }
+      catch (e) { errors.push(String(e.message || e)); }
+    }
+    try {
+      const tracks = await innertubeTracks(videoId());
+      const want = (wantLang || "").toLowerCase();
+      const pick =
+        tracks.find((t) => (t.languageCode || "").toLowerCase().startsWith(want) && t.kind !== "asr") ||
+        tracks.find((t) => (t.languageCode || "").toLowerCase().startsWith(want)) ||
+        tracks[0];
+      if (pick && pick.baseUrl) return { raw: await fetchExact(pick.baseUrl), via: "innertube" };
+    } catch (e) {
+      errors.push(String(e.message || e));
+    }
+    throw new Error(errors.filter(Boolean).join(" / ") || "no captured timedtext");
   }
 
   window.addEventListener("message", async (ev) => {
@@ -192,7 +215,7 @@
       if (d.type === "list") {
         let tracks = tracksFrom(playerResponse()).map(summarize);
         if (!tracks.length) {
-          try { tracks = (await androidTracks(videoId())).map(summarize); } catch {}
+          try { tracks = (await innertubeTracks(videoId())).map(summarize); } catch {}
         }
         const pr = playerResponse();
         let audioLang = pr?.videoDetails?.defaultAudioLanguage || pr?.microformat?.playerMicroformatRenderer?.audioLanguage || "";
@@ -204,7 +227,7 @@
         } catch {}
         reply(d.id, { ok: true, type: "list", tracks, videoId: videoId(), audioLang, currentLang });
       } else if (d.type === "fetch") {
-        const out = await loadCaption(d.lang);
+        const out = await loadCaption(d.lang, d.baseUrl);
         reply(d.id, { ok: true, type: "fetch", raw: out.raw, via: out.via });
       } else if (d.type === "clear") {
         window.__kikiLastBody = "";
