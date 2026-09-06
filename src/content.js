@@ -368,11 +368,11 @@
     hideAi();
     setAiTitle("KIKI");
     const token = STATE.aiToken;
-    const x = e?.clientX || word.getBoundingClientRect().left;
-    const y = e?.clientY || word.getBoundingClientRect().top;
+    const rect = word.getBoundingClientRect();
+    const x = e?.clientX || (rect.left + rect.width / 2);
+    const y = e?.clientY || (rect.top + rect.height / 2);
     setTimeout(() => {
       if (token !== STATE.aiToken || STATE.lookupEl !== word) return;
-      revealYomitanFrames();
       const range = document.createRange();
       range.selectNodeContents(word);
       const sel = window.getSelection();
@@ -380,8 +380,11 @@
         sel.removeAllRanges();
         sel.addRange(range);
       }
-      word.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y }));
-      word.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y }));
+      const opts = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, pointerType: "mouse" };
+      word.dispatchEvent(new PointerEvent("pointerover", opts));
+      word.dispatchEvent(new MouseEvent("mouseover", opts));
+      word.dispatchEvent(new PointerEvent("pointermove", opts));
+      word.dispatchEvent(new MouseEvent("mousemove", opts));
     }, prev && prev !== word ? 140 : 0);
   }
 
@@ -393,7 +396,9 @@
     STATE.pausedForLookup = false;
     document.querySelectorAll(".kiki-word.kiki-active").forEach((n) => n.classList.remove("kiki-active"));
     const sel = window.getSelection();
-    if (sel) sel.removeAllRanges();
+    if (sel) {
+      try { sel.removeAllRanges(); } catch {}
+    }
     hideAi();
     dismissYomitan(active);
     const v = videoEl();
@@ -404,23 +409,6 @@
     const opts = { key: "Escape", code: "Escape", keyCode: 27, which: 27, bubbles: true, cancelable: true };
     target.dispatchEvent(new KeyboardEvent("keydown", opts));
     target.dispatchEvent(new KeyboardEvent("keyup", opts));
-  }
-
-  function findYomitanContainers() {
-    const list = [];
-    const parents = [document.body, document.querySelector("#movie_player"), document.documentElement].filter(Boolean);
-    for (const p of parents) {
-      if (!p.children) continue;
-      for (const child of p.children) {
-        if (child.tagName === "DIV" && !child.id && !child.className) {
-          const allStyle = child.style.all || child.style.getPropertyValue("all");
-          if (allStyle === "initial") {
-            list.push(child);
-          }
-        }
-      }
-    }
-    return list;
   }
 
   function triggerClickOutside() {
@@ -457,47 +445,14 @@
     }
   }
 
-  function hideAllYomitanElements() {
-    const hideNode = (n) => {
-      try {
-        n.style.setProperty("display", "none", "important");
-        n.style.setProperty("visibility", "hidden", "important");
-        n.style.setProperty("opacity", "0", "important");
-        n.setAttribute("hidden", "");
-      } catch {}
-    };
-
-    document.querySelectorAll("iframe, [id*='yomitan' i], [class*='yomitan' i], [id*='yomichan' i], [class*='yomichan' i], yomitan-popup, yomichan-popup, #yomitan-popup-host").forEach((n) => {
-      if (isYomitan(n)) {
-        if (n.tagName === "IFRAME") {
-          try { fireEsc(n.contentWindow || n); } catch {}
-        }
-        hideNode(n);
-      }
-    });
-    findYomitanContainers().forEach(hideNode);
-  }
-
-  function revealYomitanFrames() {
-    const unhide = (n) => {
-      try {
-        n.style.removeProperty("display");
-        n.style.removeProperty("visibility");
-        n.style.removeProperty("opacity");
-        n.removeAttribute("hidden");
-      } catch {}
-    };
-    document.querySelectorAll("iframe, [id*='yomitan' i], [class*='yomitan' i], [id*='yomichan' i], [class*='yomichan' i], yomitan-popup, yomichan-popup, #yomitan-popup-host").forEach((n) => {
-      if (isYomitan(n)) unhide(n);
-    });
-    findYomitanContainers().forEach(unhide);
-  }
-
   function dismissYomitan(word) {
     if (word) {
       try {
-        word.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, view: window }));
-        word.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true, view: window }));
+        const opts = { bubbles: true, view: window };
+        word.dispatchEvent(new PointerEvent("pointerout", opts));
+        word.dispatchEvent(new MouseEvent("mouseout", opts));
+        word.dispatchEvent(new PointerEvent("pointerleave", opts));
+        word.dispatchEvent(new MouseEvent("mouseleave", opts));
       } catch {}
     }
     try {
@@ -508,16 +463,6 @@
     fireEsc(window);
 
     triggerClickOutside();
-    hideAllYomitanElements();
-
-    [50, 140, 300].forEach((delay) => {
-      setTimeout(() => {
-        if (!STATE.lookupEl || isAiOpen()) {
-          triggerClickOutside();
-          hideAllYomitanElements();
-        }
-      }, delay);
-    });
   }
 
   function yomitanOpen() {
