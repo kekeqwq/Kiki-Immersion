@@ -6,6 +6,7 @@
   let sourceUrl = "";
   let lastUrl = "";
   let selfFetching = 0;
+  let capturedVideoId = "";
 
   function player() {
     return document.querySelector("#movie_player") || document.querySelector(".html5-video-player");
@@ -25,6 +26,13 @@
 
   function noteUrl(url) {
     if (!isTimedtext(url) || selfFetching) return;
+    const currentId = videoId();
+    if (capturedVideoId && currentId && capturedVideoId !== currentId) {
+      sourceUrl = "";
+      lastUrl = "";
+      window.__kikiLastBody = "";
+    }
+    capturedVideoId = currentId;
     lastUrl = url;
     if (!hasTlang(url)) sourceUrl = url;
   }
@@ -42,7 +50,10 @@
       if (isTimedtext(url) && !selfFetching) {
         p.then((res) => {
           res.clone().text().then((t) => {
-            if (t && t.trim().length > 8) window.__kikiLastBody = t;
+            if (t && t.trim().length > 8) {
+              capturedVideoId = videoId();
+              window.__kikiLastBody = t;
+            }
           }).catch(() => {});
         }).catch(() => {});
       }
@@ -66,7 +77,10 @@
           if (this.responseType === "" || this.responseType === "text") body = this.responseText || "";
           else if (this.responseType === "json") body = JSON.stringify(this.response || "");
         } catch {}
-        if (body && body.length > 8) window.__kikiLastBody = body;
+        if (body && body.length > 8) {
+          capturedVideoId = videoId();
+          window.__kikiLastBody = body;
+        }
       } catch {}
     });
     return origSend.apply(this, args);
@@ -126,12 +140,16 @@
     selfFetching++;
     const errors = [];
     try {
-      for (const fmt of ["json3", "srv3", "vtt", "srv1"]) {
+      for (const fmt of ["vtt", "srv3", "json3", "srv1", ""]) {
         try {
           const u = new URL(url, location.href);
-          u.searchParams.set("fmt", fmt);
-          u.searchParams.delete("tlang");
-          const res = await origFetch.call(window, u.toString(), { credentials: "include", cache: "no-store" });
+          if (fmt) u.searchParams.set("fmt", fmt);
+          else u.searchParams.delete("fmt");
+          const res = await origFetch.call(window, u.toString(), {
+            credentials: "include",
+            cache: "no-store",
+            headers: { accept: "text/vtt, text/plain, application/json, */*" }
+          });
           const txt = await res.text();
           if (!res.ok) {
             errors.push(fmt + ":http " + res.status);
@@ -176,6 +194,13 @@
 
   async function loadCaption(wantLang, baseUrl) {
     const errors = [];
+    const currentId = videoId();
+    if (capturedVideoId && currentId && capturedVideoId !== currentId) {
+      sourceUrl = "";
+      lastUrl = "";
+      window.__kikiLastBody = "";
+      capturedVideoId = currentId;
+    }
     if (window.__kikiLastBody && window.__kikiLastBody.trim().length > 20) {
       return { raw: window.__kikiLastBody, via: "wire-body" };
     }
@@ -192,6 +217,15 @@
     const url = sourceUrl || lastUrl;
     if (url) {
       try { return { raw: await fetchExact(url), via: "captured-pot" }; }
+      catch (e) { errors.push(String(e.message || e)); }
+    }
+    sourceUrl = "";
+    lastUrl = "";
+    nudgeCaptions(wantLang);
+    await sleep(500);
+    const retryUrl = sourceUrl || lastUrl;
+    if (retryUrl) {
+      try { return { raw: await fetchExact(retryUrl), via: "captured-retry" }; }
       catch (e) { errors.push(String(e.message || e)); }
     }
     try {
@@ -233,6 +267,7 @@
         window.__kikiLastBody = "";
         sourceUrl = "";
         lastUrl = "";
+        capturedVideoId = "";
         reply(d.id, { ok: true, type: "clear" });
       }
     } catch (e) {

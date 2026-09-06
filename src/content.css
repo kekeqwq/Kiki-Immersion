@@ -142,16 +142,16 @@ html.kiki-show-chrome .ytp-gradient-bottom {
 
 .kiki-ai-btn {
   position: absolute;
-  left: 0.28em;
-  bottom: 0.28em;
-  width: 0.95em;
-  height: 0.95em;
+  left: 0.24em;
+  bottom: 0.2em;
+  width: max(1.35em, 44px);
+  height: max(1.35em, 44px);
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--kiki-ink) 45%, transparent);
   background: transparent;
   color: var(--kiki-ink);
   font: inherit;
-  font-size: 0.38em;
+  font-size: max(0.48em, 16px);
   letter-spacing: 0;
   line-height: 1;
   cursor: pointer;
