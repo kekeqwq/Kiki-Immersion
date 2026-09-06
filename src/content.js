@@ -15,7 +15,6 @@
     pausedForLookup: false,
     lookupEl: null,
     lookupWord: "",
-    aiWord: "",
     aiEnabled: false,
     aiHold: false,
     aiToken: 0,
@@ -271,17 +270,6 @@
     requestAnimationFrame(placeAi);
   }
 
-  let suppressTimer = null;
-  function suppressYomitanTemporarily(duration = 500) {
-    document.documentElement.classList.add("kiki-suppress-yomitan");
-    clearTimeout(suppressTimer);
-    suppressTimer = setTimeout(() => {
-      if (!isAiOpen()) {
-        document.documentElement.classList.remove("kiki-suppress-yomitan");
-      }
-    }, duration);
-  }
-
   function isAiOpen() {
     const el = $("#kiki-ai");
     return !!(el && !el.hidden && el.offsetHeight > 0);
@@ -292,11 +280,27 @@
     e.preventDefault();
     const word = e.currentTarget;
     const clickedWordText = (word.textContent || "").trim().toLowerCase();
+    const currentActiveText = (STATE.lookupWord || (STATE.lookupEl && STATE.lookupEl.textContent) || "").trim().toLowerCase();
+
+    if (isAiOpen()) {
+      const isTargetWord =
+        STATE.lookupEl === word ||
+        word.classList.contains("kiki-active") ||
+        (currentActiveText && currentActiveText === clickedWordText);
+
+      if (isTargetWord) {
+        closeLookup();
+        return;
+      }
+      closeLookup();
+      openLookup(word, e);
+      return;
+    }
+
     const isSameWord =
       STATE.lookupEl === word ||
       word.classList.contains("kiki-active") ||
-      (STATE.lookupWord && STATE.lookupWord.toLowerCase() === clickedWordText) ||
-      (STATE.aiWord && STATE.aiWord === clickedWordText);
+      (currentActiveText && currentActiveText === clickedWordText);
 
     if (isSameWord) {
       closeLookup();
@@ -331,8 +335,6 @@
       return;
     }
 
-    STATE.aiWord = (STATE.lookupEl.textContent || "").trim().toLowerCase();
-    suppressYomitanTemporarily(30000);
     dismissYomitan(STATE.lookupEl);
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges();
@@ -349,7 +351,6 @@
     word.classList.add("kiki-active");
     STATE.lookupEl = word;
     STATE.lookupWord = (word.textContent || "").trim();
-    STATE.aiWord = "";
     const v = videoEl();
     if (v && !v.paused) v.pause();
     STATE.pausedForLookup = true;
@@ -378,13 +379,11 @@
     const active = STATE.lookupEl;
     STATE.lookupEl = null;
     STATE.lookupWord = "";
-    STATE.aiWord = "";
     STATE.pausedForLookup = false;
     document.querySelectorAll(".kiki-word.kiki-active").forEach((n) => n.classList.remove("kiki-active"));
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges();
     hideAi();
-    suppressYomitanTemporarily(500);
     dismissYomitan(active);
     const v = videoEl();
     if (v) v.play().catch(() => {});
@@ -397,27 +396,13 @@
   }
 
   function revealYomitanFrames() {
-    document.documentElement.classList.remove("kiki-suppress-yomitan");
-    const unhide = (n) => {
-      try {
-        n.style.removeProperty("display");
-        n.style.removeProperty("visibility");
-        n.style.removeProperty("opacity");
-        n.removeAttribute("hidden");
-      } catch {}
-    };
-    document.querySelectorAll("iframe, [id*='yomitan'], [class*='yomitan'], [id*='yomichan'], [class*='yomichan'], yomitan-popup, yomichan-popup").forEach((n) => {
-      const blob = `${n.id || ""} ${n.className || ""} ${n.src || ""} ${n.title || ""} ${n.tagName || ""}`.toLowerCase();
-      if (!blob.includes("yomitan") && !blob.includes("yomichan") && !blob.includes("chrome-extension")) return;
-      unhide(n);
+    document.querySelectorAll("iframe, [id*='yomitan'], [class*='yomitan'], [id*='yomichan'], [class*='yomichan']").forEach((n) => {
+      const blob = ((n.id || "") + (n.className || "") + (n.src || "") + (n.title || "")).toLowerCase();
+      if (!blob.includes("yomitan") && !blob.includes("yomichan")) return;
+      n.style.removeProperty("display");
+      n.style.removeProperty("visibility");
+      n.removeAttribute("hidden");
     });
-    try {
-      document.querySelectorAll("*").forEach((el) => {
-        if (el.shadowRoot) {
-          el.shadowRoot.querySelectorAll("iframe, [id*='yomitan'], [class*='yomitan']").forEach(unhide);
-        }
-      });
-    } catch {}
   }
 
   function dismissYomitan(word) {
@@ -431,41 +416,22 @@
     } catch {}
     fireEsc(document);
     fireEsc(window);
-
-    const hideNode = (n) => {
-      try {
-        n.style.setProperty("display", "none", "important");
-        n.style.setProperty("visibility", "hidden", "important");
-        n.style.setProperty("opacity", "0", "important");
-        n.setAttribute("hidden", "");
-      } catch {}
-    };
-
-    const isYomitan = (n) => {
-      const blob = `${n.id || ""} ${n.className || ""} ${n.src || ""} ${n.title || ""} ${n.tagName || ""}`.toLowerCase();
-      return /yomitan|yomichan/.test(blob) ||
-        (n.tagName === "IFRAME" && /chrome-extension:/.test(n.src || "") && /popup|frame|float/i.test(n.src || blob));
-    };
-
-    document.querySelectorAll("iframe, [id*='yomitan' i], [class*='yomitan' i], [id*='yomichan' i], [class*='yomichan' i], yomitan-popup, yomichan-popup").forEach((n) => {
-      if (isYomitan(n)) hideNode(n);
+    document.querySelectorAll("iframe").forEach((f) => {
+      const blob = ((f.id || "") + (f.className || "") + (f.src || "") + (f.title || "")).toLowerCase();
+      if (blob.includes("yomitan") || blob.includes("yomichan")) {
+        try { fireEsc(f.contentWindow || f); } catch {}
+        f.style.setProperty("display", "none", "important");
+        f.style.setProperty("visibility", "hidden", "important");
+        f.setAttribute("hidden", "");
+      }
     });
-
-    try {
-      document.querySelectorAll("*").forEach((el) => {
-        if (el.shadowRoot) {
-          el.shadowRoot.querySelectorAll("iframe, [id*='yomitan' i], [class*='yomitan' i], .popup, .float").forEach(hideNode);
-        }
-      });
-    } catch {}
-
-    [0, 30, 80, 160].forEach((delay) => {
-      setTimeout(() => {
-        fireEsc(document);
-        document.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: 8, clientY: 8, view: window }));
-        document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: 8, clientY: 8, view: window }));
-      }, delay);
+    document.querySelectorAll("[id*='yomitan'], [class*='yomitan'], [id*='yomichan'], [class*='yomichan']").forEach((n) => {
+      n.style.setProperty("display", "none", "important");
+      n.style.setProperty("visibility", "hidden", "important");
     });
+    setTimeout(() => {
+      fireEsc(document);
+    }, 40);
   }
 
   function yomitanOpen() {
@@ -1169,7 +1135,10 @@
     const id = videoIdFromUrl();
     if (!id) return;
     if (!STATE.forceReload && id === STATE.videoId && STATE.cues.length) return;
-    closeLookup();
+    STATE.lookupEl = null;
+    STATE.lookupWord = "";
+    STATE.pausedForLookup = false;
+    hideAi();
     STATE.videoId = id;
     STATE.cues = [];
     STATE.idx = -1;
