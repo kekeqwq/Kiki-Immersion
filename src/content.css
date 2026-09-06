@@ -126,9 +126,10 @@ html.kiki-show-chrome .ytp-gradient-bottom {
 }
 
 .kiki-line {
+  position: relative;
   display: inline-block;
   max-width: 100%;
-  padding: 0.28em 0.7em;
+  padding: 0.28em 0.7em 0.28em 1.7em;
   margin: 0.12em 0;
   color: var(--kiki-ink);
   background: color-mix(in srgb, var(--kiki-paper) calc(var(--kiki-bg-alpha, 86) * 1%), transparent);
@@ -138,6 +139,27 @@ html.kiki-show-chrome .ytp-gradient-bottom {
   font-size: var(--kiki-font, 28px);
   font-weight: 500;
 }
+
+.kiki-ai-btn {
+  position: absolute;
+  left: 0.28em;
+  bottom: 0.28em;
+  width: 0.95em;
+  height: 0.95em;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--kiki-ink) 45%, transparent);
+  background: transparent;
+  color: var(--kiki-ink);
+  font: inherit;
+  font-size: 0.38em;
+  letter-spacing: 0;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+.kiki-ai-btn::before { content: "AI"; }
+.kiki-ai-btn:active { background: color-mix(in srgb, var(--kiki-ink) 12%, transparent); }
 
 .kiki-word {
   display: inline;

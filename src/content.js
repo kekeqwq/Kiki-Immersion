@@ -239,6 +239,13 @@
       w.addEventListener("pointerdown", onWordPointer, { passive: false });
       line.appendChild(w);
     });
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "kiki-ai-btn";
+    btn.title = "Ask AI";
+    btn.setAttribute("aria-label", "Ask AI");
+    btn.addEventListener("pointerdown", onAiButton, { passive: false });
+    line.appendChild(btn);
     box.appendChild(line);
     requestAnimationFrame(placeAi);
   }
@@ -255,12 +262,21 @@
   }
 
   function sentenceText() {
-    return ($("#kiki-captions")?.innerText || "").replace(/\s+/g, " ").trim();
+    return [...document.querySelectorAll(".kiki-word")].map((n) => n.textContent).join(" ").replace(/\s+/g, " ").trim();
+  }
+
+  function onAiButton(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!STATE.lookupEl) return;
+    dismissYomitan(STATE.lookupEl);
+    revealYomitanFrames();
+    STATE.aiToken++;
+    askAi(STATE.lookupEl.textContent, sentenceText(), STATE.aiToken);
   }
 
   function openLookup(word, e) {
     STATE.aiToken++;
-    clearTimeout(scheduleAiFallback._t);
     const prev = STATE.lookupEl;
     if (prev && prev !== word) dismissYomitan(prev);
     document.querySelectorAll(".kiki-word.kiki-active").forEach((n) => n.classList.remove("kiki-active"));
@@ -276,6 +292,7 @@
     const y = e?.clientY || word.getBoundingClientRect().top;
     setTimeout(() => {
       if (token !== STATE.aiToken || STATE.lookupEl !== word) return;
+      revealYomitanFrames();
       const range = document.createRange();
       range.selectNodeContents(word);
       const sel = window.getSelection();
@@ -283,13 +300,11 @@
       sel.addRange(range);
       word.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y }));
       word.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y }));
-      scheduleAiFallback(word.textContent, sentenceText(), token);
     }, prev && prev !== word ? 140 : 0);
   }
 
   function closeLookup() {
     STATE.aiToken++;
-    clearTimeout(scheduleAiFallback._t);
     const active = STATE.lookupEl;
     STATE.lookupEl = null;
     STATE.pausedForLookup = false;
@@ -360,34 +375,6 @@
     return false;
   }
 
-  function watchLookup(word, sentence, token) {
-    clearInterval(watchLookup._iv);
-    let ticks = 0;
-    let started = false;
-    watchLookup._iv = setInterval(() => {
-      if (token !== STATE.aiToken || !STATE.lookupEl || STATE.lookupEl.textContent !== word) {
-        clearInterval(watchLookup._iv);
-        return;
-      }
-      if (yomitanOpen()) {
-        hideAi();
-        STATE.aiHold = true;
-        return;
-      }
-      ticks += 1;
-      if (!STATE.aiEnabled || started || STATE.aiHold) return;
-      if (ticks >= 12) {
-        started = true;
-        askAi(word, sentence, token);
-      }
-    }, 250);
-  }
-
-  function scheduleAiFallback(word, sentence, token) {
-    STATE.aiHold = false;
-    watchLookup(word, sentence, token);
-  }
-
   function setAiTitle(title) {
     const hd = $("#kiki-ai .kiki-ai-hd");
     if (hd) hd.textContent = title || "KIKI";
@@ -426,8 +413,7 @@
   function askAi(word, sentence, token) {
     if (token == null) token = STATE.aiToken;
     chrome.storage.local.get(null, async (cfg) => {
-      if (token !== STATE.aiToken || !STATE.lookupEl || STATE.aiHold) return;
-      if (yomitanOpen()) { hideAi(); STATE.aiHold = true; return; }
+      if (token !== STATE.aiToken || !STATE.lookupEl) return;
       const chain = providerChain(cfg);
       if (!chain.length) {
         showAi("No API / model configured");
@@ -436,7 +422,6 @@
       for (let i = 0; i < chain.length; i++) {
         const step = chain[i];
         if (token !== STATE.aiToken || !STATE.lookupEl) return;
-        if (yomitanOpen()) { hideAi(); return; }
         showAi(step.startMsg);
         const res = await sendTry({ ...step, word, sentence });
         if (token !== STATE.aiToken || !STATE.lookupEl) return;
@@ -530,7 +515,7 @@
     if (!STATE.enabled) return;
     const p = playerEl();
     if (!p || !p.contains(e.target)) return;
-    if (e.target.closest("#kiki-captions") || e.target.closest("#kiki-ai") || e.target.closest("#kiki-track-menu")) return;
+    if (e.target.closest("#kiki-captions") || e.target.closest(".kiki-ai-btn") || e.target.closest("#kiki-ai") || e.target.closest("#kiki-track-menu")) return;
     if (e.target.closest("#kiki-btn-toggle") || e.target.closest("#kiki-btn-track")) return;
     if (document.documentElement.classList.contains("kiki-show-chrome") && e.target.closest(".ytp-chrome-bottom, .ytp-chrome-top, .ytp-popup")) return;
     const r = p.getBoundingClientRect();
