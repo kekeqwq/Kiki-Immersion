@@ -13,7 +13,15 @@
   }
 
   function videoId() {
-    try { return new URL(location.href).searchParams.get("v") || ""; } catch { return ""; }
+    try {
+      const u = new URL(location.href);
+      if (u.searchParams.get("v")) return u.searchParams.get("v");
+      const m = u.pathname.match(/\/(?:shorts|live)\/([a-zA-Z0-9_-]+)/);
+      if (m) return m[1];
+      return "";
+    } catch {
+      return "";
+    }
   }
 
   function isTimedtext(url) {
@@ -128,6 +136,12 @@
       if (p && typeof p.getPlayerResponse === "function") {
         const r = p.getPlayerResponse();
         if (r && tracksFrom(r).length) return r;
+      }
+    } catch {}
+    try {
+      const flexy = document.querySelector("ytd-watch-flexy");
+      if (flexy && flexy.playerData && tracksFrom(flexy.playerData).length) {
+        return flexy.playerData;
       }
     } catch {}
     if (window.ytInitialPlayerResponse && tracksFrom(window.ytInitialPlayerResponse).length) {
@@ -340,8 +354,11 @@
     try {
       if (d.type === "list") {
         let tracks = [];
+        const p = player();
+        if (p && typeof p.loadModule === "function") {
+          try { p.loadModule("captions"); } catch {}
+        }
         try {
-          const p = player();
           const tl = p && p.getOption && p.getOption("captions", "tracklist");
           if (Array.isArray(tl) && tl.length) {
             tracks = tl.map(summarize);

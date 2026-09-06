@@ -251,7 +251,7 @@
     const line = document.createElement("div");
     line.className = "kiki-line";
     line.addEventListener("pointerdown", (e) => {
-      if (e.target === line && isAiOpen()) {
+      if (e.target === line && (isAiOpen() || STATE.lookupEl)) {
         e.stopPropagation();
         e.preventDefault();
         closeLookup();
@@ -406,32 +406,58 @@
     target.dispatchEvent(new KeyboardEvent("keyup", opts));
   }
 
-  function revealYomitanFrames() {
-    const unhide = (n) => {
-      try {
-        n.style.removeProperty("display");
-        n.style.removeProperty("visibility");
-        n.style.removeProperty("opacity");
-        n.removeAttribute("hidden");
-      } catch {}
-    };
-    document.querySelectorAll("iframe, [id*='yomitan' i], [class*='yomitan' i], [id*='yomichan' i], [class*='yomichan' i], yomitan-popup, yomichan-popup").forEach((n) => {
-      if (isYomitan(n)) unhide(n);
-    });
+  function findYomitanContainers() {
+    const list = [];
+    const parents = [document.body, document.querySelector("#movie_player"), document.documentElement].filter(Boolean);
+    for (const p of parents) {
+      if (!p.children) continue;
+      for (const child of p.children) {
+        if (child.tagName === "DIV" && !child.id && !child.className) {
+          const allStyle = child.style.all || child.style.getPropertyValue("all");
+          if (allStyle === "initial") {
+            list.push(child);
+          }
+        }
+      }
+    }
+    return list;
   }
 
-  function dismissYomitan(word) {
-    if (word) {
-      word.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, view: window }));
-      word.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true, view: window }));
-    }
+  function triggerClickOutside() {
     try {
-      const sel = window.getSelection();
-      if (sel) sel.removeAllRanges();
-    } catch {}
-    fireEsc(document);
-    fireEsc(window);
+      const opts = {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: -999,
+        clientY: -999,
+        screenX: -999,
+        screenY: -999,
+        button: 0,
+        buttons: 0,
+        pointerId: 1,
+        pointerType: "mouse",
+        isPrimary: true
+      };
+      window.dispatchEvent(new PointerEvent("pointerdown", { ...opts, buttons: 1 }));
+      window.dispatchEvent(new MouseEvent("mousedown", { ...opts, buttons: 1 }));
+      window.dispatchEvent(new PointerEvent("pointerup", opts));
+      window.dispatchEvent(new MouseEvent("mouseup", opts));
 
+      const dummy = document.createElement("div");
+      dummy.style.cssText = "position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;pointer-events:none;opacity:0;";
+      (document.body || document.documentElement).appendChild(dummy);
+      dummy.dispatchEvent(new PointerEvent("pointerdown", { ...opts, buttons: 1 }));
+      dummy.dispatchEvent(new MouseEvent("mousedown", { ...opts, buttons: 1 }));
+      dummy.dispatchEvent(new PointerEvent("pointerup", opts));
+      dummy.dispatchEvent(new MouseEvent("mouseup", opts));
+      dummy.remove();
+    } catch (err) {
+      console.warn("Kiki triggerClickOutside error:", err);
+    }
+  }
+
+  function hideAllYomitanElements() {
     const hideNode = (n) => {
       try {
         n.style.setProperty("display", "none", "important");
@@ -441,13 +467,56 @@
       } catch {}
     };
 
-    document.querySelectorAll("iframe, [id*='yomitan' i], [class*='yomitan' i], [id*='yomichan' i], [class*='yomichan' i], yomitan-popup, yomichan-popup").forEach((n) => {
+    document.querySelectorAll("iframe, [id*='yomitan' i], [class*='yomitan' i], [id*='yomichan' i], [class*='yomichan' i], yomitan-popup, yomichan-popup, #yomitan-popup-host").forEach((n) => {
       if (isYomitan(n)) {
         if (n.tagName === "IFRAME") {
           try { fireEsc(n.contentWindow || n); } catch {}
         }
         hideNode(n);
       }
+    });
+    findYomitanContainers().forEach(hideNode);
+  }
+
+  function revealYomitanFrames() {
+    const unhide = (n) => {
+      try {
+        n.style.removeProperty("display");
+        n.style.removeProperty("visibility");
+        n.style.removeProperty("opacity");
+        n.removeAttribute("hidden");
+      } catch {}
+    };
+    document.querySelectorAll("iframe, [id*='yomitan' i], [class*='yomitan' i], [id*='yomichan' i], [class*='yomichan' i], yomitan-popup, yomichan-popup, #yomitan-popup-host").forEach((n) => {
+      if (isYomitan(n)) unhide(n);
+    });
+    findYomitanContainers().forEach(unhide);
+  }
+
+  function dismissYomitan(word) {
+    if (word) {
+      try {
+        word.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, view: window }));
+        word.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true, view: window }));
+      } catch {}
+    }
+    try {
+      const sel = window.getSelection();
+      if (sel) sel.removeAllRanges();
+    } catch {}
+    fireEsc(document);
+    fireEsc(window);
+
+    triggerClickOutside();
+    hideAllYomitanElements();
+
+    [50, 140, 300].forEach((delay) => {
+      setTimeout(() => {
+        if (!STATE.lookupEl || isAiOpen()) {
+          triggerClickOutside();
+          hideAllYomitanElements();
+        }
+      }, delay);
     });
   }
 
@@ -888,10 +957,15 @@
     ensureRoot();
     ensureChromeButtons();
     if (!STATE.enabled) return;
+    const curVid = videoIdFromUrl();
+    if (curVid && curVid !== STATE.videoId) {
+      onNavigate();
+      return;
+    }
     const v = videoEl();
     if (!v) return;
     if (!STATE.cues.length) {
-      if (!v.paused && !loadingTracks && STATE.videoId && !(lastFailedVideoId === STATE.videoId && Date.now() - lastLoadAttemptTime < 6000)) {
+      if (!loadingTracks && STATE.videoId && !(lastFailedVideoId === STATE.videoId && Date.now() - lastLoadAttemptTime < 4500)) {
         loadForVideo();
       }
       return;
@@ -905,7 +979,11 @@
 
   function videoIdFromUrl() {
     try {
-      return new URL(location.href).searchParams.get("v");
+      const u = new URL(location.href);
+      if (u.searchParams.get("v")) return u.searchParams.get("v");
+      const m = u.pathname.match(/\/(?:shorts|live)\/([a-zA-Z0-9_-]+)/);
+      if (m) return m[1];
+      return null;
     } catch {
       return null;
     }
