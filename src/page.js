@@ -74,8 +74,20 @@
         if (!isTimedtext(this.__kikiUrl) || selfFetching) return;
         let body = "";
         try {
-          if (this.responseType === "" || this.responseType === "text") body = this.responseText || "";
-          else if (this.responseType === "json") body = JSON.stringify(this.response || "");
+          if (this.responseType === "" || this.responseType === "text") {
+            body = this.responseText || "";
+          } else if (this.responseType === "json") {
+            body = typeof this.response === "string" ? this.response : JSON.stringify(this.response || "");
+          } else if (this.responseType === "arraybuffer" && this.response) {
+            body = new TextDecoder().decode(this.response);
+          } else if (this.responseType === "blob" && this.response) {
+            this.response.text().then((t) => {
+              if (t && t.length > 8) {
+                capturedVideoId = videoId();
+                window.__kikiLastBody = t;
+              }
+            }).catch(() => {});
+          }
         } catch {}
         if (body && body.length > 8) {
           capturedVideoId = videoId();
@@ -124,14 +136,48 @@
     };
   }
 
+  function isPlayerReady() {
+    const p = player();
+    return !!(
+      p &&
+      typeof p.getPlayerResponse === "function" &&
+      (typeof p.loadModule === "function" || typeof p.getOption === "function")
+    );
+  }
+
+  async function waitForPlayerReady(timeout = 4000) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < timeout) {
+      if (isPlayerReady()) return true;
+      await sleep(150);
+    }
+    return isPlayerReady();
+  }
+
   function nudgeCaptions(lang) {
     try {
       const p = player();
       if (!p) return;
       if (typeof p.loadModule === "function") p.loadModule("captions");
-      const code = lang || "en";
-      if (typeof p.setOption === "function") {
+      const code = (lang || "en").toLowerCase();
+      let track = null;
+      if (typeof p.getOption === "function") {
+        const list = p.getOption("captions", "tracklist") || [];
+        track =
+          list.find((t) => (t.languageCode || "").toLowerCase() === code) ||
+          list.find((t) => (t.languageCode || "").toLowerCase().startsWith(code.split(/[-_]/)[0])) ||
+          list[0];
+      }
+      if (track && typeof p.setOption === "function") {
+        try { p.setOption("captions", "track", track); } catch {}
+      } else if (typeof p.setOption === "function") {
         try { p.setOption("captions", "track", { languageCode: code }); } catch {}
+      }
+      if (typeof p.setOption === "function") {
+        try { p.setOption("captions", "reload", true); } catch {}
+      }
+      if (typeof p.toggleSubtitlesOn === "function") {
+        try { p.toggleSubtitlesOn(); } catch {}
       }
     } catch {}
   }
@@ -140,11 +186,12 @@
     selfFetching++;
     const errors = [];
     try {
-      for (const fmt of ["vtt", "srv3", "json3", "srv1", ""]) {
+      for (const fmt of [null, "json3", "srv3", "vtt", "srv1"]) {
         try {
           const u = new URL(url, location.href);
-          if (fmt) u.searchParams.set("fmt", fmt);
-          else u.searchParams.delete("fmt");
+          if (fmt !== null) {
+            u.searchParams.set("fmt", fmt);
+          }
           const res = await origFetch.call(window, u.toString(), {
             credentials: "include",
             cache: "no-store",
@@ -152,16 +199,16 @@
           });
           const txt = await res.text();
           if (!res.ok) {
-            errors.push(fmt + ":http " + res.status);
+            errors.push((fmt || "raw") + ":http " + res.status);
             continue;
           }
           if (!txt || !txt.trim()) {
-            errors.push(fmt + ":empty");
+            errors.push((fmt || "raw") + ":empty");
             continue;
           }
           return txt;
         } catch (e) {
-          errors.push(fmt + ":" + (e && e.message ? e.message : e));
+          errors.push((fmt || "raw") + ":" + (e && e.message ? e.message : e));
         }
       }
       throw new Error(errors.join(" | ") || "empty body");
@@ -205,29 +252,43 @@
       return { raw: window.__kikiLastBody, via: "wire-body" };
     }
     if (baseUrl) {
-      try { return { raw: await fetchExact(baseUrl), via: "track-url" }; }
-      catch (e) { errors.push(String(e.message || e)); }
+      try {
+        const raw = await fetchExact(baseUrl);
+        if (raw && raw.trim().length > 20) {
+          return { raw, via: "track-url" };
+        }
+      } catch (e) {
+        errors.push(String(e.message || e));
+      }
     }
+
+    await waitForPlayerReady(4000);
     nudgeCaptions(wantLang);
-    for (let i = 0; i < 12; i++) {
-      if (sourceUrl || lastUrl) break;
-      if (i === 2 || i === 6) nudgeCaptions(wantLang);
-      await sleep(280);
+
+    for (let i = 0; i < 18; i++) {
+      if (window.__kikiLastBody && window.__kikiLastBody.trim().length > 20) {
+        return { raw: window.__kikiLastBody, via: "wire-body" };
+      }
+      if (sourceUrl || lastUrl) {
+        try {
+          const raw = await fetchExact(sourceUrl || lastUrl);
+          if (raw && raw.trim().length > 20) {
+            return { raw, via: "captured-pot" };
+          }
+        } catch (e) {
+          errors.push(String(e.message || e));
+        }
+      }
+      if (i === 3 || i === 8 || i === 13) {
+        nudgeCaptions(wantLang);
+      }
+      await sleep(250);
     }
-    const url = sourceUrl || lastUrl;
-    if (url) {
-      try { return { raw: await fetchExact(url), via: "captured-pot" }; }
-      catch (e) { errors.push(String(e.message || e)); }
+
+    if (window.__kikiLastBody && window.__kikiLastBody.trim().length > 20) {
+      return { raw: window.__kikiLastBody, via: "wire-body" };
     }
-    sourceUrl = "";
-    lastUrl = "";
-    nudgeCaptions(wantLang);
-    await sleep(500);
-    const retryUrl = sourceUrl || lastUrl;
-    if (retryUrl) {
-      try { return { raw: await fetchExact(retryUrl), via: "captured-retry" }; }
-      catch (e) { errors.push(String(e.message || e)); }
-    }
+
     try {
       const tracks = await innertubeTracks(videoId());
       const want = (wantLang || "").toLowerCase();
@@ -235,7 +296,12 @@
         tracks.find((t) => (t.languageCode || "").toLowerCase().startsWith(want) && t.kind !== "asr") ||
         tracks.find((t) => (t.languageCode || "").toLowerCase().startsWith(want)) ||
         tracks[0];
-      if (pick && pick.baseUrl) return { raw: await fetchExact(pick.baseUrl), via: "innertube" };
+      if (pick && pick.baseUrl) {
+        const raw = await fetchExact(pick.baseUrl);
+        if (raw && raw.trim().length > 20) {
+          return { raw, via: "innertube" };
+        }
+      }
     } catch (e) {
       errors.push(String(e.message || e));
     }
@@ -247,7 +313,20 @@
     if (!d || d.source !== "kiki-content") return;
     try {
       if (d.type === "list") {
-        let tracks = tracksFrom(playerResponse()).map(summarize);
+        const ready = isPlayerReady();
+        let tracks = [];
+        if (ready) {
+          try {
+            const p = player();
+            const tl = p.getOption && p.getOption("captions", "tracklist");
+            if (Array.isArray(tl) && tl.length) {
+              tracks = tl.map(summarize);
+            }
+          } catch {}
+        }
+        if (!tracks.length) {
+          tracks = tracksFrom(playerResponse()).map(summarize);
+        }
         if (!tracks.length) {
           try { tracks = (await innertubeTracks(videoId())).map(summarize); } catch {}
         }
@@ -259,7 +338,7 @@
           const cur = p && p.getOption && p.getOption("captions", "track");
           currentLang = cur?.languageCode || cur?.language || "";
         } catch {}
-        reply(d.id, { ok: true, type: "list", tracks, videoId: videoId(), audioLang, currentLang });
+        reply(d.id, { ok: true, type: "list", tracks, videoId: videoId(), audioLang, currentLang, ready });
       } else if (d.type === "fetch") {
         const out = await loadCaption(d.lang, d.baseUrl);
         reply(d.id, { ok: true, type: "fetch", raw: out.raw, via: out.via });

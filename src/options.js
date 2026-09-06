@@ -158,6 +158,13 @@ function load() {
     setAiSwitch(!!s.aiTested, !!s.aiEnabled);
     document.getElementById("aiStatus").textContent = s.aiTested ? "tested" : "";
   });
+  const ver = chrome.runtime?.getManifest?.()?.version;
+  if (ver) {
+    const lede = document.querySelector(".lede");
+    if (lede) lede.textContent = `v${ver} — YouTube captions for touch immersion. No translation.`;
+    const aboutVer = document.querySelector(".about p");
+    if (aboutVer) aboutVer.textContent = `Kiki Immersion ${ver}`;
+  }
 }
 sel.addEventListener("change", paintPreview);
 document.getElementById("fontSize").addEventListener("input", paintPreview);
@@ -252,6 +259,7 @@ function collectConfig(cb) {
   });
 }
 document.getElementById("clearCache").addEventListener("click", () => {
+  chrome.storage.local.remove("aiCache", () => void chrome.runtime.lastError);
   chrome.runtime.sendMessage({ type: "kiki-clear-cache" }, () => {
     document.getElementById("clearCache").textContent = "Cleared";
     setTimeout(() => (document.getElementById("clearCache").textContent = "Clear caption cache"), 900);

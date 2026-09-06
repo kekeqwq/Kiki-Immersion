@@ -28,6 +28,19 @@
   };
 
   const DOUBLE_MS = 320;
+  const AI_CACHE = new Map();
+  let AI_CONFIG = null;
+  let activeAiPort = null;
+
+  function abortActiveAi() {
+    if (activeAiPort) {
+      try {
+        activeAiPort.postMessage({ type: "abort" });
+        activeAiPort.disconnect();
+      } catch {}
+      activeAiPort = null;
+    }
+  }
 
   function $(sel, root = document) {
     return root.querySelector(sel);
@@ -381,6 +394,7 @@
   }
 
   function hideAi() {
+    abortActiveAi();
     const el = $("#kiki-ai");
     if (el) {
       el.hidden = true;
@@ -389,11 +403,19 @@
     }
   }
 
-  function showAi(text, model) {
+  function showAi(text, model, isStreaming) {
     const el = $("#kiki-ai");
     if (!el) return;
     el.hidden = false;
-    el.querySelector(".kiki-ai-bd").textContent = String(text || "").replace(/\*\*/g, "");
+    const bd = el.querySelector(".kiki-ai-bd");
+    if (bd) {
+      bd.textContent = String(text || "").replace(/\*\*/g, "");
+      if (isStreaming) {
+        const cursor = document.createElement("span");
+        cursor.className = "kiki-ai-cursor";
+        bd.appendChild(cursor);
+      }
+    }
     setAiTitle(model ? `KIKI — ${model}` : "KIKI");
     placeAi();
   }
@@ -410,30 +432,152 @@
     ai.style.bottom = bottom + "px";
   }
 
-  function askAi(word, sentence, token) {
-    if (token == null) token = STATE.aiToken;
-    chrome.storage.local.get(null, async (cfg) => {
-      if (token !== STATE.aiToken || !STATE.lookupEl) return;
-      const chain = providerChain(cfg);
-      if (!chain.length) {
-        showAi("No API / model configured");
+  function saveAiCache(key, entry) {
+    AI_CACHE.set(key, entry);
+    if (AI_CACHE.size > 150) {
+      const firstKey = AI_CACHE.keys().next().value;
+      AI_CACHE.delete(firstKey);
+    }
+    const obj = {};
+    AI_CACHE.forEach((v, k) => { obj[k] = v; });
+    chrome.storage.local.set({ aiCache: obj });
+  }
+
+  function streamTry(step, word, sentence, lang, promptZh, promptEn, token, onProgress) {
+    return new Promise((resolve) => {
+      abortActiveAi();
+      let port;
+      try {
+        port = chrome.runtime.connect({ name: "kiki-ai-stream" });
+      } catch (e) {
+        resolve({ ok: false, error: String(e.message || e) });
         return;
       }
-      for (let i = 0; i < chain.length; i++) {
-        const step = chain[i];
-        if (token !== STATE.aiToken || !STATE.lookupEl) return;
-        showAi(step.startMsg);
-        const res = await sendTry({ ...step, word, sentence });
-        if (token !== STATE.aiToken || !STATE.lookupEl) return;
-        if (res && res.ok) {
-          showAi(res.text, step.model);
+      activeAiPort = port;
+      let accumulated = "";
+      let settled = false;
+
+      port.onDisconnect.addListener(() => {
+        if (!settled) {
+          settled = true;
+          if (activeAiPort === port) activeAiPort = null;
+          const err = chrome.runtime.lastError?.message || "Disconnected";
+          resolve({ ok: false, error: err });
+        }
+      });
+
+      port.onMessage.addListener((msg) => {
+        if (token !== STATE.aiToken || !STATE.lookupEl) {
+          abortActiveAi();
           return;
         }
-        const why = shortErr(res && res.error);
-        const next = chain[i + 1];
-        showAi(next ? `${why}\n${next.retryMsg}` : `${why}\nAll configured endpoints failed`);
-      }
+        if (!msg) return;
+        if (msg.type === "chunk") {
+          if (msg.thinking && !accumulated) {
+            onProgress("Thinking…", true);
+          } else if (msg.text) {
+            accumulated += msg.text;
+            onProgress(accumulated, false);
+          }
+        } else if (msg.type === "done") {
+          settled = true;
+          if (activeAiPort === port) activeAiPort = null;
+          try { port.disconnect(); } catch {}
+          resolve({ ok: true, text: accumulated });
+        } else if (msg.type === "error") {
+          settled = true;
+          if (activeAiPort === port) activeAiPort = null;
+          try { port.disconnect(); } catch {}
+          resolve({ ok: false, error: msg.error });
+        }
+      });
+
+      port.postMessage({
+        type: "start",
+        base: step.base,
+        key: step.key,
+        model: step.model,
+        word,
+        sentence,
+        lang,
+        promptZh,
+        promptEn
+      });
     });
+  }
+
+  async function askAi(word, sentence, token) {
+    if (token == null) token = STATE.aiToken;
+    abortActiveAi();
+
+    let cfg = AI_CONFIG;
+    if (!cfg || (!cfg.apiBase && !cfg.providers)) {
+      cfg = (await new Promise((r) => chrome.storage.local.get(null, r))) || {};
+      AI_CONFIG = cfg;
+    }
+    if (token !== STATE.aiToken || !STATE.lookupEl) return;
+
+    const lang = cfg.aiLang || "zh";
+    const normWord = String(word || "").trim().toLowerCase();
+    const normSentence = String(sentence || "").trim();
+    const cacheKey = `${lang}:${normWord}:${normSentence}`;
+    const cached = AI_CACHE.get(cacheKey);
+    if (cached && cached.text) {
+      showAi(cached.text, cached.model, false);
+      return;
+    }
+
+    const chain = providerChain(cfg);
+    if (!chain.length) {
+      showAi("No API / model configured", null, false);
+      return;
+    }
+
+    for (let i = 0; i < chain.length; i++) {
+      const step = chain[i];
+      if (token !== STATE.aiToken || !STATE.lookupEl) return;
+
+      showAi(step.startMsg, null, false);
+
+      let rafPending = false;
+      let latestProgress = "";
+      let latestIsThinking = false;
+
+      const res = await streamTry(
+        step,
+        word,
+        sentence,
+        lang,
+        cfg.promptZh,
+        cfg.promptEn,
+        token,
+        (progressText, isThinking) => {
+          if (token !== STATE.aiToken || !STATE.lookupEl) return;
+          latestProgress = progressText;
+          latestIsThinking = isThinking;
+          if (!rafPending) {
+            rafPending = true;
+            requestAnimationFrame(() => {
+              rafPending = false;
+              if (token !== STATE.aiToken || !STATE.lookupEl) return;
+              showAi(latestProgress, step.model, !latestIsThinking);
+            });
+          }
+        }
+      );
+
+      if (token !== STATE.aiToken || !STATE.lookupEl) return;
+
+      if (res && res.ok && res.text) {
+        showAi(res.text, step.model, false);
+        saveAiCache(cacheKey, { text: res.text, model: step.model, time: Date.now() });
+        return;
+      }
+
+      const why = shortErr(res && res.error);
+      const next = chain[i + 1];
+      showAi(next ? `${why}\n${next.retryMsg}` : `${why}\nAll configured endpoints failed`, null, false);
+    }
   }
 
   function providerChain(cfg) {
@@ -664,7 +808,13 @@
     ensureChromeButtons();
     if (!STATE.enabled) return;
     const v = videoEl();
-    if (!v || !STATE.cues.length) return;
+    if (!v) return;
+    if (!STATE.cues.length) {
+      if (!v.paused && !loadingTracks && STATE.videoId) {
+        loadForVideo();
+      }
+      return;
+    }
     const i = findIndex(v.currentTime * 1000);
     if (i !== STATE.idx) {
       STATE.idx = i;
@@ -857,13 +1007,14 @@
   }
 
   async function applyTrack(track, userPicked) {
+    if (!track) return;
     STATE.trackKey = trackKey(track);
     if (userPicked) chrome.storage.sync.set({ lastTrackLang: track.languageCode, lastTrackAsr: !!track.isAsr });
     let lastErr = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        if (attempt) await sleep(400 * attempt);
-        const res = await pageCall("fetch", { baseUrl: track.baseUrl, lang: track.languageCode || "en" }, 18000);
+        if (attempt) await sleep(800 * attempt);
+        const res = await pageCall("fetch", { baseUrl: track.baseUrl, lang: track.languageCode || "en" }, 22000);
         STATE.cues = parseAny(res.raw || "");
         STATE.idx = -1;
         renderCue(-1);
@@ -881,30 +1032,38 @@
     renderTrackMenu();
   }
 
+  let loadingTracks = false;
   async function loadForVideo() {
-    injectPage();
-    await sleep(150);
-    let data;
-    for (let i = 0; i < 8; i++) {
-      try {
-        data = await pageCall("list");
-        if (data.tracks && data.tracks.length) break;
-      } catch {}
-      await sleep(350);
+    if (loadingTracks) return;
+    loadingTracks = true;
+    try {
+      injectPage();
+      await sleep(150);
+      let data;
+      for (let i = 0; i < 15; i++) {
+        try {
+          data = await pageCall("list");
+          if (data && data.tracks && data.tracks.length && data.ready) break;
+          if (data && data.tracks && data.tracks.length && i >= 6) break;
+        } catch {}
+        await sleep(350);
+      }
+      if (!data || !data.tracks || !data.tracks.length) {
+        STATE.tracks = [];
+        STATE.cues = [];
+        renderCue(-1);
+        renderTrackMenu();
+        toast("no captions");
+        return;
+      }
+      STATE.tracks = data.tracks;
+      STATE.audioLang = data.audioLang || "";
+      STATE.currentLang = data.currentLang || "";
+      const preferred = pickDefault(STATE.tracks);
+      await applyTrack(preferred, false);
+    } finally {
+      loadingTracks = false;
     }
-    if (!data || !data.tracks || !data.tracks.length) {
-      STATE.tracks = [];
-      STATE.cues = [];
-      renderCue(-1);
-      renderTrackMenu();
-      toast("no captions");
-      return;
-    }
-    STATE.tracks = data.tracks;
-    STATE.audioLang = data.audioLang || "";
-    STATE.currentLang = data.currentLang || "";
-    const preferred = pickDefault(STATE.tracks);
-    await applyTrack(preferred, false);
   }
 
   function sleep(ms) {
@@ -928,7 +1087,9 @@
     return new Promise((resolve) => {
       const t0 = Date.now();
       const iv = setInterval(() => {
-        if (playerEl() && videoEl()) {
+        const v = videoEl();
+        const p = playerEl();
+        if (p && v && (v.readyState >= 1 || v.duration > 0 || Date.now() - t0 > 2500)) {
           clearInterval(iv);
           resolve();
         } else if (Date.now() - t0 > 15000) {
@@ -979,6 +1140,8 @@
     STATE.trackKey = null;
     STATE.audioLang = "";
     STATE.currentLang = "";
+    AI_CACHE.clear();
+    chrome.storage.local.remove("aiCache", () => void chrome.runtime.lastError);
     try { await pageCall("clear", {}, 1500); } catch {}
     toast("cache cleared");
     await onNavigate();
@@ -995,14 +1158,37 @@
     applySettings(s || {});
     onNavigate();
   });
-  chrome.storage.local.get(["aiEnabled", "aiTested"], (s) => {
-    STATE.aiEnabled = !!(s.aiEnabled && s.aiTested);
+  chrome.storage.local.get(null, (s) => {
+    AI_CONFIG = s || {};
+    STATE.aiEnabled = !!(s && s.aiEnabled && s.aiTested);
+    if (s && s.aiCache && typeof s.aiCache === "object") {
+      for (const [k, v] of Object.entries(s.aiCache)) {
+        AI_CACHE.set(k, v);
+      }
+    }
   });
   chrome.storage.onChanged.addListener((ch, area) => {
-    if (area === "local" && (ch.aiEnabled || ch.aiTested)) {
-      chrome.storage.local.get(["aiEnabled", "aiTested"], (s) => {
-        STATE.aiEnabled = !!(s.aiEnabled && s.aiTested);
-      });
+    if (area === "local") {
+      if (ch.aiCache) {
+        if (!ch.aiCache.newValue) {
+          AI_CACHE.clear();
+        } else {
+          AI_CACHE.clear();
+          for (const [k, v] of Object.entries(ch.aiCache.newValue)) {
+            AI_CACHE.set(k, v);
+          }
+        }
+      }
+      if (ch.aiEnabled || ch.aiTested) {
+        const en = ch.aiEnabled ? ch.aiEnabled.newValue : (AI_CONFIG && AI_CONFIG.aiEnabled);
+        const te = ch.aiTested ? ch.aiTested.newValue : (AI_CONFIG && AI_CONFIG.aiTested);
+        STATE.aiEnabled = !!(en && te);
+      }
+      if (AI_CONFIG) {
+        for (const [k, v] of Object.entries(ch)) {
+          AI_CONFIG[k] = v.newValue;
+        }
+      }
     }
   });
 
@@ -1017,6 +1203,17 @@
   document.addEventListener("yt-navigate-start", () => {
     STATE.videoId = null;
   });
+  document.addEventListener("yt-player-updated", () => {
+    if (!STATE.cues.length && !loadingTracks) {
+      setTimeout(onNavigate, 200);
+    }
+  });
+  document.addEventListener("play", (e) => {
+    const v = videoEl();
+    if (e.target === v && !STATE.cues.length && !loadingTracks) {
+      setTimeout(onNavigate, 200);
+    }
+  }, true);
 
   setInterval(tick, 120);
   window.addEventListener("resize", () => requestAnimationFrame(placeAi));

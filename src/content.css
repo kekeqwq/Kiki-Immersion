@@ -212,6 +212,19 @@ html.kiki-show-chrome .ytp-gradient-bottom {
   white-space: pre-wrap;
   word-break: break-word;
 }
+.kiki-ai-cursor {
+  display: inline-block;
+  width: 3px;
+  height: 1em;
+  vertical-align: -0.1em;
+  margin-left: 2px;
+  background-color: var(--kiki-ink);
+  animation: kiki-ai-blink 0.8s infinite;
+}
+@keyframes kiki-ai-blink {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 0.85; }
+}
 
 html.kiki-lock-chrome .ytp-doubletap-ui,
 html.kiki-lock-chrome .ytp-doubletap-ui-legacy,
