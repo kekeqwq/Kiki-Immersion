@@ -14,6 +14,7 @@
     idx: -1,
     pausedForLookup: false,
     lookupEl: null,
+    lookupWord: "",
     aiEnabled: false,
     aiHold: false,
     aiToken: 0,
@@ -263,11 +264,21 @@
     requestAnimationFrame(placeAi);
   }
 
+  function isAiOpen() {
+    const el = $("#kiki-ai");
+    return !!(el && !el.hidden && el.offsetHeight > 0);
+  }
+
   function onWordPointer(e) {
     e.stopPropagation();
-    if (e.pointerType === "touch" || e.pointerType === "pen") e.preventDefault();
+    e.preventDefault();
     const word = e.currentTarget;
-    if (STATE.lookupEl === word) {
+    const isSameWord =
+      STATE.lookupEl === word ||
+      word.classList.contains("kiki-active") ||
+      (STATE.lookupWord && STATE.lookupWord === (word.textContent || "").trim());
+
+    if (isSameWord) {
       closeLookup();
       return;
     }
@@ -281,9 +292,29 @@
   function onAiButton(e) {
     e.preventDefault();
     e.stopPropagation();
+    let target = STATE.lookupEl;
+    if (!target || !target.isConnected) {
+      target = document.querySelector(".kiki-word.kiki-active") || document.querySelector(".kiki-word");
+      if (target) {
+        STATE.lookupEl = target;
+        STATE.lookupWord = (target.textContent || "").trim();
+        target.classList.add("kiki-active");
+        const v = videoEl();
+        if (v && !v.paused) v.pause();
+        STATE.pausedForLookup = true;
+      }
+    }
     if (!STATE.lookupEl) return;
+
+    if (isAiOpen()) {
+      closeLookup();
+      return;
+    }
+
     dismissYomitan(STATE.lookupEl);
-    revealYomitanFrames();
+    const sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+
     STATE.aiToken++;
     askAi(STATE.lookupEl.textContent, sentenceText(), STATE.aiToken);
   }
@@ -295,6 +326,7 @@
     document.querySelectorAll(".kiki-word.kiki-active").forEach((n) => n.classList.remove("kiki-active"));
     word.classList.add("kiki-active");
     STATE.lookupEl = word;
+    STATE.lookupWord = (word.textContent || "").trim();
     const v = videoEl();
     if (v && !v.paused) v.pause();
     STATE.pausedForLookup = true;
@@ -309,8 +341,10 @@
       const range = document.createRange();
       range.selectNodeContents(word);
       const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
       word.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y }));
       word.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y }));
     }, prev && prev !== word ? 140 : 0);
@@ -320,10 +354,11 @@
     STATE.aiToken++;
     const active = STATE.lookupEl;
     STATE.lookupEl = null;
+    STATE.lookupWord = "";
     STATE.pausedForLookup = false;
     document.querySelectorAll(".kiki-word.kiki-active").forEach((n) => n.classList.remove("kiki-active"));
     const sel = window.getSelection();
-    sel.removeAllRanges();
+    if (sel) sel.removeAllRanges();
     hideAi();
     dismissYomitan(active);
     const v = videoEl();
@@ -351,6 +386,10 @@
       word.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, view: window }));
       word.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true, view: window }));
     }
+    try {
+      const sel = window.getSelection();
+      if (sel) sel.removeAllRanges();
+    } catch {}
     fireEsc(document);
     fireEsc(window);
     document.querySelectorAll("iframe").forEach((f) => {
@@ -1074,6 +1113,7 @@
     const id = videoIdFromUrl();
     if (!id) return;
     if (!STATE.forceReload && id === STATE.videoId && STATE.cues.length) return;
+    closeLookup();
     STATE.videoId = id;
     STATE.cues = [];
     STATE.idx = -1;
