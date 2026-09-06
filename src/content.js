@@ -251,12 +251,10 @@
       w.className = "kiki-word";
       w.textContent = tok.t;
       w.addEventListener("pointerdown", onWordPointer, { passive: false });
-      ["click", "mousedown", "mouseup", "pointerup"].forEach((evt) => {
-        w.addEventListener(evt, (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-        }, { passive: false });
-      });
+      w.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+      }, { passive: false });
       line.appendChild(w);
     });
     const btn = document.createElement("button");
@@ -277,7 +275,7 @@
 
   function onWordPointer(e) {
     e.stopPropagation();
-    e.preventDefault();
+    if (e.pointerType === "touch" || e.pointerType === "pen") e.preventDefault();
     const word = e.currentTarget;
     const clickedWordText = (word.textContent || "").trim().toLowerCase();
     const currentActiveText = (STATE.lookupWord || (STATE.lookupEl && STATE.lookupEl.textContent) || "").trim().toLowerCase();
@@ -398,7 +396,7 @@
   function revealYomitanFrames() {
     document.querySelectorAll("iframe, [id*='yomitan'], [class*='yomitan'], [id*='yomichan'], [class*='yomichan']").forEach((n) => {
       const blob = ((n.id || "") + (n.className || "") + (n.src || "") + (n.title || "")).toLowerCase();
-      if (!blob.includes("yomitan") && !blob.includes("yomichan")) return;
+      if (!n.src?.startsWith("chrome-extension://") && !blob.includes("yomitan") && !blob.includes("yomichan")) return;
       n.style.removeProperty("display");
       n.style.removeProperty("visibility");
       n.removeAttribute("hidden");
@@ -418,7 +416,7 @@
     fireEsc(window);
     document.querySelectorAll("iframe").forEach((f) => {
       const blob = ((f.id || "") + (f.className || "") + (f.src || "") + (f.title || "")).toLowerCase();
-      if (blob.includes("yomitan") || blob.includes("yomichan")) {
+      if (f.src?.startsWith("chrome-extension://") || blob.includes("yomitan") || blob.includes("yomichan")) {
         try { fireEsc(f.contentWindow || f); } catch {}
         f.style.setProperty("display", "none", "important");
         f.style.setProperty("visibility", "hidden", "important");
@@ -431,6 +429,8 @@
     });
     setTimeout(() => {
       fireEsc(document);
+      document.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: 8, clientY: 8, view: window }));
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: 8, clientY: 8, view: window }));
     }, 40);
   }
 
@@ -864,6 +864,9 @@
     return -1;
   }
 
+  let lastFailedVideoId = "";
+  let lastLoadAttemptTime = 0;
+
   function tick() {
     ensureRoot();
     ensureChromeButtons();
@@ -871,7 +874,7 @@
     const v = videoEl();
     if (!v) return;
     if (!STATE.cues.length) {
-      if (!v.paused && !loadingTracks && STATE.videoId) {
+      if (!v.paused && !loadingTracks && STATE.videoId && !(lastFailedVideoId === STATE.videoId && Date.now() - lastLoadAttemptTime < 6000)) {
         loadForVideo();
       }
       return;
@@ -1097,6 +1100,7 @@
   async function loadForVideo() {
     if (loadingTracks) return;
     loadingTracks = true;
+    lastLoadAttemptTime = Date.now();
     try {
       injectPage();
       await sleep(150);
@@ -1104,14 +1108,16 @@
       for (let i = 0; i < 15; i++) {
         try {
           data = await pageCall("list");
-          if (data && data.tracks && data.tracks.length && data.ready) break;
-          if (data && data.tracks && data.tracks.length && i >= 6) break;
+          if (data && data.tracks && data.tracks.length) {
+            if (data.ready || i >= 2) break;
+          }
         } catch {}
-        await sleep(350);
+        await sleep(300);
       }
       if (!data || !data.tracks || !data.tracks.length) {
         STATE.tracks = [];
         STATE.cues = [];
+        lastFailedVideoId = STATE.videoId;
         renderCue(-1);
         renderTrackMenu();
         toast("no captions");
@@ -1122,6 +1128,11 @@
       STATE.currentLang = data.currentLang || "";
       const preferred = pickDefault(STATE.tracks);
       await applyTrack(preferred, false);
+      if (!STATE.cues.length) {
+        lastFailedVideoId = STATE.videoId;
+      } else {
+        lastFailedVideoId = "";
+      }
     } finally {
       loadingTracks = false;
     }
@@ -1135,6 +1146,8 @@
     const id = videoIdFromUrl();
     if (!id) return;
     if (!STATE.forceReload && id === STATE.videoId && STATE.cues.length) return;
+    lastFailedVideoId = "";
+    lastLoadAttemptTime = 0;
     STATE.lookupEl = null;
     STATE.lookupWord = "";
     STATE.pausedForLookup = false;
@@ -1198,6 +1211,8 @@
   }
 
   async function clearCaptionCache() {
+    lastFailedVideoId = "";
+    lastLoadAttemptTime = 0;
     STATE.forceReload = true;
     STATE.videoId = null;
     STATE.cues = [];

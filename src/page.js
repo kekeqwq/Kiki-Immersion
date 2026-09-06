@@ -26,7 +26,9 @@
 
   function noteUrl(url) {
     if (!isTimedtext(url) || selfFetching) return;
-    const currentId = videoId();
+    let urlVid = "";
+    try { urlVid = new URL(url, location.href).searchParams.get("v") || ""; } catch {}
+    const currentId = urlVid || videoId();
     if (capturedVideoId && currentId && capturedVideoId !== currentId) {
       sourceUrl = "";
       lastUrl = "";
@@ -51,7 +53,9 @@
         p.then((res) => {
           res.clone().text().then((t) => {
             if (t && t.trim().length > 8) {
-              capturedVideoId = videoId();
+              let urlVid = "";
+              try { urlVid = new URL(url, location.href).searchParams.get("v") || ""; } catch {}
+              capturedVideoId = urlVid || videoId();
               window.__kikiLastBody = t;
             }
           }).catch(() => {});
@@ -81,16 +85,21 @@
           } else if (this.responseType === "arraybuffer" && this.response) {
             body = new TextDecoder().decode(this.response);
           } else if (this.responseType === "blob" && this.response) {
+            const reqUrl = this.__kikiUrl;
             this.response.text().then((t) => {
               if (t && t.length > 8) {
-                capturedVideoId = videoId();
+                let urlVid = "";
+                try { urlVid = new URL(reqUrl, location.href).searchParams.get("v") || ""; } catch {}
+                capturedVideoId = urlVid || videoId();
                 window.__kikiLastBody = t;
               }
             }).catch(() => {});
           }
         } catch {}
         if (body && body.length > 8) {
-          capturedVideoId = videoId();
+          let urlVid = "";
+          try { urlVid = new URL(this.__kikiUrl, location.href).searchParams.get("v") || ""; } catch {}
+          capturedVideoId = urlVid || videoId();
           window.__kikiLastBody = body;
         }
       } catch {}
@@ -118,6 +127,16 @@
       const p = player();
       if (p && typeof p.getPlayerResponse === "function") {
         const r = p.getPlayerResponse();
+        if (r && tracksFrom(r).length) return r;
+      }
+    } catch {}
+    if (window.ytInitialPlayerResponse && tracksFrom(window.ytInitialPlayerResponse).length) {
+      return window.ytInitialPlayerResponse;
+    }
+    try {
+      const p = player();
+      if (p && typeof p.getPlayerResponse === "function") {
+        const r = p.getPlayerResponse();
         if (r) return r;
       }
     } catch {}
@@ -138,6 +157,9 @@
 
   function isPlayerReady() {
     const p = player();
+    if (p && typeof p.loadModule === "function") {
+      try { p.loadModule("captions"); } catch {}
+    }
     return !!(
       p &&
       typeof p.getPlayerResponse === "function" &&
@@ -176,8 +198,9 @@
       if (typeof p.setOption === "function") {
         try { p.setOption("captions", "reload", true); } catch {}
       }
-      if (typeof p.toggleSubtitlesOn === "function") {
-        try { p.toggleSubtitlesOn(); } catch {}
+      const ccBtn = document.querySelector(".ytp-subtitles-button");
+      if (ccBtn && ccBtn.getAttribute("aria-pressed") === "false") {
+        ccBtn.click();
       }
     } catch {}
   }
@@ -204,6 +227,7 @@
           }
           if (!txt || !txt.trim()) {
             errors.push((fmt || "raw") + ":empty");
+            if (fmt === null) break;
             continue;
           }
           return txt;
@@ -241,7 +265,9 @@
 
   async function loadCaption(wantLang, baseUrl) {
     const errors = [];
-    const currentId = videoId();
+    let urlVid = "";
+    try { urlVid = (baseUrl && new URL(baseUrl, location.href).searchParams.get("v")) || ""; } catch {}
+    const currentId = urlVid || videoId();
     if (capturedVideoId && currentId && capturedVideoId !== currentId) {
       sourceUrl = "";
       lastUrl = "";
@@ -262,10 +288,10 @@
       }
     }
 
-    await waitForPlayerReady(4000);
+    await waitForPlayerReady(3000);
     nudgeCaptions(wantLang);
 
-    for (let i = 0; i < 18; i++) {
+    for (let i = 0; i < 20; i++) {
       if (window.__kikiLastBody && window.__kikiLastBody.trim().length > 20) {
         return { raw: window.__kikiLastBody, via: "wire-body" };
       }
@@ -279,10 +305,10 @@
           errors.push(String(e.message || e));
         }
       }
-      if (i === 3 || i === 8 || i === 13) {
+      if (i === 1 || i === 4 || i === 8 || i === 14) {
         nudgeCaptions(wantLang);
       }
-      await sleep(250);
+      await sleep(200);
     }
 
     if (window.__kikiLastBody && window.__kikiLastBody.trim().length > 20) {
@@ -313,17 +339,14 @@
     if (!d || d.source !== "kiki-content") return;
     try {
       if (d.type === "list") {
-        const ready = isPlayerReady();
         let tracks = [];
-        if (ready) {
-          try {
-            const p = player();
-            const tl = p.getOption && p.getOption("captions", "tracklist");
-            if (Array.isArray(tl) && tl.length) {
-              tracks = tl.map(summarize);
-            }
-          } catch {}
-        }
+        try {
+          const p = player();
+          const tl = p && p.getOption && p.getOption("captions", "tracklist");
+          if (Array.isArray(tl) && tl.length) {
+            tracks = tl.map(summarize);
+          }
+        } catch {}
         if (!tracks.length) {
           tracks = tracksFrom(playerResponse()).map(summarize);
         }
@@ -338,7 +361,7 @@
           const cur = p && p.getOption && p.getOption("captions", "track");
           currentLang = cur?.languageCode || cur?.language || "";
         } catch {}
-        reply(d.id, { ok: true, type: "list", tracks, videoId: videoId(), audioLang, currentLang, ready });
+        reply(d.id, { ok: true, type: "list", tracks, videoId: videoId(), audioLang, currentLang, ready: isPlayerReady() });
       } else if (d.type === "fetch") {
         const out = await loadCaption(d.lang, d.baseUrl);
         reply(d.id, { ok: true, type: "fetch", raw: out.raw, via: out.via });
