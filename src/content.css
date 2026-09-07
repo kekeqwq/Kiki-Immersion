@@ -180,22 +180,6 @@ html.kiki-show-chrome .ytp-gradient-bottom {
   border-bottom-color: var(--kiki-ink);
 }
 
-#kiki-shield {
-  position: absolute;
-  display: none;
-  pointer-events: auto;
-  cursor: pointer;
-  background: rgba(0, 0, 0, 0.005);
-  border: none;
-  outline: none;
-  padding: 0;
-  margin: 0;
-  z-index: 4;
-  box-sizing: border-box;
-  border-radius: 6px;
-  -webkit-tap-highlight-color: transparent;
-}
-
 #kiki-ai {
   position: absolute;
   left: 50%;

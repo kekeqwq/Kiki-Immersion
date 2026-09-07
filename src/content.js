@@ -104,7 +104,6 @@
           <div class="kiki-zone kiki-right" data-zone="right" data-act="dbl"></div>
         </div>
         <div id="kiki-captions"></div>
-        <button id="kiki-shield" type="button" tabindex="-1" aria-hidden="true" style="display:none;"></button>
         <div id="kiki-ai" hidden>
           <div class="kiki-ai-hd">Kiki</div>
           <div class="kiki-ai-bd">…</div>
@@ -114,21 +113,7 @@
       host.appendChild(root);
       bindZones(root);
     }
-    const shield = $("#kiki-shield");
-    if (shield && !shield.__bound) {
-      shield.__bound = true;
-      shield.addEventListener("pointerdown", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        closeLookup();
-      }, { passive: false });
-      ["click", "mousedown", "mouseup", "pointerup"].forEach((evt) => {
-        shield.addEventListener(evt, (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }, { passive: false });
-      });
-    }
+    ensureYomitanObserver();
     paintRoot(root);
     root.style.display = STATE.enabled ? "" : "none";
     document.documentElement.classList.toggle("kiki-hide-native", STATE.enabled && STATE.hideNativeCaptions);
@@ -250,8 +235,132 @@
     }
   }
 
+  const yomitanHosts = new Set();
+  let yomitanObserver = null;
+  const observedRoots = new WeakSet();
+
+  function isYomitanHost(el) {
+    if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+    if (el.hasAttribute && el.hasAttribute("data-kiki-yomitan")) return true;
+    if (el.id && el.id.startsWith("kiki-")) return false;
+
+    const tag = el.tagName;
+    const st = el.getAttribute("style") || "";
+
+    if (tag === "DIV") {
+      if (/all\s*:\s*initial/i.test(st) || el.style?.all === "initial") return true;
+      if (el.id && /yomi/i.test(el.id)) return true;
+      if (typeof el.className === "string" && /yomi/i.test(el.className)) return true;
+    }
+
+    if (tag === "IFRAME") {
+      const src = String(el.src || "");
+      if (/popup\.html/i.test(src) || /yomitan/i.test(src) || /likgccmbimhjbgkjambclfkhldnlhbnn/i.test(src)) return true;
+      if (src.startsWith("chrome-extension://") && !src.includes(chrome.runtime.id)) return true;
+    }
+
+    return false;
+  }
+
+  function markYomitanNode(node) {
+    if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
+    if (isYomitanHost(node)) {
+      node.setAttribute("data-kiki-yomitan", "true");
+      yomitanHosts.add(node);
+      return;
+    }
+    const iframe = node.querySelector && node.querySelector("iframe");
+    if (iframe && isYomitanHost(iframe)) {
+      node.setAttribute("data-kiki-yomitan", "true");
+      yomitanHosts.add(node);
+      iframe.setAttribute("data-kiki-yomitan", "true");
+      yomitanHosts.add(iframe);
+    }
+  }
+
+  function scanYomitanHosts() {
+    const candidates = [];
+    if (document.body) candidates.push(...document.body.children);
+    if (document.documentElement) candidates.push(...document.documentElement.children);
+    const p = playerEl();
+    if (p) candidates.push(...p.children);
+
+    for (const el of candidates) {
+      markYomitanNode(el);
+    }
+    document.querySelectorAll('[data-kiki-yomitan="true"]').forEach((el) => yomitanHosts.add(el));
+    document.querySelectorAll('iframe[src*="popup.html"]').forEach((el) => {
+      markYomitanNode(el);
+      if (el.parentElement) markYomitanNode(el.parentElement);
+    });
+  }
+
+  function ensureYomitanObserver() {
+    if (!yomitanObserver) {
+      yomitanObserver = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          for (const node of m.addedNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              markYomitanNode(node);
+              if (!STATE.lookupEl && !isAiOpen() && yomitanHosts.has(node)) {
+                node.style.setProperty("display", "none", "important");
+                node.style.setProperty("visibility", "hidden", "important");
+                node.setAttribute("hidden", "");
+              }
+            }
+          }
+        }
+      });
+    }
+
+    const targets = [document.body, document.documentElement, playerEl()].filter(Boolean);
+    for (const t of targets) {
+      if (!observedRoots.has(t)) {
+        try {
+          yomitanObserver.observe(t, { childList: true });
+          observedRoots.add(t);
+        } catch {}
+      }
+    }
+  }
+
+  function hideAllYomitan() {
+    scanYomitanHosts();
+    for (const host of yomitanHosts) {
+      if (host.isConnected) {
+        host.style.setProperty("display", "none", "important");
+        host.style.setProperty("visibility", "hidden", "important");
+        host.setAttribute("hidden", "");
+      }
+    }
+    document.querySelectorAll('[data-kiki-yomitan="true"]').forEach((h) => {
+      h.style.setProperty("display", "none", "important");
+      h.style.setProperty("visibility", "hidden", "important");
+      h.setAttribute("hidden", "");
+    });
+  }
+
+  function revealAllYomitan() {
+    scanYomitanHosts();
+    for (const host of yomitanHosts) {
+      if (host.isConnected) {
+        host.style.removeProperty("display");
+        host.style.removeProperty("visibility");
+        host.removeAttribute("hidden");
+        host.style.setProperty("all", "initial", "important");
+      }
+    }
+    document.querySelectorAll('[data-kiki-yomitan="true"]').forEach((h) => {
+      h.style.removeProperty("display");
+      h.style.removeProperty("visibility");
+      h.removeAttribute("hidden");
+      h.style.setProperty("all", "initial", "important");
+    });
+  }
+
   function isYomitan(n) {
     if (!n) return false;
+    if (isYomitanHost(n)) return true;
     const cls = typeof n.className === "string" ? n.className : (n.className?.baseVal || "");
     const blob = `${n.id || ""} ${cls} ${n.src || ""} ${n.title || ""} ${n.tagName || ""}`.toLowerCase();
     return /yomitan|yomichan/.test(blob) ||
@@ -263,7 +372,7 @@
     if (!box) return;
     box.innerHTML = "";
     if (!STATE.enabled || i < 0 || !STATE.cues[i]) {
-      hideShield(0);
+      if (!STATE.lookupEl && !isAiOpen()) hideAllYomitan();
       return;
     }
     const src = STATE.cues[i].text;
@@ -291,11 +400,13 @@
           e.preventDefault();
         }, { passive: false });
       });
-      w.addEventListener("mousemove", (e) => {
-        if (!e.isTrusted) return;
-        if (isAiOpen() || !STATE.lookupEl || STATE.lookupEl !== w) {
-          e.stopPropagation();
-        }
+      ["pointerover", "mouseover", "pointermove", "mousemove"].forEach((evt) => {
+        w.addEventListener(evt, (e) => {
+          if (!e.isTrusted) return;
+          if (isAiOpen() || !STATE.lookupEl || STATE.lookupEl !== w) {
+            e.stopPropagation();
+          }
+        });
       });
       line.appendChild(w);
     });
@@ -309,7 +420,6 @@
     box.appendChild(line);
     requestAnimationFrame(() => {
       placeAi();
-      syncShieldPosition();
     });
   }
 
@@ -346,63 +456,6 @@
     return [...document.querySelectorAll(".kiki-word")].map((n) => n.textContent).join(" ").replace(/\s+/g, " ").trim();
   }
 
-  let shieldTimer = null;
-
-  function updateShield(targetEl) {
-    clearTimeout(shieldTimer);
-    const shield = $("#kiki-shield");
-    const root = $("#kiki-root");
-    if (!shield || !root) return;
-    if (!targetEl || !targetEl.isConnected) {
-      shield.style.display = "none";
-      return;
-    }
-    const r = targetEl.getBoundingClientRect();
-    const rootR = root.getBoundingClientRect();
-    if (r.width <= 0 || r.height <= 0) {
-      shield.style.display = "none";
-      return;
-    }
-    const isLine = targetEl.classList.contains("kiki-line");
-    const pad = isLine ? 0 : 2;
-    const radius = isLine ? "18px" : "6px";
-    shield.style.left = Math.max(0, r.left - rootR.left - pad) + "px";
-    shield.style.top = Math.max(0, r.top - rootR.top - pad) + "px";
-    shield.style.width = (r.width + pad * 2) + "px";
-    shield.style.height = (r.height + pad * 2) + "px";
-    shield.style.borderRadius = radius;
-    shield.style.display = "block";
-  }
-
-  function hideShield(delay = 120) {
-    clearTimeout(shieldTimer);
-    const shield = $("#kiki-shield");
-    if (!shield) return;
-    if (delay > 0) {
-      shieldTimer = setTimeout(() => {
-        if (!STATE.lookupEl && !isAiOpen()) {
-          shield.style.display = "none";
-        }
-      }, delay);
-    } else {
-      shield.style.display = "none";
-    }
-  }
-
-  function syncShieldPosition() {
-    const shield = $("#kiki-shield");
-    if (!shield || shield.style.display === "none") return;
-    if (isAiOpen()) {
-      const line = $(".kiki-line");
-      if (line) updateShield(line);
-      else hideShield(0);
-    } else if (STATE.lookupEl && STATE.lookupEl.isConnected) {
-      updateShield(STATE.lookupEl);
-    } else {
-      hideShield(0);
-    }
-  }
-
   function onAiButton(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -425,12 +478,18 @@
       return;
     }
 
+    hideAllYomitan();
     dismissYomitan(STATE.lookupEl);
+    [40, 100, 220].forEach((ms) => {
+      setTimeout(() => {
+        if (isAiOpen() || !STATE.lookupEl) {
+          hideAllYomitan();
+        }
+      }, ms);
+    });
+
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges();
-
-    const line = $(".kiki-line");
-    if (line) updateShield(line);
 
     STATE.aiToken++;
     askAi(STATE.lookupEl.textContent, sentenceText(), STATE.aiToken);
@@ -449,13 +508,14 @@
     STATE.pausedForLookup = true;
     hideAi();
     setAiTitle("KIKI");
-    hideShield(0);
+    revealAllYomitan();
     const token = STATE.aiToken;
     const rect = word.getBoundingClientRect();
     const x = e?.clientX || (rect.left + rect.width / 2);
     const y = e?.clientY || (rect.top + rect.height / 2);
     setTimeout(() => {
       if (token !== STATE.aiToken || STATE.lookupEl !== word) return;
+      revealAllYomitan();
       const range = document.createRange();
       range.selectNodeContents(word);
       const sel = window.getSelection();
@@ -468,11 +528,6 @@
       word.dispatchEvent(new MouseEvent("mouseover", opts));
       word.dispatchEvent(new PointerEvent("pointermove", opts));
       word.dispatchEvent(new MouseEvent("mousemove", opts));
-      setTimeout(() => {
-        if (token === STATE.aiToken && STATE.lookupEl === word) {
-          updateShield(word);
-        }
-      }, 50);
     }, prev && prev !== word ? 140 : 0);
   }
 
@@ -488,8 +543,15 @@
       try { sel.removeAllRanges(); } catch {}
     }
     hideAi();
-    hideShield(120);
+    hideAllYomitan();
     dismissYomitan(active);
+    [40, 100, 220].forEach((ms) => {
+      setTimeout(() => {
+        if (!STATE.lookupEl && !isAiOpen()) {
+          hideAllYomitan();
+        }
+      }, ms);
+    });
     const v = videoEl();
     if (v) v.play().catch(() => {});
   }
@@ -550,8 +612,8 @@
     } catch {}
     fireEsc(document);
     fireEsc(window);
-
     triggerClickOutside();
+    hideAllYomitan();
   }
 
   function yomitanOpen() {
@@ -582,7 +644,6 @@
       el.querySelector(".kiki-ai-bd").textContent = "";
       setAiTitle("KIKI");
     }
-    if (!STATE.lookupEl) hideShield(0);
   }
 
   function showAi(text, model, isStreaming) {
@@ -600,8 +661,6 @@
     }
     setAiTitle(model ? `KIKI — ${model}` : "KIKI");
     placeAi();
-    const line = $(".kiki-line");
-    if (line) updateShield(line);
   }
 
   function placeAi() {
@@ -614,7 +673,6 @@
     const gap = 18;
     const bottom = Math.max(72, rr.bottom - cr.top + gap);
     ai.style.bottom = bottom + "px";
-    syncShieldPosition();
   }
 
   function saveAiCache(key, entry) {
@@ -844,7 +902,7 @@
     if (!STATE.enabled) return;
     const p = playerEl();
     if (!p || !p.contains(e.target)) return;
-    if (e.target.closest("#kiki-captions") || e.target.closest(".kiki-ai-btn") || e.target.closest("#kiki-ai") || e.target.closest("#kiki-track-menu") || e.target.closest("#kiki-shield")) return;
+    if (e.target.closest("#kiki-captions") || e.target.closest(".kiki-ai-btn") || e.target.closest("#kiki-ai") || e.target.closest("#kiki-track-menu") || e.target.closest('[data-kiki-yomitan="true"]') || isYomitan(e.target)) return;
     if (e.target.closest("#kiki-btn-toggle") || e.target.closest("#kiki-btn-track")) return;
     if (document.documentElement.classList.contains("kiki-show-chrome") && e.target.closest(".ytp-chrome-bottom, .ytp-chrome-top, .ytp-popup")) return;
     const r = p.getBoundingClientRect();
@@ -883,7 +941,7 @@
   }
 
   function onZonePointer(e) {
-    if (e.target.closest && (e.target.closest(".kiki-word") || e.target.closest("#kiki-shield"))) return;
+    if (e.target.closest && (e.target.closest(".kiki-word") || e.target.closest('[data-kiki-yomitan="true"]'))) return;
     e.preventDefault();
     e.stopPropagation();
     const zone = e.currentTarget.dataset.zone;
@@ -1289,6 +1347,7 @@
     STATE.lookupWord = "";
     STATE.pausedForLookup = false;
     hideAi();
+    hideAllYomitan();
     STATE.videoId = id;
     STATE.cues = [];
     STATE.idx = -1;
