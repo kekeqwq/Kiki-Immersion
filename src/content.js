@@ -115,6 +115,28 @@
     }
     ensureYomitanObserver();
     paintRoot(root);
+    const captionsBox = $("#kiki-captions");
+    if (captionsBox && !captionsBox.__observed) {
+      captionsBox.__observed = true;
+      try {
+        const ro = new ResizeObserver(() => {
+          if (STATE.lookupEl) positionAllYomitan();
+          if (isAiOpen()) placeAi();
+        });
+        ro.observe(captionsBox);
+      } catch {}
+    }
+    if (!ensureRoot.__eventsBound) {
+      ensureRoot.__eventsBound = true;
+      window.addEventListener("resize", () => {
+        if (STATE.lookupEl) positionAllYomitan();
+        if (isAiOpen()) placeAi();
+      }, { passive: true });
+      document.addEventListener("fullscreenchange", () => {
+        if (STATE.lookupEl) positionAllYomitan();
+        if (isAiOpen()) placeAi();
+      }, { passive: true });
+    }
     root.style.display = STATE.enabled ? "" : "none";
     document.documentElement.classList.toggle("kiki-hide-native", STATE.enabled && STATE.hideNativeCaptions);
     document.documentElement.classList.toggle("kiki-lock-chrome", !!STATE.enabled);
@@ -306,6 +328,8 @@
                 node.style.setProperty("display", "none", "important");
                 node.style.setProperty("visibility", "hidden", "important");
                 node.setAttribute("hidden", "");
+              } else if (STATE.lookupEl && yomitanHosts.has(node)) {
+                positionAllYomitan();
               }
             }
           }
@@ -322,6 +346,112 @@
         } catch {}
       }
     }
+  }
+
+  function computeYomitanLayout() {
+    const p = playerEl();
+    const pr = p ? p.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+    const cap = $("#kiki-captions");
+    const line = cap?.querySelector(".kiki-line");
+    const cr = line ? line.getBoundingClientRect() : (cap && cap.offsetHeight > 0 ? cap.getBoundingClientRect() : null);
+
+    // Centered horizontally relative to the video player
+    const targetWidth = Math.min(760, Math.max(300, Math.round(pr.width * 0.90)));
+    const targetLeft = Math.max(8, Math.round(pr.left + (pr.width - targetWidth) / 2));
+
+    // Float 16px above the top boundary of captions (whether single-line or multi-line)
+    const gap = 16;
+    const bottomBoundary = cr ? (cr.top - gap) : (pr.bottom - Math.round(pr.height * 0.16));
+    const topMargin = Math.max(12, Math.round(pr.top + 20));
+    const maxAllowedHeight = Math.max(180, Math.round(bottomBoundary - topMargin));
+    const targetHeight = Math.min(420, maxAllowedHeight);
+    const targetTop = Math.max(topMargin, Math.round(bottomBoundary - targetHeight));
+
+    return {
+      left: targetLeft,
+      top: targetTop,
+      width: targetWidth,
+      height: targetHeight
+    };
+  }
+
+  function getHostShadowRoot(host) {
+    try {
+      if (typeof chrome !== "undefined" && chrome.dom && typeof chrome.dom.openOrClosedShadowRoot === "function") {
+        const s = chrome.dom.openOrClosedShadowRoot(host);
+        if (s) return s;
+      }
+    } catch {}
+    return host.openOrClosedShadowRoot || host.shadowRoot || null;
+  }
+
+  function ensureShadowStyle(shadow) {
+    if (!shadow) return;
+    let s = shadow.querySelector("#kiki-yomi-style");
+    if (!s) {
+      s = document.createElement("style");
+      s.id = "kiki-yomi-style";
+      s.textContent = `
+        iframe.yomitan-popup {
+          position: fixed !important;
+          left: var(--kiki-yomi-left) !important;
+          top: var(--kiki-yomi-top) !important;
+          width: var(--kiki-yomi-width) !important;
+          height: var(--kiki-yomi-height) !important;
+          border-radius: 18px !important;
+          box-shadow: 0 14px 40px rgba(0, 0, 0, 0.38) !important;
+          overflow: hidden !important;
+        }
+      `;
+      shadow.appendChild(s);
+    }
+  }
+
+  function applyFrameStyles(frame, layout) {
+    if (!frame) return;
+    try {
+      frame.style.setProperty("position", "fixed", "important");
+      frame.style.setProperty("left", `${layout.left}px`, "important");
+      frame.style.setProperty("top", `${layout.top}px`, "important");
+      frame.style.setProperty("width", `${layout.width}px`, "important");
+      frame.style.setProperty("height", `${layout.height}px`, "important");
+      frame.style.setProperty("border-radius", "18px", "important");
+      frame.style.setProperty("box-shadow", "0 14px 40px rgba(0, 0, 0, 0.38)", "important");
+      frame.style.setProperty("overflow", "hidden", "important");
+      frame.style.setProperty("z-index", "2147483647", "important");
+    } catch {}
+  }
+
+  function positionAllYomitan() {
+    scanYomitanHosts();
+    if (!yomitanHosts.size) return;
+    const layout = computeYomitanLayout();
+
+    for (const host of yomitanHosts) {
+      if (!host.isConnected) continue;
+
+      host.style.setProperty("z-index", "2147483647", "important");
+      host.style.setProperty("--kiki-yomi-left", `${layout.left}px`);
+      host.style.setProperty("--kiki-yomi-top", `${layout.top}px`);
+      host.style.setProperty("--kiki-yomi-width", `${layout.width}px`);
+      host.style.setProperty("--kiki-yomi-height", `${layout.height}px`);
+
+      if (host.tagName === "IFRAME") {
+        applyFrameStyles(host, layout);
+        continue;
+      }
+
+      const shadow = getHostShadowRoot(host);
+      if (shadow) {
+        ensureShadowStyle(shadow);
+        const frame = shadow.querySelector("iframe.yomitan-popup, iframe");
+        if (frame) applyFrameStyles(frame, layout);
+      }
+    }
+
+    document.querySelectorAll('iframe[src*="popup.html"]').forEach((f) => {
+      applyFrameStyles(f, layout);
+    });
   }
 
   function hideAllYomitan() {
@@ -356,6 +486,7 @@
       h.removeAttribute("hidden");
       h.style.setProperty("all", "initial", "important");
     });
+    positionAllYomitan();
   }
 
   function isYomitan(n) {
@@ -420,6 +551,7 @@
     box.appendChild(line);
     requestAnimationFrame(() => {
       placeAi();
+      if (STATE.lookupEl) positionAllYomitan();
     });
   }
 
@@ -509,6 +641,7 @@
     hideAi();
     setAiTitle("KIKI");
     revealAllYomitan();
+    positionAllYomitan();
     const token = STATE.aiToken;
     const rect = word.getBoundingClientRect();
     const x = e?.clientX || (rect.left + rect.width / 2);
@@ -516,6 +649,7 @@
     setTimeout(() => {
       if (token !== STATE.aiToken || STATE.lookupEl !== word) return;
       revealAllYomitan();
+      positionAllYomitan();
       const range = document.createRange();
       range.selectNodeContents(word);
       const sel = window.getSelection();
@@ -528,6 +662,13 @@
       word.dispatchEvent(new MouseEvent("mouseover", opts));
       word.dispatchEvent(new PointerEvent("pointermove", opts));
       word.dispatchEvent(new MouseEvent("mousemove", opts));
+      [30, 80, 150, 300, 500].forEach((ms) => {
+        setTimeout(() => {
+          if (token === STATE.aiToken && STATE.lookupEl === word) {
+            positionAllYomitan();
+          }
+        }, ms);
+      });
     }, prev && prev !== word ? 140 : 0);
   }
 

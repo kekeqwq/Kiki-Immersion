@@ -204,6 +204,11 @@ html.kiki-show-chrome .ytp-gradient-bottom {
   line-height: 1.45;
   box-sizing: border-box;
 }
+
+[data-kiki-yomitan="true"] {
+  z-index: 2147483647 !important;
+  pointer-events: auto !important;
+}
 #kiki-ai .kiki-ai-hd {
   font-size: 12px;
   letter-spacing: 0.08em;
