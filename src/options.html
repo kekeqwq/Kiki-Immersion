@@ -76,7 +76,13 @@
     .map { width: 100%; border: 1px solid var(--ink); display: block; background: #fff; }
     #aiStatus { font-size: 0.85rem; }
     .about { text-align: center; }
-    .about img { width: 100%; max-width: 260px; display: block; margin: 0.8rem auto 0; }
+    .about img {
+      width: 100%;
+      max-width: 220px;
+      display: block;
+      margin: 0.8rem auto 0;
+      mix-blend-mode: multiply;
+    }
     .about p { opacity: 0.75; font-size: 0.86rem; }
     .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.8rem; }
   </style>
@@ -160,8 +166,8 @@
   <section>
     <h2>About</h2>
     <div class="about">
-      <p>Kiki Immersion 1.7.2</p>
-      <img src="../icons/about.jpg" alt="Kiki watching television" />
+      <p>Kiki Immersion 1.7.7</p>
+      <img src="../icons/about.png" alt="Kiki watching television" />
       <p>A small watcher. Large type. One line at a time.</p>
     </div>
   </section>
