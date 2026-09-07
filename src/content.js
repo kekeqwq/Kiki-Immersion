@@ -104,6 +104,7 @@
           <div class="kiki-zone kiki-right" data-zone="right" data-act="dbl"></div>
         </div>
         <div id="kiki-captions"></div>
+        <button id="kiki-shield" type="button" tabindex="-1" aria-hidden="true" style="display:none;"></button>
         <div id="kiki-ai" hidden>
           <div class="kiki-ai-hd">Kiki</div>
           <div class="kiki-ai-bd">…</div>
@@ -112,6 +113,21 @@
       `;
       host.appendChild(root);
       bindZones(root);
+    }
+    const shield = $("#kiki-shield");
+    if (shield && !shield.__bound) {
+      shield.__bound = true;
+      shield.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeLookup();
+      }, { passive: false });
+      ["click", "mousedown", "mouseup", "pointerup"].forEach((evt) => {
+        shield.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }, { passive: false });
+      });
     }
     paintRoot(root);
     root.style.display = STATE.enabled ? "" : "none";
@@ -246,7 +262,10 @@
     const box = $("#kiki-captions");
     if (!box) return;
     box.innerHTML = "";
-    if (!STATE.enabled || i < 0 || !STATE.cues[i]) return;
+    if (!STATE.enabled || i < 0 || !STATE.cues[i]) {
+      hideShield(0);
+      return;
+    }
     const src = STATE.cues[i].text;
     const line = document.createElement("div");
     line.className = "kiki-line";
@@ -288,7 +307,10 @@
     btn.addEventListener("pointerdown", onAiButton, { passive: false });
     line.appendChild(btn);
     box.appendChild(line);
-    requestAnimationFrame(placeAi);
+    requestAnimationFrame(() => {
+      placeAi();
+      syncShieldPosition();
+    });
   }
 
   function isAiOpen() {
@@ -324,6 +346,63 @@
     return [...document.querySelectorAll(".kiki-word")].map((n) => n.textContent).join(" ").replace(/\s+/g, " ").trim();
   }
 
+  let shieldTimer = null;
+
+  function updateShield(targetEl) {
+    clearTimeout(shieldTimer);
+    const shield = $("#kiki-shield");
+    const root = $("#kiki-root");
+    if (!shield || !root) return;
+    if (!targetEl || !targetEl.isConnected) {
+      shield.style.display = "none";
+      return;
+    }
+    const r = targetEl.getBoundingClientRect();
+    const rootR = root.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) {
+      shield.style.display = "none";
+      return;
+    }
+    const isLine = targetEl.classList.contains("kiki-line");
+    const pad = isLine ? 0 : 2;
+    const radius = isLine ? "18px" : "6px";
+    shield.style.left = Math.max(0, r.left - rootR.left - pad) + "px";
+    shield.style.top = Math.max(0, r.top - rootR.top - pad) + "px";
+    shield.style.width = (r.width + pad * 2) + "px";
+    shield.style.height = (r.height + pad * 2) + "px";
+    shield.style.borderRadius = radius;
+    shield.style.display = "block";
+  }
+
+  function hideShield(delay = 120) {
+    clearTimeout(shieldTimer);
+    const shield = $("#kiki-shield");
+    if (!shield) return;
+    if (delay > 0) {
+      shieldTimer = setTimeout(() => {
+        if (!STATE.lookupEl && !isAiOpen()) {
+          shield.style.display = "none";
+        }
+      }, delay);
+    } else {
+      shield.style.display = "none";
+    }
+  }
+
+  function syncShieldPosition() {
+    const shield = $("#kiki-shield");
+    if (!shield || shield.style.display === "none") return;
+    if (isAiOpen()) {
+      const line = $(".kiki-line");
+      if (line) updateShield(line);
+      else hideShield(0);
+    } else if (STATE.lookupEl && STATE.lookupEl.isConnected) {
+      updateShield(STATE.lookupEl);
+    } else {
+      hideShield(0);
+    }
+  }
+
   function onAiButton(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -350,6 +429,9 @@
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges();
 
+    const line = $(".kiki-line");
+    if (line) updateShield(line);
+
     STATE.aiToken++;
     askAi(STATE.lookupEl.textContent, sentenceText(), STATE.aiToken);
   }
@@ -367,6 +449,7 @@
     STATE.pausedForLookup = true;
     hideAi();
     setAiTitle("KIKI");
+    hideShield(0);
     const token = STATE.aiToken;
     const rect = word.getBoundingClientRect();
     const x = e?.clientX || (rect.left + rect.width / 2);
@@ -385,6 +468,11 @@
       word.dispatchEvent(new MouseEvent("mouseover", opts));
       word.dispatchEvent(new PointerEvent("pointermove", opts));
       word.dispatchEvent(new MouseEvent("mousemove", opts));
+      setTimeout(() => {
+        if (token === STATE.aiToken && STATE.lookupEl === word) {
+          updateShield(word);
+        }
+      }, 50);
     }, prev && prev !== word ? 140 : 0);
   }
 
@@ -400,6 +488,7 @@
       try { sel.removeAllRanges(); } catch {}
     }
     hideAi();
+    hideShield(120);
     dismissYomitan(active);
     const v = videoEl();
     if (v) v.play().catch(() => {});
@@ -493,6 +582,7 @@
       el.querySelector(".kiki-ai-bd").textContent = "";
       setAiTitle("KIKI");
     }
+    if (!STATE.lookupEl) hideShield(0);
   }
 
   function showAi(text, model, isStreaming) {
@@ -510,6 +600,8 @@
     }
     setAiTitle(model ? `KIKI — ${model}` : "KIKI");
     placeAi();
+    const line = $(".kiki-line");
+    if (line) updateShield(line);
   }
 
   function placeAi() {
@@ -522,6 +614,7 @@
     const gap = 18;
     const bottom = Math.max(72, rr.bottom - cr.top + gap);
     ai.style.bottom = bottom + "px";
+    syncShieldPosition();
   }
 
   function saveAiCache(key, entry) {
@@ -751,7 +844,7 @@
     if (!STATE.enabled) return;
     const p = playerEl();
     if (!p || !p.contains(e.target)) return;
-    if (e.target.closest("#kiki-captions") || e.target.closest(".kiki-ai-btn") || e.target.closest("#kiki-ai") || e.target.closest("#kiki-track-menu")) return;
+    if (e.target.closest("#kiki-captions") || e.target.closest(".kiki-ai-btn") || e.target.closest("#kiki-ai") || e.target.closest("#kiki-track-menu") || e.target.closest("#kiki-shield")) return;
     if (e.target.closest("#kiki-btn-toggle") || e.target.closest("#kiki-btn-track")) return;
     if (document.documentElement.classList.contains("kiki-show-chrome") && e.target.closest(".ytp-chrome-bottom, .ytp-chrome-top, .ytp-popup")) return;
     const r = p.getBoundingClientRect();
@@ -790,7 +883,7 @@
   }
 
   function onZonePointer(e) {
-    if (e.target.closest && e.target.closest(".kiki-word")) return;
+    if (e.target.closest && (e.target.closest(".kiki-word") || e.target.closest("#kiki-shield"))) return;
     e.preventDefault();
     e.stopPropagation();
     const zone = e.currentTarget.dataset.zone;
@@ -820,7 +913,11 @@
     } else if (zone === "fs" && kind === "dbl") {
       toggleWebpageFs();
     } else if (zone === "pause" && kind === "single") {
-      togglePause();
+      if (isAiOpen() || STATE.lookupEl) {
+        closeLookup();
+      } else {
+        togglePause();
+      }
     } else if (zone === "hd" && kind === "dbl") {
       setMaxQuality();
     } else if (zone === "ctrl" && kind === "single") {
