@@ -20,6 +20,11 @@
   const MODULES = ["core", "yomitan", "ai", "ui", "youtube"];
   const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/modules/";
 
+  try {
+    window.__kiki_loader_version = KIKI_LOADER_VERSION;
+    localStorage.setItem("kiki_loader_version", KIKI_LOADER_VERSION);
+  } catch (e) {}
+
   // 1. Force Desktop YouTube Cookie early
   try {
     document.cookie = "PREF=f6=40000000&f5=30000; domain=.youtube.com; path=/; max-age=31536000; SameSite=Lax";
@@ -94,7 +99,8 @@
       results.forEach((code, idx) => {
         setCachedModule(MODULES[idx], code);
       });
-      localStorage.setItem("kiki_cache_version", KIKI_LOADER_VERSION);
+      localStorage.setItem("kiki_cache_version", "1.2.0");
+      localStorage.setItem("kiki_loader_version", KIKI_LOADER_VERSION);
       localStorage.setItem("kiki_cache_time", new Date().toLocaleString());
 
       hudToast.textContent = "✅ Kiki Immersion: Core modules ready!";

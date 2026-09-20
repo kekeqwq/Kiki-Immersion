@@ -912,7 +912,8 @@
         `;
             } else if (activeTab === "about") {
         const cacheTime = localStorage.getItem("kiki_cache_time") || "Initial / Local";
-        const cacheVer = localStorage.getItem("kiki_cache_version") || "1.2.0";
+        const engineVer = localStorage.getItem("kiki_cache_version") || "1.2.0";
+        const loaderVer = localStorage.getItem("kiki_loader_version") || (window.__kiki_loader_version || "1.0.0");
         const modulesList = ["core", "yomitan", "ai", "ui", "youtube"];
         const modStatus = modulesList.map(m => {
           const has = !!localStorage.getItem("kiki_mod_" + m);
@@ -925,9 +926,10 @@
         contentHtml = `
           <div style="display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow-y: auto; padding-right: 4px;">
             <div style="background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(165, 180, 252, 0.25); border-radius: 12px; padding: 12px 14px;">
-              <div style="font-size: 16px; font-weight: 800; color: #FFF; display: flex; align-items: center; gap: 8px;">
+              <div style="font-size: 16px; font-weight: 800; color: #FFF; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <span>✦ Kiki Immersion</span>
-                <span style="background: linear-gradient(135deg, #6366F1, #8B5CF6); font-size: 11px; padding: 2px 7px; border-radius: 6px;">v${cacheVer}</span>
+                <span style="background: linear-gradient(135deg, #2563EB, #3B82F6); font-size: 11px; padding: 2px 7px; border-radius: 6px; font-weight: 700;">Engine v${engineVer}</span>
+                <span style="background: rgba(255, 255, 255, 0.12); font-size: 11px; padding: 2px 7px; border-radius: 6px; color: #CBD5E1; font-weight: 600;">Loader v${loaderVer}</span>
               </div>
               <div style="font-size: 12px; color: #94A3B8; margin-top: 4px; line-height: 1.45;">
                 Touch & Mouse YouTube Immersion with Offline Yomitan, High-DPI Subtitles, AI Context & Hot-Reload Engine.
