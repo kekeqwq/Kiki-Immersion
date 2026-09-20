@@ -80,22 +80,16 @@ Since iPadOS Userscripts does not support direct remote URL script installation,
   // 1. Force Desktop YouTube & Early Native Lockout
   // -------------------------------------------------------------
   try {
-    document.cookie = "PREF=f6=40000000&f5=30000; domain=.youtube.com; path=/; max-age=31536000; SameSite=Lax";
+    document.cookie = "PREF=f6=40000000&f5=30000&app=desktop; domain=.youtube.com; path=/; max-age=31536000; SameSite=Lax";
   } catch (e) {}
 
   if (location.hostname === 'm.youtube.com' || location.host.includes('m.youtube.com')) {
-    const tried = sessionStorage.getItem('kiki_bounced_to_desktop');
-    if (!tried) {
-      sessionStorage.setItem('kiki_bounced_to_desktop', '1');
-      const targetUrl = new URL(location.href);
-      targetUrl.hostname = 'www.youtube.com';
-      targetUrl.searchParams.set('app', 'desktop');
-      targetUrl.searchParams.set('persist_app', '1');
-      location.replace(targetUrl.toString());
-      return;
-    }
-  } else {
-    try { sessionStorage.removeItem('kiki_bounced_to_desktop'); } catch (e) {}
+    const targetUrl = new URL(location.href);
+    targetUrl.hostname = 'www.youtube.com';
+    targetUrl.searchParams.set('app', 'desktop');
+    targetUrl.searchParams.set('persist_app', '1');
+    location.replace(targetUrl.toString());
+    return;
   }
 
   try {
@@ -155,13 +149,17 @@ Since iPadOS Userscripts does not support direct remote URL script installation,
         scriptSource = p.createScript(fullCode);
       } catch (e) {}
     }
-    const runner = new Function(scriptSource);
-    runner();
+    try {
+      const runner = new Function(scriptSource);
+      runner();
+    } catch (e) {
+      console.error("[Kiki Loader] Module execution error:", e);
+    }
   }
 
   async function fetchModule(name) {
     const url = `${GITHUB_RAW_BASE}${name}.js?_t=${Date.now()}`;
-    const resp = await fetch(url);
+    const resp = await fetch(url, { cache: "no-store" });
     if (!resp.ok) throw new Error(`HTTP ${resp.status} on ${name}.js`);
     return await resp.text();
   }
@@ -221,7 +219,7 @@ Since iPadOS Userscripts does not support direct remote URL script installation,
 })();
 ```
 
-> **提示**：安装 Loader 后，首次打开任意 YouTube 页面将自动并发拉取核心组件并缓存至本地；后续使用将实现 **0 延迟本地秒开**。需要更新时，只需在播放器顶部的 `ℹ️ About` 面板中点击「一键热更新」即可！
+> **Tip**: After installing the Loader, the first time you open any YouTube page, it will automatically fetch and cache all core modules locally. Subsequent visits load with **zero latency** from local storage. To check for updates, simply click the update button in the `ℹ️ About` panel on the player HUD bar!
 
 ---
 
@@ -232,9 +230,9 @@ Since iPadOS Userscripts does not support direct remote URL script installation,
    - **High-DPI Font Typography**: Explicit pixel sizing (`22px` headwords, `15px` definitions with 1.65 line height), eliminating YouTube's `10px` root rem scaling trap.
    - **AI Contextual Explanation Engine**:
      - **MarginNote 4 Style Exploration Pills**: Dynamically provides 2~4 clickable follow-up pills tailored to the video sentence and response.
-     - **Real-Time Reasoning Progress & Auto-Collapse**: Streaming reasoning tokens fold neatly into a purple `✦ 思考完成` status bar.
+     - **Real-Time Reasoning Progress & Auto-Collapse**: Streaming reasoning tokens fold neatly into a purple `✦ Reasoning Complete` status bar.
      - **Multi-Turn Conversational Chat**: Pinned bottom input bar for continuous inquiries with conversation memory.
-     - **Mode Switcher**: One-click switching between `⚡ 简答速查` (Quick Glance), `📚 深度精学` (Deep Study), and `⚙️ 自定义` (Custom).
+     - **Mode Switcher**: One-click switching between `⚡ Quick Glance`, `📚 Deep Study`, and `⚙️ Custom`.
      - **Max Tokens Presets**: Friendly presets (`4096` default, `8192`, `2048`, custom) to prevent answer cutoffs.
 
 2. **Rock-Solid Subtitle Pipeline (Strict Non-Live Mode)**
@@ -254,19 +252,19 @@ Since iPadOS Userscripts does not support direct remote URL script installation,
 
 ```text
 Kiki-Immersion/
-├── loader.user.js            # 永久轻量级 Loader 引导程序 (~100 行)
-├── modules/                  # 核心模块化代码库
-│   ├── core.js               # 核心状态、存储、通用函数、样式
-│   ├── yomitan.js            # Yomitan 离线 IndexedDB 词典引擎与音频
-│   ├── ai.js                 # AI 语境解析、流式多轮与 MarginNote 胶囊
-│   ├── ui.js                 # HUD 控制条、卡片排版、设置与热更面板
-│   └── youtube.js            # YouTube DOM 适配、字幕抓取与手势全屏
-├── manifest.json             # 模块注册清单与元数据
-├── scripts/                  # 本地自动化打包与构建脚本
-│   ├── bundle.py             # 毫秒级生成 dist 单文件 Bundle
-│   └── build_all.py          # 构建与同步脚本
+├── loader.user.js            # Permanent lightweight loader entrypoint (~100 lines)
+├── modules/                  # Modular source code
+│   ├── core.js               # Core state, storage, helper utilities, styles
+│   ├── yomitan.js            # Yomitan offline IndexedDB dictionary & audio
+│   ├── ai.js                 # AI explanation engine, streaming & exploration pills
+│   ├── ui.js                 # HUD bar, card layout, settings & update modal
+│   └── youtube.js            # YouTube DOM adapter, subtitle capture & gestures
+├── manifest.json             # Module registry and metadata manifest
+├── scripts/                  # Build and bundling scripts
+│   ├── bundle.py             # Generates dist single-file bundle
+│   └── build_all.py          # Build and sync utilities
 └── dist/
-    └── kiki-immersion.user.js # 单文件完整发布产物 (供完全离线使用)
+    └── kiki-immersion.user.js # Standalone monolithic bundle (fully offline)
 ```
 
 ---
