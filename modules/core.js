@@ -5,13 +5,7 @@
 
 
 
-  if (document.documentElement) {
-    document.documentElement.classList.add("kiki-lock-chrome");
-  } else {
-    document.addEventListener("DOMContentLoaded", () => {
-      document.documentElement.classList.add("kiki-lock-chrome");
-    }, { once: true });
-  }
+
 
 
   window.__kiki_engine_version = "1.2.2";

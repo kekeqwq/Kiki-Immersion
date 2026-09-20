@@ -19,6 +19,40 @@ header = """// ==UserScript==
 
 (() => {
   'use strict';
+
+  // -------------------------------------------------------------
+  // 1. Force Desktop YouTube & Early Native Lockout
+  // -------------------------------------------------------------
+  try {
+    document.cookie = "PREF=f6=40000000&f5=30000; domain=.youtube.com; path=/; max-age=31536000; SameSite=Lax";
+  } catch (e) {}
+
+  if (location.hostname === 'm.youtube.com' || location.host.includes('m.youtube.com')) {
+    const tried = sessionStorage.getItem('kiki_bounced_to_desktop');
+    if (!tried) {
+      sessionStorage.setItem('kiki_bounced_to_desktop', '1');
+      const targetUrl = new URL(location.href);
+      targetUrl.hostname = 'www.youtube.com';
+      targetUrl.searchParams.set('app', 'desktop');
+      targetUrl.searchParams.set('persist_app', '1');
+      location.replace(targetUrl.toString());
+      return;
+    }
+  } else {
+    try { sessionStorage.removeItem('kiki_bounced_to_desktop'); } catch (e) {}
+  }
+
+  try {
+    Object.defineProperty(navigator, 'platform', { get: () => "MacIntel" });
+  } catch (e) {}
+
+  if (document.documentElement) {
+    document.documentElement.classList.add("kiki-lock-chrome");
+  } else {
+    document.addEventListener("DOMContentLoaded", () => {
+      document.documentElement.classList.add("kiki-lock-chrome");
+    }, { once: true });
+  }
 """
 
 footer = """
