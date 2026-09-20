@@ -59,6 +59,8 @@
   }
 
 
+  window.__kiki_engine_version = "1.2.0";
+
   const STATE = window.STATE = {
     enabled: true,
     subsVisible: localStorage.getItem("kiki_subs_visible") !== "0",
@@ -70,7 +72,9 @@
     lookupWord: "",
     fs: false,
     videoId: null,
-    hudVisible: false
+    hudVisible: false,
+    loadingTracks: false,
+    engineVersion: "1.2.0"
   };
 
   // -------------------------------------------------------------
@@ -3417,7 +3421,8 @@ window.KikiAudioEngine = KikiAudioEngine;
         const live = lastObservedText ? "YES" : "NO";
         const trackCount = v && v.textTracks ? v.textTracks.length : 0;
         const domCount = queryCaptionElements(".ytp-caption-segment, .caption-visual-line").length;
-        toast(`Kiki v1.1.3 [${status}] | CC=${cueCount} | Live=${live} | DOM=${domCount} | Trk=${trackCount}`);
+        const kikiVer = window.__kiki_engine_version || localStorage.getItem("kiki_cache_version") || "1.2.0";
+        toast(`✦ Kiki v${kikiVer} [${status}] | CC=${cueCount} | Live=${live} | DOM=${domCount} | Trk=${trackCount}`);
       });
     }
 
@@ -3457,7 +3462,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         targetCc = "Home";
       } else if (STATE.cues && STATE.cues.length) {
         targetCc = `CC: ${STATE.cues.length}`;
-      } else if (loadingTracks) {
+      } else if (STATE.loadingTracks) {
         targetCc = "Loading CC...";
       } else {
         targetCc = "CC: None (Tap to Search)";
@@ -4706,11 +4711,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     if (!capturedVideoId || capturedVideoId === curVid) {
       const cues = parseAny(body);
       if (cues && cues.length) {
-        STATE.cues = cues;
-        STATE.idx = -1;
-        renderCue(-1);
-        updateHud(`✦ CC: ${cues.length}`);
-        toast(`Subtitles Loaded: ${cues.length} lines`);
+        applyLoadedCues(cues, "wire-sniffer");
       }
     }
   }
@@ -4926,21 +4927,29 @@ window.KikiAudioEngine = KikiAudioEngine;
           const url = key
             ? `https://www.youtube.com/youtubei/v1/player?prettyPrint=false&key=${encodeURIComponent(key)}`
             : "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
-          const res = await origFetch.call(window, url, {
-            method: "POST",
-            credentials: "omit",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              context: { client: { ...client, hl: "en", gl: "US" } },
-              videoId: id,
-              contentCheckOk: true,
-              racyCheckOk: true
-            })
-          });
-          if (!res.ok) continue;
-          const json = await res.json();
-          const tracks = json?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-          if (Array.isArray(tracks) && tracks.length) return tracks;
+          const ctrl = new AbortController();
+          const tid = setTimeout(() => ctrl.abort(), 2500);
+          try {
+            const res = await origFetch.call(window, url, {
+              method: "POST",
+              credentials: "omit",
+              headers: { "content-type": "application/json" },
+              signal: ctrl.signal,
+              body: JSON.stringify({
+                context: { client: { ...client, hl: "en", gl: "US" } },
+                videoId: id,
+                contentCheckOk: true,
+                racyCheckOk: true
+              })
+            });
+            clearTimeout(tid);
+            if (!res.ok) continue;
+            const json = await res.json();
+            const tracks = json?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+            if (Array.isArray(tracks) && tracks.length) return tracks;
+          } catch {} finally {
+            clearTimeout(tid);
+          }
         } catch {}
       }
     } catch {
@@ -5589,6 +5598,17 @@ window.KikiAudioEngine = KikiAudioEngine;
       const trackCues = extractCuesFromVideo();
       if (trackCues && trackCues.length > 2) {
         applyLoadedCues(trackCues, "video-track");
+        return;
+      }
+
+      // Fallback: render live caption text if available so user sees subtitles immediately
+      const liveText = getLiveCaptionText();
+      if (liveText && liveText !== lastObservedText) {
+        lastObservedText = liveText;
+        const box = document.getElementById("kiki-captions");
+        if (box && typeof window.renderTextToBox === "function") {
+          window.renderTextToBox(box, liveText);
+        }
       }
     }
   }
@@ -5656,30 +5676,54 @@ window.KikiAudioEngine = KikiAudioEngine;
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-  function getAllCaptionTracks() {
+  function isTrackForCurrentVideo(track, vid) {
+    if (!track || !track.baseUrl) return false;
+    if (!vid) return true;
+    try {
+      const u = new URL(track.baseUrl, location.href);
+      const trackVid = u.searchParams.get("v");
+      if (trackVid && vid && trackVid !== vid) return false;
+    } catch {}
+    return true;
+  }
+
+  function getAllCaptionTracks(vid) {
+    const curVid = vid || currentVideoId();
+    const filterTracks = (list) => {
+      if (!Array.isArray(list)) return [];
+      return list.filter(t => isTrackForCurrentVideo(t, curVid));
+    };
+
     const domTracks = getCaptionTracksFromDom();
-    if (domTracks && domTracks.length) return domTracks;
+    if (domTracks && domTracks.length) {
+      const filtered = filterTracks(domTracks);
+      if (filtered.length) return filtered;
+    }
 
     try {
       const mp = document.getElementById("movie_player") || playerEl();
       if (mp && typeof mp.getPlayerResponse === "function") {
         const pr = mp.getPlayerResponse();
         const ct = pr?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-        if (Array.isArray(ct) && ct.length) return ct;
+        const filtered = filterTracks(ct);
+        if (filtered.length) return filtered;
       }
       if (mp && typeof mp.getOption === "function") {
         const tl = mp.getOption("captions", "tracklist");
-        if (Array.isArray(tl) && tl.length) return tl;
+        const filtered = filterTracks(tl);
+        if (filtered.length) return filtered;
       }
     } catch {}
     try {
       const flexy = document.querySelector("ytd-watch-flexy");
       const ct = flexy?.playerData?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-      if (Array.isArray(ct) && ct.length) return ct;
+      const filtered = filterTracks(ct);
+      if (filtered.length) return filtered;
     } catch {}
     try {
       const ct = window.ytInitialPlayerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-      if (Array.isArray(ct) && ct.length) return ct;
+      const filtered = filterTracks(ct);
+      if (filtered.length) return filtered;
     } catch {}
     return [];
   }
@@ -5708,12 +5752,15 @@ window.KikiAudioEngine = KikiAudioEngine;
     if (!url) return "";
     selfFetching++;
     try {
-      const cleanUrl = url.replace(/\\u0026/g, "&").replace(/\\\//g, "/");
+      const cleanUrl = url
+        .replace(/&amp;/g, "&")
+        .replace(/\\u0026/g, "&")
+        .replace(/\\\//g, "/");
       const ctrl = new AbortController();
       const tid = setTimeout(() => ctrl.abort(), timeoutMs);
       try {
         const res = await origFetch.call(window, cleanUrl, {
-          credentials: "same-origin",
+          credentials: "include",
           cache: "default",
           signal: ctrl.signal
         });
@@ -5761,15 +5808,6 @@ window.KikiAudioEngine = KikiAudioEngine;
         const pressed = btn.getAttribute("aria-pressed");
         if (pressed === "false" || !pressed) {
           clickElement(btn);
-        } else if (pressed === "true") {
-          // If container has no active caption windows, trigger YouTube's caption pipeline
-          const container = document.getElementById("ytp-caption-window-container");
-          if (!container || !container.firstElementChild) {
-            clickElement(btn);
-            setTimeout(() => {
-              try { clickElement(btn); } catch {}
-            }, 250);
-          }
         }
       });
     } catch {}
@@ -5782,6 +5820,8 @@ window.KikiAudioEngine = KikiAudioEngine;
     }
     STATE.cues = cues;
     STATE.idx = -1;
+    STATE.loadingTracks = false;
+    loadingTracks = false;
     renderCue(-1);
     lastFailedVideoId = "";
     suppressNativeCaptions();
@@ -5798,6 +5838,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     }
 
     loadingTracks = true;
+    STATE.loadingTracks = true;
     lastLoadAttemptTime = Date.now();
     updateHud("✦ Loading CC...");
 
@@ -5811,30 +5852,42 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
       }
 
-      // 2. DOM / Player extraction (with polling retry for SPA rendering)
-      let tracks = getAllCaptionTracks();
+      // 2. DOM / Player extraction (with quick polling retry)
+      let tracks = getAllCaptionTracks(vid);
       if (!tracks || !tracks.length) {
-        for (let i = 0; i < 6; i++) {
-          await sleep(350);
-          tracks = getAllCaptionTracks();
+        for (let i = 0; i < 4; i++) {
+          await sleep(250);
+          tracks = getAllCaptionTracks(vid);
           if (tracks && tracks.length) break;
         }
       }
 
-      // 3. Innertube API fallback (ANDROID & WEB clients)
+      // 3. Innertube API fallback (with abort timeout)
       if (!tracks || !tracks.length) {
         try {
-          tracks = await innertubeTracks(vid);
+          const it = await innertubeTracks(vid);
+          if (it && it.length) {
+            tracks = it.filter(t => isTrackForCurrentVideo(t, vid));
+          }
         } catch {}
       }
 
-      // 4. Background page fetch fallback
+      // 4. Background page fetch fallback (with abort timeout)
       if (!tracks || !tracks.length) {
         try {
-          const res = await origFetch.call(window, `https://www.youtube.com/watch?v=${vid}`, { credentials: "omit" });
+          const ctrl = new AbortController();
+          const tid = setTimeout(() => ctrl.abort(), 2500);
+          const res = await origFetch.call(window, `https://www.youtube.com/watch?v=${vid}`, {
+            credentials: "omit",
+            signal: ctrl.signal
+          });
+          clearTimeout(tid);
           if (res.ok) {
             const html = await res.text();
-            tracks = extractTracksFromHtml(html);
+            const extracted = extractTracksFromHtml(html);
+            if (extracted && extracted.length) {
+              tracks = extracted.filter(t => isTrackForCurrentVideo(t, vid));
+            }
           }
         } catch {}
       }
@@ -5853,16 +5906,18 @@ window.KikiAudioEngine = KikiAudioEngine;
           return 0;
         });
 
-        for (const pick of sorted) {
+        // Limit to top 3 tracks to avoid long sequential delays
+        for (const pick of sorted.slice(0, 3)) {
           if (!pick || !pick.baseUrl) continue;
-          // Request fmt=json3 first (clean events & wordsToLines), then raw baseUrl
-          const jsonUrl = pick.baseUrl.includes("fmt=")
-            ? pick.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
-            : pick.baseUrl + (pick.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
-          let raw = await fetchExact(jsonUrl, 4500);
+          // Try baseUrl directly first
+          let raw = await fetchExact(pick.baseUrl, 2000);
           let cues = parseAny(raw);
           if (!cues || !cues.length) {
-            raw = await fetchExact(pick.baseUrl, 4500);
+            // Then try with fmt=json3
+            const jsonUrl = pick.baseUrl.includes("fmt=")
+              ? pick.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
+              : pick.baseUrl + (pick.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
+            raw = await fetchExact(jsonUrl, 2000);
             cues = parseAny(raw);
           }
           if (cues && cues.length) {
@@ -5881,7 +5936,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       ];
       for (const cand of directCandidates) {
         try {
-          const raw = await fetchExact(cand, 3500);
+          const raw = await fetchExact(cand, 2000);
           const cues = parseAny(raw);
           if (cues && cues.length) {
             applyLoadedCues(cues, "direct");
@@ -5899,9 +5954,10 @@ window.KikiAudioEngine = KikiAudioEngine;
       }
 
       lastFailedVideoId = vid;
-      updateHud("✦ CC: Off");
+      updateHud("✦ CC: None (Tap to Search)");
     } finally {
       loadingTracks = false;
+      STATE.loadingTracks = false;
     }
   }
 
@@ -5979,7 +6035,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       if (!v) return;
 
       if (!STATE.cues.length && STATE.videoId) {
-        if (!loadingTracks && !(lastFailedVideoId === STATE.videoId && Date.now() - lastLoadAttemptTime < 1800)) {
+        if (!loadingTracks && !STATE.loadingTracks && !(lastFailedVideoId === STATE.videoId && Date.now() - lastLoadAttemptTime < 30000)) {
           loadForVideo();
         }
       }
@@ -6059,7 +6115,8 @@ window.KikiAudioEngine = KikiAudioEngine;
         const vState = v ? (v.paused ? "Paused" : "Play") : "NoVid";
         const hudState = hudEl ? (hudEl.offsetWidth > 0 ? `${hudEl.offsetWidth}x${hudEl.offsetHeight}` : "0px") : "NULL";
         const trkCount = v && v.textTracks ? v.textTracks.length : 0;
-        toast(`✦ Kiki v1.1.3 [HUD:${hudState}|${vState}|TT:${trkCount}]`);
+        const kikiVer = window.__kiki_engine_version || localStorage.getItem("kiki_cache_version") || "1.2.0";
+        toast(`✦ Kiki v${kikiVer} [HUD:${hudState}|${vState}|TT:${trkCount}]`);
       }, 700);
       setTimeout(() => {
         ensureHud();

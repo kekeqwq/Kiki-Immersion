@@ -251,7 +251,8 @@
         const live = lastObservedText ? "YES" : "NO";
         const trackCount = v && v.textTracks ? v.textTracks.length : 0;
         const domCount = queryCaptionElements(".ytp-caption-segment, .caption-visual-line").length;
-        toast(`Kiki v1.1.3 [${status}] | CC=${cueCount} | Live=${live} | DOM=${domCount} | Trk=${trackCount}`);
+        const kikiVer = window.__kiki_engine_version || localStorage.getItem("kiki_cache_version") || "1.2.0";
+        toast(`✦ Kiki v${kikiVer} [${status}] | CC=${cueCount} | Live=${live} | DOM=${domCount} | Trk=${trackCount}`);
       });
     }
 
@@ -291,7 +292,7 @@
         targetCc = "Home";
       } else if (STATE.cues && STATE.cues.length) {
         targetCc = `CC: ${STATE.cues.length}`;
-      } else if (loadingTracks) {
+      } else if (STATE.loadingTracks) {
         targetCc = "Loading CC...";
       } else {
         targetCc = "CC: None (Tap to Search)";

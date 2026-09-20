@@ -38,6 +38,8 @@
   }
 
 
+  window.__kiki_engine_version = "1.2.0";
+
   const STATE = window.STATE = {
     enabled: true,
     subsVisible: localStorage.getItem("kiki_subs_visible") !== "0",
@@ -49,7 +51,9 @@
     lookupWord: "",
     fs: false,
     videoId: null,
-    hudVisible: false
+    hudVisible: false,
+    loadingTracks: false,
+    engineVersion: "1.2.0"
   };
 
   // -------------------------------------------------------------
