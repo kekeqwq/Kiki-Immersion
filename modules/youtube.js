@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - YouTube Adapter & Subtitle Pipeline
-// Version: 1.2.1
+// Version: 1.2.2
 // =============================================================
 
   // -------------------------------------------------------------
@@ -474,12 +474,16 @@
     if (!hud) return;
     if (STATE.hudVisible) {
       hud.style.setProperty("display", "flex", "important");
-      hud.style.setProperty("visibility", "visible", "important");
-      hud.style.setProperty("opacity", "1", "important");
+      requestAnimationFrame(() => {
+        hud.style.setProperty("visibility", "visible", "important");
+        hud.style.setProperty("opacity", "1", "important");
+      });
       toast("Kiki Bar: Shown");
       clearTimeout(toggleHud._t);
-      toggleHud._t = setTimeout(() => hideHud(), 7000);
+      toggleHud._t = setTimeout(() => hideHud(), 6000);
     } else {
+      if (typeof closeTrackDropdown === "function") closeTrackDropdown();
+      clearTimeout(toggleHud._t);
       hud.style.setProperty("opacity", "0", "important");
       hud.style.setProperty("visibility", "hidden", "important");
       setTimeout(() => {
@@ -1573,7 +1577,7 @@
         const vState = v ? (v.paused ? "Paused" : "Play") : "NoVid";
         const hudState = hudEl ? (hudEl.offsetWidth > 0 ? `${hudEl.offsetWidth}x${hudEl.offsetHeight}` : "0px") : "NULL";
         const trkCount = v && v.textTracks ? v.textTracks.length : 0;
-        const kikiVer = window.__kiki_engine_version || localStorage.getItem("kiki_cache_version") || "1.2.1";
+        const kikiVer = window.__kiki_engine_version || localStorage.getItem("kiki_cache_version") || "1.2.2";
         toast(`✦ Kiki v${kikiVer} [HUD:${hudState}|${vState}|TT:${trkCount}]`);
       }, 700);
       setTimeout(() => {
@@ -1592,4 +1596,4 @@
 
 
 
-  console.log('[Kiki Immersion] v1.2.1 Modular Engine Loaded on:', location.href);
+  console.log('[Kiki Immersion] v1.2.2 Modular Engine Loaded on:', location.href);

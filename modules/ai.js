@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - AI Contextual Engine & Multi-Turn Chat
-// Version: 1.2.1
+// Version: 1.2.2
 // =============================================================
 
   async function pingAiConnection({ base, key, model }) {

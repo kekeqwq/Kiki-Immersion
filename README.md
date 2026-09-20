@@ -2,18 +2,23 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Frosted Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.1-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.0-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.2-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.0-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
 ## 📢 Release Overview
 
+**v1.2.2 (HUD Auto-Hide, Interactive Dismiss & Vector Settings Icon)**:
+- **HUD Auto-Hide & Persistence Fix**: Fixed a bug where background caption updates repeatedly unhid the top bar; now smoothly auto-hides after 6 seconds of inactivity (or 3.5s after pointer leaves).
+- **Multiple Manual Dismiss Controls**: Easily hide the HUD anytime by tapping the top-left video corner, clicking the green status dot `[●]`, or clicking the new `✕` close button on the bar.
+- **Crisp Vector Settings Icon**: Replaced fragile font-dependent gear text glyph with an inline vector SVG icon that renders sharply and consistently across macOS, iPadOS, iOS, Chrome, and Windows.
+- **Track Dropdown Safety**: Automatically keeps the HUD open while the subtitle tracks dropdown menu is being browsed.
+
 **v1.2.1 (Streamlined HUD, Track Dropdown & True Subtitle Fallback)**:
-- **Streamlined HUD Bar**: Refined to 5 essential, high-utility controls: `⚙ Settings`, `ℹ️ About`, `💬 Sub: On/Off`, `CC Status (with Dropdown)`, and `🔄 Reload`.
+- **Streamlined HUD Bar**: Refined to 5 essential, high-utility controls: `Settings`, `ℹ️ About`, `💬 Sub: On/Off`, `CC Status (with Dropdown)`, and `🔄 Reload`.
 - **Elongated Subtitle Track Status**: Displays the active track name and loaded line count (e.g., `CC: English · 142 ▾`, `CC: English (auto) · 98 ▾`, `CC: Live ▾`).
 - **Interactive Track Dropdown Menu**: Clicking the CC status button opens a dropdown listing all available official and auto-generated subtitle tracks, allowing instant manual track switching.
-- **Strict Subtitle Priority**: Prioritizes official native audio language tracks (e.g. US/UK English for EN videos, Japanese for JA videos), followed by auto-generated captions, with realtime word-by-word subtitles as true fallback.
-- **True Fallback Protection**: Fixed live subtitles from preempting timedtext while tracks are being fetched.
+- **Strict Subtitle Priority**: Prioritizes official native audio language tracks, followed by auto-generated captions, with realtime word-by-word subtitles as true fallback.
 - **Centered Toast Notifications**: Re-anchored feedback toasts to the exact center of the screen so they are never obscured by top bars or controls.
 
 ---

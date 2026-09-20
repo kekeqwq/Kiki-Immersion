@@ -99,7 +99,7 @@
       results.forEach((code, idx) => {
         setCachedModule(MODULES[idx], code);
       });
-      localStorage.setItem("kiki_cache_version", "1.2.1");
+      localStorage.setItem("kiki_cache_version", "1.2.2");
       localStorage.setItem("kiki_loader_version", KIKI_LOADER_VERSION);
       localStorage.setItem("kiki_cache_time", new Date().toLocaleString());
 

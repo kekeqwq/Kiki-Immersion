@@ -21,7 +21,7 @@ if 'class="kiki-hud-btn kiki-hud-about"' not in ui_code:
 # Add About tab rendering in showSettingsModal
 about_tab_html = """      } else if (activeTab === "about") {
         const cacheTime = localStorage.getItem("kiki_cache_time") || "Initial / Local";
-        const cacheVer = localStorage.getItem("kiki_cache_version") || "1.2.1";
+        const cacheVer = localStorage.getItem("kiki_cache_version") || "1.2.2";
         const modulesList = ["core", "yomitan", "ai", "ui", "youtube"];
         const modStatus = modulesList.map(m => {
           const has = !!localStorage.getItem("kiki_mod_" + m);
@@ -102,7 +102,7 @@ about_event_listeners = """
                 const t = await r.text();
                 localStorage.setItem("kiki_mod_" + m, t);
               }));
-              localStorage.setItem("kiki_cache_version", "1.2.1");
+              localStorage.setItem("kiki_cache_version", "1.2.2");
               localStorage.setItem("kiki_cache_time", new Date().toLocaleString());
               toast("✅ 核心组件已覆盖更新，正在重载...");
               setTimeout(() => location.reload(), 800);

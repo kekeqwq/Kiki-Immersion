@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.2.1
+// Version: 1.2.2
 // =============================================================
 
   // -------------------------------------------------------------
@@ -38,7 +38,7 @@
   }
 
 
-  window.__kiki_engine_version = "1.2.1";
+  window.__kiki_engine_version = "1.2.2";
 
   const STATE = window.STATE = {
     enabled: true,
@@ -57,7 +57,7 @@
     liveMode: false,
     liveFallbackAllowed: false,
     lastObservedText: "",
-    engineVersion: "1.2.1"
+    engineVersion: "1.2.2"
   };
 
   // -------------------------------------------------------------
