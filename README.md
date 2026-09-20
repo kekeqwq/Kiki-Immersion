@@ -2,11 +2,16 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Frosted Glass Subtitles & Audio Engine for Safari.*
 
-![Platform](https://img.shields.io/badge/platform-Safari-blue.svg) ![Release](https://img.shields.io/badge/release-v1.1.0-emerald.svg) ![Status](https://img.shields.io/badge/status-Verified%20100%25-success.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari-blue.svg) ![Release](https://img.shields.io/badge/release-v1.1.1-emerald.svg) ![Status](https://img.shields.io/badge/status-Verified%20100%25-success.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
 ## 📢 Release Overview
+
+**v1.1.1 (Multi-Word Phrase Matching, Subtitle Toggle & HUD Responsiveness Patch)**:
+- **Yomitan Multi-Word Phrase Matching**: Clicking any word searches for matching multi-word phrases and idioms (e.g. "good night") in installed Yomitan dictionaries, prioritizing matched phrases at the top with multi-word highlights and seamless toggle-to-close behavior.
+- **Subtitle Visibility Switch**: Top HUD bar now includes a `💬 Sub: On/Off` toggle button to quickly show or hide subtitles for videos that do not require them.
+- **Zero-Latency HUD & Gesture Engine**: Eliminated DOM Text node recreation in WebKit's high-frequency tick cycle, added `touch-action: manipulation !important;`, tactile touch scaling feedback (`scale(0.93)`), and unified `bindHudButton` event isolation ensuring crisp, single-click/tap responsiveness across macOS and iPadOS Safari.
 
 **v1.1.0 (Core Milestone Release)**:
 The two core pillars of Kiki Immersion are now complete and 100% verified on Safari (macOS & iPadOS):
@@ -120,8 +125,9 @@ To test dictionary parsing, morphology, or Yomitan structured content independen
 | **Click / Tap Subtitle `✦ AI`** | Subtitle Bar | Toggle AI contextual explanation for word or full sentence |
 | **Click / Tap Card `✦ Ask AI`** | Yomitan Card | Switch from Yomitan definition to AI contextual explanation |
 | **Click / Tap Outside Card / `×`** | Player Area | Close card & resume video playback |
-| **Click / Tap Top-Left Corner** | Top-Left Corner | Toggle HUD controller (7s auto-hide) |
-| **Click / Tap Top-Right Corner** | Top-Right Corner | Toggle native YouTube controls (captions jump up 69px) |
+| **Click / Tap Top-Left Corner** | Top-Left Corner | Toggle HUD controller (auto-hides after 8s) |
+| **HUD `💬 Sub: On/Off`** | Top Bar | Toggle subtitle visibility on / off |
+| **Click / Tap Top-Right Corner** | Top-Right Corner | Toggle native YouTube controls (captions jump up) |
 | **HUD `📖 Dict` / `🤖 AI`** | Top Bar | Open in-player settings modal (Dictionaries & AI Configuration) |
 | **Double Click (Mouse)** | Anywhere on Player | Toggle Webpage Theater Fullscreen |
 | **Double Tap (Touch)** | Center Area | Toggle Webpage Theater Fullscreen |

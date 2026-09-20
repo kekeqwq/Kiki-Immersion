@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion (Safari)
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion-Safari
-// @version      1.1.0
+// @version      1.1.1
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, and touch/mouse gestures tailored for Safari.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -584,6 +584,9 @@ window.KikiStructuredContent = KikiStructuredContent;
       min-height: 1em !important;
       transition: top 0.22s cubic-bezier(0.16, 1, 0.3, 1), bottom 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
     }
+    #kiki-captions.kiki-hidden {
+      display: none !important;
+    }
     .kiki-line {
       display: inline-block !important; max-width: 100% !important;
       padding: 0.38em 0.95em !important; margin: 0.1em 0 !important;
@@ -736,13 +739,19 @@ window.KikiStructuredContent = KikiStructuredContent;
     }
     #kiki-hud .kiki-hud-btn {
       background: rgba(255, 255, 255, 0.16) !important; border-radius: 12px !important;
-      padding: 4px 9px !important; font-size: 11px !important; cursor: pointer !important;
-      border: 1px solid rgba(255, 255, 255, 0.15) !important; color: #FFFFFF !important;
+      padding: 5px 11px !important; font-size: 11.5px !important; cursor: pointer !important;
+      pointer-events: auto !important; touch-action: manipulation !important;
+      -webkit-touch-callout: none !important; user-select: none !important; -webkit-user-select: none !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important; color: #FFFFFF !important;
       font-weight: 600 !important; -webkit-tap-highlight-color: transparent !important;
-      white-space: nowrap !important;
+      white-space: nowrap !important; transition: background 0.12s ease, transform 0.08s ease !important;
     }
-    #kiki-hud .kiki-hud-btn:hover, #kiki-hud .kiki-hud-btn:active {
-      background: rgba(255, 255, 255, 0.35) !important;
+    #kiki-hud .kiki-hud-btn:hover {
+      background: rgba(255, 255, 255, 0.3) !important;
+    }
+    #kiki-hud .kiki-hud-btn:active {
+      background: rgba(255, 255, 255, 0.45) !important;
+      transform: scale(0.93) !important;
     }
 
     #kiki-hub-iframe { display: none !important; width: 0 !important; height: 0 !important; }
@@ -2690,14 +2699,131 @@ window.KikiAudioEngine = KikiAudioEngine;
     return html;
   }
 
-  async function lookupWord(term) {
-    try {
-      const localResults = await localSearch.search(term);
-      if (localResults && localResults.length) {
-        return localResults;
+  function getSliceText(fromEl, toEl) {
+    let cur = fromEl;
+    let str = "";
+    let blocked = false;
+    while (cur) {
+      const text = cur.textContent || "";
+      if (cur !== fromEl && cur !== toEl && cur.nodeType === Node.TEXT_NODE) {
+        // Block phrase detection across major clause/sentence punctuation
+        if (/[,.?!:;()\[\]"“”—\/\\]/.test(text)) {
+          blocked = true;
+          break;
+        }
       }
+      str += text;
+      if (cur === toEl) break;
+      cur = cur.nextSibling;
+    }
+    if (blocked) return null;
+    return str.trim();
+  }
+
+  async function lookupWord(term, wordEl) {
+    try {
+      const cleanTerm = (term || "").trim();
+      if (!cleanTerm) return [];
+
+      const candidatePhrases = [];
+      const seenPhrases = new Set([cleanTerm.toLowerCase()]);
+
+      if (wordEl && wordEl.closest) {
+        const line = wordEl.closest(".kiki-line");
+        if (line) {
+          const allWords = Array.from(line.querySelectorAll(".kiki-word"));
+          const C = allWords.indexOf(wordEl);
+          if (C !== -1 && allWords.length > 1) {
+            const N = allWords.length;
+
+            // 1. Forward phrases starting with wordEl (longest to shortest, max 5 words)
+            for (let len = Math.min(5, N - C); len >= 2; len--) {
+              const p = getSliceText(allWords[C], allWords[C + len - 1]);
+              if (p && !seenPhrases.has(p.toLowerCase())) {
+                seenPhrases.add(p.toLowerCase());
+                candidatePhrases.push({
+                  phrase: p,
+                  priority: 20 + len,
+                  wordEls: allWords.slice(C, C + len)
+                });
+              }
+            }
+
+            // 2. Surrounding & preceding phrases containing wordEl (longest to shortest, max 5 words)
+            for (let len = Math.min(5, N); len >= 2; len--) {
+              for (let s = Math.max(0, C - len + 1); s < C && s + len - 1 < N; s++) {
+                const e = s + len - 1;
+                if (e >= C) {
+                  const p = getSliceText(allWords[s], allWords[e]);
+                  if (p && !seenPhrases.has(p.toLowerCase())) {
+                    seenPhrases.add(p.toLowerCase());
+                    candidatePhrases.push({
+                      phrase: p,
+                      priority: len,
+                      wordEls: allWords.slice(s, e + 1)
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Query candidate phrases and single word in parallel
+      const phrasePromises = candidatePhrases.map((cp) => localSearch.search(cp.phrase));
+      const singleWordPromise = localSearch.search(cleanTerm);
+
+      const [phraseResultsArr, singleWordResults] = await Promise.all([
+        Promise.all(phrasePromises),
+        singleWordPromise
+      ]);
+
+      const matchedPhrases = [];
+      for (let i = 0; i < candidatePhrases.length; i++) {
+        const res = phraseResultsArr[i];
+        if (res && res.length > 0) {
+          matchedPhrases.push({
+            meta: candidatePhrases[i],
+            results: res
+          });
+        }
+      }
+
+      // Sort matched phrases by priority descending (forward phrases & longer phrases first)
+      matchedPhrases.sort((a, b) => b.meta.priority - a.meta.priority);
+
+      // If a phrase matched in dictionary, highlight all words belonging to the top matched phrase
+      if (matchedPhrases.length > 0) {
+        const topPhrase = matchedPhrases[0];
+        topPhrase.meta.wordEls.forEach((el) => el.classList.add("kiki-active"));
+      }
+
+      // Combine results: matched phrases first, then single word definitions
+      const combined = [];
+      const seenEntryKeys = new Set();
+
+      const addEntry = (item) => {
+        const key = `${item.dictId}:${item.term.toLowerCase()}:${item.reading}:${item.seq || ''}`;
+        if (!seenEntryKeys.has(key)) {
+          seenEntryKeys.add(key);
+          combined.push(item);
+        }
+      };
+
+      for (const mp of matchedPhrases) {
+        for (const item of mp.results) {
+          addEntry(item);
+        }
+      }
+
+      for (const item of (singleWordResults || [])) {
+        addEntry(item);
+      }
+
+      return combined;
     } catch (err) {
-      console.warn("[Kiki localSearch error]", err);
+      console.warn("[Kiki lookupWord error]", err);
     }
     return [];
   }
@@ -2707,6 +2833,7 @@ window.KikiAudioEngine = KikiAudioEngine;
   // -------------------------------------------------------------
   const STATE = window.STATE = {
     enabled: true,
+    subsVisible: localStorage.getItem("kiki_subs_visible") !== "0",
     cues: [],
     tracks: [],
     idx: -1,
@@ -2884,7 +3011,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     let initialLeft = 0, initialTop = 0;
 
     el.addEventListener("touchstart", (e) => {
-      if (e.target.tagName === "BUTTON") return;
+      if (e.target.closest("button")) return;
       const touch = e.touches[0];
       if (!touch) return;
       isDragging = true;
@@ -2920,6 +3047,48 @@ window.KikiAudioEngine = KikiAudioEngine;
     }, { passive: true });
   }
 
+  function keepHudAlive(ms = 8000) {
+    if (STATE.hudVisible) {
+      clearTimeout(toggleHud._t);
+      toggleHud._t = setTimeout(() => hideHud(), ms);
+    }
+  }
+
+  function bindHudButton(btn, handler) {
+    if (!btn || btn._kiki_bound) return;
+    btn._kiki_bound = true;
+    let lastActionTime = 0;
+
+    const runAction = (e) => {
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+      keepHudAlive();
+      const now = Date.now();
+      if (now - lastActionTime < 240) return;
+      lastActionTime = now;
+      try {
+        handler(e);
+      } catch (err) {
+        console.error("[Kiki HUD button action]", err);
+      }
+    };
+
+    btn.addEventListener("click", runAction);
+    btn.addEventListener("touchend", runAction);
+    btn.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      keepHudAlive();
+    });
+    btn.addEventListener("touchstart", (e) => {
+      e.stopPropagation();
+      keepHudAlive();
+    }, { passive: false });
+    btn.addEventListener("mousedown", (e) => {
+      e.stopPropagation();
+      keepHudAlive();
+    });
+  }
+
   function ensureHud() {
     const targetHost = document.body || document.documentElement;
     if (!targetHost) return null;
@@ -2934,6 +3103,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       setHtml(hud, `
         <div class="kiki-hud-dot" style="width: 10px !important; height: 10px !important; border-radius: 50% !important; background: #10B981 !important; flex-shrink: 0 !important; box-shadow: 0 0 10px #10B981 !important;"></div>
         <button type="button" class="kiki-hud-btn kiki-hud-title" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 700 !important; white-space: nowrap !important;" title="Tap for diagnostics">✦ Kiki</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-sub" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="Toggle Subtitles Visibility">💬 Sub: On</button>
         <button type="button" class="kiki-hud-btn kiki-hud-cc" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;">CC: Searching...</button>
         <button type="button" class="kiki-hud-btn kiki-hud-dict" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;">📖 Dict: 0</button>
         <button type="button" class="kiki-hud-btn kiki-hud-ai" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="AI API Configuration">🤖 AI: Off</button>
@@ -2943,42 +3113,64 @@ window.KikiAudioEngine = KikiAudioEngine;
       targetHost.appendChild(hud);
       makeDraggable(hud);
 
-      hud.querySelector(".kiki-hud-fs").addEventListener("click", (e) => {
-        e.stopPropagation();
+      hud.addEventListener("pointerenter", () => {
+        clearTimeout(toggleHud._t);
+      });
+      hud.addEventListener("pointerleave", () => {
+        if (STATE.hudVisible) {
+          clearTimeout(toggleHud._t);
+          toggleHud._t = setTimeout(() => hideHud(), 4000);
+        }
+      });
+
+      bindHudButton(hud.querySelector(".kiki-hud-sub"), () => {
+        STATE.subsVisible = !(STATE.subsVisible !== false);
+        localStorage.setItem("kiki_subs_visible", STATE.subsVisible ? "1" : "0");
+        const box = $("#kiki-captions");
+        if (box) {
+          if (!STATE.subsVisible) {
+            box.classList.add("kiki-hidden");
+            closeLookup();
+            toast("✦ Subtitles hidden");
+          } else {
+            box.classList.remove("kiki-hidden");
+            if (STATE.idx >= 0) renderCue(STATE.idx);
+            toast("✦ Subtitles enabled");
+          }
+        }
+        updateHud();
+      });
+
+      bindHudButton(hud.querySelector(".kiki-hud-fs"), () => {
         toggleWebpageFs();
       });
 
-      hud.querySelector(".kiki-hud-ctrl").addEventListener("click", (e) => {
-        e.stopPropagation();
+      bindHudButton(hud.querySelector(".kiki-hud-ctrl"), () => {
         toggleNativeChrome();
       });
 
-      hud.querySelector(".kiki-hud-dict").addEventListener("click", (e) => {
-        e.stopPropagation();
+      bindHudButton(hud.querySelector(".kiki-hud-dict"), () => {
         showSettingsModal("dict");
       });
 
-      hud.querySelector(".kiki-hud-ai").addEventListener("click", (e) => {
-        e.stopPropagation();
+      bindHudButton(hud.querySelector(".kiki-hud-ai"), () => {
         showSettingsModal("ai");
       });
 
-      hud.querySelector(".kiki-hud-cc").addEventListener("click", (e) => {
-        e.stopPropagation();
+      bindHudButton(hud.querySelector(".kiki-hud-cc"), () => {
         toast("Activating Captions...");
         ensureCaptionsActive();
         loadForVideo();
       });
 
-      hud.querySelector(".kiki-hud-title").addEventListener("click", (e) => {
-        e.stopPropagation();
+      bindHudButton(hud.querySelector(".kiki-hud-title"), () => {
         const cueCount = STATE.cues ? STATE.cues.length : 0;
         const v = videoEl();
         const status = v ? (v.paused ? "Paused" : "Playing") : "No Video";
         const live = lastObservedText ? "YES" : "NO";
         const trackCount = v && v.textTracks ? v.textTracks.length : 0;
         const domCount = queryCaptionElements(".ytp-caption-segment, .caption-visual-line").length;
-        toast(`Kiki v1.1.0 [${status}] | CC=${cueCount} | Live=${live} | DOM=${domCount} | Trk=${trackCount}`);
+        toast(`Kiki v1.1.1 [${status}] | CC=${cueCount} | Live=${live} | DOM=${domCount} | Trk=${trackCount}`);
       });
     }
 
@@ -2988,40 +3180,70 @@ window.KikiAudioEngine = KikiAudioEngine;
   function updateHud(statusText) {
     const hud = ensureHud();
     if (!hud) return;
+    const subBtn = hud.querySelector(".kiki-hud-sub");
     const ccBtn = hud.querySelector(".kiki-hud-cc");
     const fsBtn = hud.querySelector(".kiki-hud-fs");
     const ctrlBtn = hud.querySelector(".kiki-hud-ctrl");
-    if (ccBtn) {
-      if (statusText) {
-        ccBtn.textContent = statusText;
-      } else if (!currentVideoId()) {
-        ccBtn.textContent = "Home";
-      } else if (STATE.cues && STATE.cues.length) {
-        ccBtn.textContent = `CC: ${STATE.cues.length}`;
-      } else if (loadingTracks) {
-        ccBtn.textContent = "Loading CC...";
-      } else {
-        ccBtn.textContent = "CC: None (Tap to Search)";
+    const dictBtn = hud.querySelector(".kiki-hud-dict");
+    const aiBtn = hud.querySelector(".kiki-hud-ai");
+
+    if (subBtn) {
+      const on = STATE.subsVisible !== false;
+      const targetText = on ? "💬 Sub: On" : "💬 Sub: Off";
+      if (subBtn.textContent !== targetText) subBtn.textContent = targetText;
+      const targetBg = on ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.1)";
+      const targetBorder = on ? "rgba(52, 211, 153, 0.4)" : "rgba(255, 255, 255, 0.2)";
+      const targetColor = on ? "#6EE7B7" : "#A1A1AA";
+      if (subBtn.dataset.active !== (on ? "1" : "0")) {
+        subBtn.dataset.active = on ? "1" : "0";
+        subBtn.style.setProperty("background", targetBg, "important");
+        subBtn.style.setProperty("border-color", targetBorder, "important");
+        subBtn.style.setProperty("color", targetColor, "important");
       }
     }
-    if (fsBtn) {
-      fsBtn.textContent = STATE.fs ? "✕ Exit FS" : "⛶ Fullscreen";
+
+    if (ccBtn) {
+      let targetCc = "CC: Searching...";
+      if (statusText) {
+        targetCc = statusText;
+      } else if (!currentVideoId()) {
+        targetCc = "Home";
+      } else if (STATE.cues && STATE.cues.length) {
+        targetCc = `CC: ${STATE.cues.length}`;
+      } else if (loadingTracks) {
+        targetCc = "Loading CC...";
+      } else {
+        targetCc = "CC: None (Tap to Search)";
+      }
+      if (ccBtn.textContent !== targetCc) ccBtn.textContent = targetCc;
     }
+
+    if (fsBtn) {
+      const targetFs = STATE.fs ? "✕ Exit FS" : "⛶ Fullscreen";
+      if (fsBtn.textContent !== targetFs) fsBtn.textContent = targetFs;
+    }
+
     if (ctrlBtn) {
       const showChrome = document.documentElement.classList.contains("kiki-show-chrome");
-      ctrlBtn.textContent = showChrome ? "✕ Hide Bar" : "⚙ Controls";
+      const targetCtrl = showChrome ? "✕ Hide Bar" : "⚙ Controls";
+      if (ctrlBtn.textContent !== targetCtrl) ctrlBtn.textContent = targetCtrl;
     }
-    const dictBtn = hud.querySelector(".kiki-hud-dict");
+
     if (dictBtn) {
-      dictBtn.textContent = cachedDictCount > 0 ? `📖 Dict: ${cachedDictCount}` : "📖 Import Dict";
+      const targetDict = cachedDictCount > 0 ? `📖 Dict: ${cachedDictCount}` : "📖 Import Dict";
+      if (dictBtn.textContent !== targetDict) dictBtn.textContent = targetDict;
     }
-    const aiBtn = hud.querySelector(".kiki-hud-ai");
+
     if (aiBtn) {
       const cfg = getAiConfig();
       const hasKey = !!(cfg.apiKey && cfg.apiKey.trim());
-      aiBtn.textContent = hasKey ? "🤖 AI: On" : "🤖 AI: Off";
-      aiBtn.style.setProperty("background", hasKey ? "rgba(99, 102, 241, 0.35)" : "rgba(255, 255, 255, 0.2)", "important");
-      aiBtn.style.setProperty("border-color", hasKey ? "rgba(165, 180, 252, 0.5)" : "rgba(255, 255, 255, 0.3)", "important");
+      const targetAi = hasKey ? "🤖 AI: On" : "🤖 AI: Off";
+      if (aiBtn.textContent !== targetAi) aiBtn.textContent = targetAi;
+      if (aiBtn.dataset.active !== (hasKey ? "1" : "0")) {
+        aiBtn.dataset.active = hasKey ? "1" : "0";
+        aiBtn.style.setProperty("background", hasKey ? "rgba(99, 102, 241, 0.35)" : "rgba(255, 255, 255, 0.2)", "important");
+        aiBtn.style.setProperty("border-color", hasKey ? "rgba(165, 180, 252, 0.5)" : "rgba(255, 255, 255, 0.3)", "important");
+      }
     }
   }
 
@@ -3033,7 +3255,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       root.id = "kiki-root";
       root.style.cssText = "position: fixed !important; inset: 0 !important; pointer-events: none !important; z-index: 2147483640 !important;";
       setHtml(root, `
-        <div id="kiki-captions" style="position: fixed !important; pointer-events: auto !important; z-index: 2147483645 !important; text-align: center !important; min-height: 1em !important;"></div>
+        <div id="kiki-captions" class="${STATE.subsVisible === false ? 'kiki-hidden' : ''}" style="position: fixed !important; pointer-events: auto !important; z-index: 2147483645 !important; text-align: center !important; min-height: 1em !important;"></div>
       `);
       targetHost.appendChild(root);
     }
@@ -3053,6 +3275,11 @@ window.KikiAudioEngine = KikiAudioEngine;
   function updateCaptionPosition() {
     const box = document.getElementById("kiki-captions");
     if (!box) return;
+    if (STATE.subsVisible === false) {
+      box.classList.add("kiki-hidden");
+      return;
+    }
+    box.classList.remove("kiki-hidden");
     const v = videoEl() || playerEl();
     const showChrome = document.documentElement.classList.contains("kiki-show-chrome");
     
@@ -3384,8 +3611,8 @@ window.KikiAudioEngine = KikiAudioEngine;
     const card = $("#kiki-yomitan-card");
     const isCardOpen = card && card.classList.contains("show");
 
-    // If card is open, clicking the active word closes the card and resumes playback immediately
-    if (isCardOpen && (STATE.lookupEl === w || STATE.lookupWord === term || w.classList.contains("kiki-active"))) {
+    // If card is open, clicking the active word (or any word in the active phrase) closes the card and resumes playback immediately
+    if (isCardOpen && (STATE.lookupEl === w || STATE.lookupWord === term || (STATE.lookupWord && STATE.lookupWord.toLowerCase().includes(term.toLowerCase())) || w.classList.contains("kiki-active"))) {
       closeLookup();
       return;
     }
@@ -3443,11 +3670,18 @@ window.KikiAudioEngine = KikiAudioEngine;
         display: flex !important;
         flex-direction: column !important;
         gap: 14px !important;
+        touch-action: manipulation !important;
+        pointer-events: auto !important;
       `;
+      const stopProp = (e) => e.stopPropagation();
+      modal.addEventListener("pointerdown", stopProp);
+      modal.addEventListener("touchstart", stopProp);
+      modal.addEventListener("mousedown", stopProp);
       (document.body || document.documentElement).appendChild(modal);
     }
 
     modal.style.display = "flex";
+    keepHudAlive(15000);
     let activeTab = initialTab;
 
     async function renderModal() {
@@ -3560,30 +3794,52 @@ window.KikiAudioEngine = KikiAudioEngine;
         </div>
       `);
 
-      modal.querySelector(".kiki-modal-close")?.addEventListener("click", () => {
-        modal.style.display = "none";
-      });
+      const closeBtn = modal.querySelector(".kiki-modal-close");
+      if (closeBtn) {
+        const doClose = (e) => {
+          if (e.cancelable) e.preventDefault();
+          e.stopPropagation();
+          modal.style.display = "none";
+        };
+        closeBtn.addEventListener("click", doClose);
+        closeBtn.addEventListener("touchend", doClose);
+      }
 
       modal.querySelectorAll(".kiki-tab-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
+        const switchTab = (e) => {
+          if (e.cancelable) e.preventDefault();
+          e.stopPropagation();
           activeTab = btn.dataset.tab;
           renderModal();
-        });
+        };
+        btn.addEventListener("click", switchTab);
+        btn.addEventListener("touchend", switchTab);
       });
 
-      modal.querySelector(".kiki-modal-clear-all")?.addEventListener("click", () => {
-        clearAllStorageAndConfig();
-      });
+      const clearBtn = modal.querySelector(".kiki-modal-clear-all");
+      if (clearBtn) {
+        const doClear = (e) => {
+          if (e.cancelable) e.preventDefault();
+          e.stopPropagation();
+          clearAllStorageAndConfig();
+        };
+        clearBtn.addEventListener("click", doClear);
+        clearBtn.addEventListener("touchend", doClear);
+      }
 
       if (activeTab === "dict") {
         modal.querySelectorAll(".kiki-del-dict-btn").forEach(btn => {
-          btn.addEventListener("click", async () => {
+          const doDel = async (e) => {
+            if (e.cancelable) e.preventDefault();
+            e.stopPropagation();
             const id = btn.dataset.id;
             btn.textContent = "Deleting...";
             await localDB.deleteDictionary(id);
             await refreshDictStats();
             renderModal();
-          });
+          };
+          btn.addEventListener("click", doDel);
+          btn.addEventListener("touchend", doDel);
         });
 
         const fileInput = modal.querySelector(".kiki-modal-file-input");
@@ -3666,7 +3922,9 @@ window.KikiAudioEngine = KikiAudioEngine;
 
         const saveBtn = modal.querySelector("#kiki-ai-save-btn");
         if (saveBtn) {
-          saveBtn.addEventListener("click", () => {
+          const doSave = (e) => {
+            if (e.cancelable) e.preventDefault();
+            e.stopPropagation();
             const base = modal.querySelector("#kiki-ai-base-input")?.value || "";
             const key = modal.querySelector("#kiki-ai-key-input")?.value || "";
             const model = modal.querySelector("#kiki-ai-model-input")?.value || "";
@@ -3689,13 +3947,17 @@ window.KikiAudioEngine = KikiAudioEngine;
             toast("✦ AI configuration saved.");
             saveBtn.textContent = "✓ Saved!";
             setTimeout(() => { saveBtn.textContent = "Save AI Config"; }, 1500);
-          });
+          };
+          saveBtn.addEventListener("click", doSave);
+          saveBtn.addEventListener("touchend", doSave);
         }
 
         const pingBtn = modal.querySelector("#kiki-ai-ping-btn");
         const pingResult = modal.querySelector("#kiki-ai-ping-result");
         if (pingBtn && pingResult) {
-          pingBtn.addEventListener("click", async () => {
+          const doPing = async (e) => {
+            if (e.cancelable) e.preventDefault();
+            e.stopPropagation();
             const base = modal.querySelector("#kiki-ai-base-input")?.value || "";
             const key = modal.querySelector("#kiki-ai-key-input")?.value || "";
             const model = modal.querySelector("#kiki-ai-model-input")?.value || "";
@@ -3728,7 +3990,9 @@ window.KikiAudioEngine = KikiAudioEngine;
               pingBtn.disabled = false;
               pingBtn.textContent = "Ping AI";
             }
-          });
+          };
+          pingBtn.addEventListener("click", doPing);
+          pingBtn.addEventListener("touchend", doPing);
         }
       }
     }
@@ -3958,8 +4222,8 @@ window.KikiAudioEngine = KikiAudioEngine;
 
     positionCardAboveSubtitles(card);
 
-    const results = await lookupWord(term);
-    if (!card.classList.contains("show") || STATE.lookupWord !== term) return;
+    const results = await lookupWord(term, wordEl);
+    if (!card.classList.contains("show") || (STATE.lookupWord !== term && !results.some((r) => r.term.toLowerCase() === STATE.lookupWord.toLowerCase()))) return;
 
     if (!results || !results.length) {
       const cfg = getAiConfig();
@@ -3969,6 +4233,11 @@ window.KikiAudioEngine = KikiAudioEngine;
       }
       renderNoDefinitionCard(card, term);
       return;
+    }
+
+    // If top result is a multi-word phrase, update STATE.lookupWord to match the primary recognized term
+    if (results[0]?.term) {
+      STATE.lookupWord = results[0].term;
     }
 
     renderYomitanDefinitions(card, term, results);
@@ -4026,7 +4295,7 @@ window.KikiAudioEngine = KikiAudioEngine;
             toast("Please configure your AI API Key first.");
             return;
           }
-          explainWithAiInCard(card, originalTerm, getSentenceContext());
+          explainWithAiInCard(card, results[0]?.term || originalTerm, getSentenceContext());
         });
         row.appendChild(aiSwitchBtn);
 
@@ -4140,6 +4409,10 @@ window.KikiAudioEngine = KikiAudioEngine;
     const cardOpen = card && card.classList.contains("show");
     if ((STATE.lookupEl || cardOpen) && !e.target.closest("#kiki-yomitan-card, .kiki-word, .kiki-cap-ai-btn, #kiki-settings-modal, #kiki-hud, .kiki-toast")) {
       closeLookup();
+    }
+    const modal = document.getElementById("kiki-settings-modal");
+    if (modal && modal.style.display !== "none" && !e.target.closest("#kiki-settings-modal, .kiki-hud-dict, .kiki-hud-ai")) {
+      modal.style.display = "none";
     }
   }, true);
 
@@ -4343,6 +4616,12 @@ window.KikiAudioEngine = KikiAudioEngine;
   window.renderTextToBox = renderTextToBox;
   function renderTextToBox(box, text) {
     if (!box) return;
+    if (STATE.subsVisible === false) {
+      box.classList.add("kiki-hidden");
+      box.textContent = "";
+      return;
+    }
+    box.classList.remove("kiki-hidden");
     if (!text) {
       box.textContent = "";
       return;
@@ -5050,7 +5329,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         const vState = v ? (v.paused ? "Paused" : "Play") : "NoVid";
         const hudState = hudEl ? (hudEl.offsetWidth > 0 ? `${hudEl.offsetWidth}x${hudEl.offsetHeight}` : "0px") : "NULL";
         const trkCount = v && v.textTracks ? v.textTracks.length : 0;
-        toast(`✦ Kiki v1.0.0 [HUD:${hudState}|${vState}|TT:${trkCount}]`);
+        toast(`✦ Kiki v1.1.1 [HUD:${hudState}|${vState}|TT:${trkCount}]`);
       }, 700);
       setTimeout(() => {
         ensureHud();
@@ -5072,5 +5351,5 @@ window.KikiAudioEngine = KikiAudioEngine;
     }[c]));
   }
 
-  console.log('[Kiki Immersion] v1.1.0 Loaded on:', location.href);
+  console.log('[Kiki Immersion] v1.1.1 Loaded on:', location.href);
 })();
