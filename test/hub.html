@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Kiki Immersion Hub Service</title>
+</head>
+<body>
+    <!-- Headless Service Provider for Kiki Immersion Userscript -->
+    <script src="js/deinflect-rules.js"></script>
+    <script src="js/deinflector.js"></script>
+    <script src="js/english-lemmatizer.js"></script>
+    <script src="js/structured-content.js"></script>
+    <script src="js/db.js"></script>
+    <script src="js/search.js"></script>
+    <script src="js/messenger.js"></script>
+    <script>
+        const db = new KikiDictDB();
+        const deinflector = new Deinflector(window.DEINFLECT_RULES || {});
+        const englishLemmatizer = new EnglishLemmatizer();
+        const searchEngine = new KikiSearchEngine(db, deinflector, englishLemmatizer);
+        const messenger = new KikiHubMessenger(searchEngine, db);
+        console.log('[Kiki Hub] Headless service initialized.');
+    </script>
+</body>
+</html>

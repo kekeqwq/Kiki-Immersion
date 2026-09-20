@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kiki Immersion Local Testbench</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Dynamic Injected Stylesheet for Active Yomitan Dictionaries -->
+    <style id="kiki-injected-dict-styles"></style>
+</head>
+<body>
+    <header>
+        <div class="title-row">
+            <h1>Kiki Immersion</h1>
+            <span class="subtitle">Local Testbench (Safari)</span>
+        </div>
+        <p class="subtitle">Standalone testbench for Yomitan dictionaries. For YouTube immersion, install dictionaries directly inside the YouTube player via the HUD 📖 Dict button.</p>
+    </header>
+
+    <!-- 1. Dictionary Installation Card -->
+    <section class="card">
+        <h2>📥 Import Dictionary (.zip)</h2>
+        <div class="dropzone" id="dropzone">
+            <div class="dropzone-icon">📦</div>
+            <div class="dropzone-text">Click or drag a Yomitan .zip dictionary archive here</div>
+            <div class="dropzone-hint">Supports OALD, Cambridge, JMdict, Daijirin, and any Yomitan v3 formatted package</div>
+            <input type="file" id="fileInput" accept=".zip" style="display: none;">
+        </div>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progressBarFill"></div>
+            </div>
+            <div class="progress-status">
+                <span id="progressText">Preparing...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- 2. Test Lookup Card -->
+    <section class="card">
+        <h2>🔍 Test Lookup & Morphology</h2>
+        <div class="search-row">
+            <input type="text" class="search-input" id="searchInput" placeholder="Enter word (e.g. read, test, testing, 食べた, 走る)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+            <button class="btn-primary" id="searchBtn">Search</button>
+        </div>
+        <div class="results-container" id="resultsContainer">
+            <div class="dict-empty" id="resultsEmptyHint">Search for a word to preview exact layout and morphological reduction.</div>
+        </div>
+    </section>
+
+    <!-- 3. Installed Dictionaries Management -->
+    <section class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+            <h2 style="margin: 0;">
+                <span>📚 Installed Dictionaries</span>
+                <span id="totalTermsBadge" style="font-size: 0.8rem; font-weight: normal; color: var(--text-secondary);"></span>
+            </h2>
+            <button class="btn-danger" id="clearAllBtn" style="font-size: 0.82rem; padding: 6px 12px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                🗑 Clear All Storage
+            </button>
+        </div>
+        <div class="dict-list" id="dictList">
+            <div class="dict-empty">Loading dictionary index...</div>
+        </div>
+    </section>
+
+    <!-- Scripts -->
+    <script src="js/lib/jszip.min.js"></script>
+    <script src="js/deinflect-rules.js"></script>
+    <script src="js/deinflector.js"></script>
+    <script src="js/english-lemmatizer.js"></script>
+    <script src="js/structured-content.js"></script>
+    <script src="js/db.js"></script>
+    <script src="js/importer.js"></script>
+    <script src="js/search.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/messenger.js"></script>
+
+    <script>
+        // Initialize core instances
+        const db = new KikiDictDB();
+        const deinflector = new Deinflector(window.DEINFLECT_RULES || {});
+        const englishLemmatizer = new EnglishLemmatizer();
+        const searchEngine = new KikiSearchEngine(db, deinflector, englishLemmatizer);
+        const importer = new YomitanImporter(db);
+        const audioEngine = new KikiAudioEngine();
+        const messenger = new KikiHubMessenger(searchEngine, db);
+
+        // DOM elements
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBarFill = document.getElementById('progressBarFill');
+        const progressText = document.getElementById('progressText');
+        const progressPercent = document.getElementById('progressPercent');
+        const dictList = document.getElementById('dictList');
+        const totalTermsBadge = document.getElementById('totalTermsBadge');
+        const searchInput = document.getElementById('searchInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const resultsEmptyHint = document.getElementById('resultsEmptyHint');
+        const injectedStyles = document.getElementById('kiki-injected-dict-styles');
+
+        // Sync active dictionary CSS styles
+        async function syncDictionaryStyles() {
+            try {
+                const styles = await db.getActiveStyles();
+                injectedStyles.textContent = styles;
+            } catch (err) {
+                console.error('Failed to sync dictionary styles:', err);
+            }
+        }
+
+        // 1. Drag & drop upload
+        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files && fileInput.files.length > 0) {
+                handleFile(fileInput.files[0]);
+                fileInput.value = '';
+            }
+        });
+
+        async function handleFile(file) {
+            if (!file.name.endsWith('.zip')) {
+                alert('Please select a valid .zip Yomitan dictionary archive.');
+                return;
+            }
+
+            progressContainer.style.display = 'block';
+            dropzone.style.pointerEvents = 'none';
+            dropzone.style.opacity = '0.6';
+
+            try {
+                await importer.importZip(file, ({ message, percentage }) => {
+                    progressText.textContent = message;
+                    progressPercent.textContent = percentage + '%';
+                    progressBarFill.style.width = percentage + '%';
+                });
+
+                await syncDictionaryStyles();
+                await searchEngine.refreshDictCache();
+                await refreshDictList();
+            } catch (err) {
+                console.error(err);
+                alert('Dictionary import failed: ' + err.message);
+            } finally {
+                dropzone.style.pointerEvents = 'auto';
+                dropzone.style.opacity = '1';
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    progressBarFill.style.width = '0%';
+                }, 3000);
+            }
+        }
+
+        // 2. Dictionary list rendering
+        async function refreshDictList() {
+            const dicts = await db.getDictionaries();
+            dictList.innerHTML = '';
+
+            if (dicts.length === 0) {
+                dictList.innerHTML = '<div class="dict-empty">No dictionaries installed. Import a Yomitan .zip file above.</div>';
+                totalTermsBadge.textContent = '';
+                return;
+            }
+
+            let totalTerms = 0;
+            dicts.forEach(dict => {
+                totalTerms += (dict.termCount || 0);
+
+                const item = document.createElement('div');
+                item.className = 'dict-item';
+                item.innerHTML = `
+                    <div class="dict-info">
+                        <div class="dict-title" title="${escapeHtml(dict.title)}">${escapeHtml(dict.title)}</div>
+                        <div class="dict-meta">Entries: ${(dict.termCount || 0).toLocaleString()} | Version: ${escapeHtml(dict.revision || 'v' + dict.format)} ${dict.css ? '• Includes CSS' : ''}</div>
+                    </div>
+                    <div class="dict-actions">
+                        <label class="switch">
+                            <input type="checkbox" ${dict.enabled ? 'checked' : ''} data-id="${dict.id}">
+                            <span class="slider"></span>
+                        </label>
+                        <button class="btn-danger" data-delete-id="${dict.id}">Delete</button>
+                    </div>
+                `;
+
+                // Toggle switch
+                item.querySelector('input[type="checkbox"]').addEventListener('change', async (e) => {
+                    await db.toggleDictionary(dict.id, e.target.checked);
+                    await syncDictionaryStyles();
+                    await searchEngine.refreshDictCache();
+                });
+
+                // Delete button
+                item.querySelector('[data-delete-id]').addEventListener('click', async () => {
+                    if (confirm(`Are you sure you want to remove "${dict.title}"?`)) {
+                        item.style.opacity = '0.5';
+                        item.style.pointerEvents = 'none';
+                        await db.deleteDictionary(dict.id);
+                        await syncDictionaryStyles();
+                        await searchEngine.refreshDictCache();
+                        await refreshDictList();
+                    }
+                });
+
+                dictList.appendChild(item);
+            });
+
+            totalTermsBadge.textContent = `${dicts.length} ${dicts.length === 1 ? 'Dictionary' : 'Dictionaries'} (${totalTerms.toLocaleString()} entries)`;
+        }
+
+        // Clear All Storage Handler
+        const clearAllBtn = document.getElementById('clearAllBtn');
+        if (clearAllBtn) {
+            clearAllBtn.addEventListener('click', async () => {
+                const confirmed = confirm('Are you sure you want to clear all installed dictionaries and local storage? This action cannot be undone.');
+                if (!confirmed) return;
+                clearAllBtn.disabled = true;
+                clearAllBtn.textContent = 'Clearing...';
+                try {
+                    await db.clearAllStorage();
+                    alert('All offline dictionaries and storage caches cleared successfully.');
+                    location.reload();
+                } catch (err) {
+                    alert('Failed to clear storage: ' + err.message);
+                    clearAllBtn.disabled = false;
+                    clearAllBtn.textContent = '🗑 Clear All Storage';
+                }
+            });
+        }
+
+        // 3. Search & Layout Rendering
+        async function performSearch() {
+            const query = searchInput.value.trim();
+            if (!query) return;
+
+            resultsContainer.innerHTML = '<div class="dict-empty">Searching local index...</div>';
+
+            const startTime = performance.now();
+            const results = await searchEngine.search(query);
+            const duration = (performance.now() - startTime).toFixed(1);
+
+            resultsContainer.innerHTML = '';
+
+            if (results.length === 0) {
+                resultsContainer.innerHTML = `<div class="dict-empty">No entries found for "${escapeHtml(query)}" (${duration}ms)</div>`;
+                return;
+            }
+
+            results.forEach((res, index) => {
+                const card = document.createElement('div');
+                card.className = 'result-card';
+
+                // Badges row
+                const badges = [];
+                if (res.redirectTo) {
+                    badges.push(`<span class="badge badge-reason">→ ${escapeHtml(res.redirectTo)}</span>`);
+                } else if (res.reason) {
+                    badges.push(`<span class="badge badge-reason">‹ ${escapeHtml(res.reason)}</span>`);
+                }
+
+                // Parse definition tags (e.g. "verb A1 OPAL Oxford3000")
+                if (res.defTags) {
+                    const tokens = res.defTags.split(/\s+/).filter(Boolean);
+                    tokens.forEach(tok => {
+                        let cls = 'badge-pos';
+                        if (/^[A-C][1-2]$/i.test(tok)) {
+                            cls = 'badge-level';
+                        } else if (/Oxford|OPAL|3000|5000/i.test(tok)) {
+                            cls = 'badge-vocab';
+                        } else if (tok === 'non-lemma') {
+                            cls = 'badge-dict';
+                        }
+                        badges.push(`<span class="badge ${cls}">${escapeHtml(tok)}</span>`);
+                    });
+                }
+
+                badges.push(`<span class="badge badge-dict">${escapeHtml(res.dictTitle)}</span>`);
+
+                // Card header
+                const header = document.createElement('div');
+                header.className = 'result-header';
+                header.innerHTML = `
+                    <div class="result-term-line">
+                        <span class="result-term">${escapeHtml(res.term)}</span>
+                        <button type="button" class="btn-audio" data-term="${escapeHtml(res.term)}" data-reading="${escapeHtml(res.reading || '')}" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 50%; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px;" title="Play audio">🔊</button>
+                        ${res.reading ? `<span class="result-reading">/${escapeHtml(res.reading)}/</span>` : ''}
+                    </div>
+                    <div class="result-badges">
+                        ${badges.join('')}
+                    </div>
+                `;
+
+                header.querySelector('.btn-audio').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    audioEngine.play(res.term, res.reading);
+                });
+                card.appendChild(header);
+
+                // Card body (glossary definitions)
+                const body = document.createElement('div');
+                body.className = 'result-body';
+
+                if (Array.isArray(res.glossary)) {
+                    res.glossary.forEach(item => {
+                        if (typeof item === 'string') {
+                            const p = document.createElement('p');
+                            p.textContent = item;
+                            body.appendChild(p);
+                        } else if (Array.isArray(item) && typeof item[0] === 'string') {
+                            // Raw fallback for [target, [tags]]
+                            const p = document.createElement('p');
+                            p.innerHTML = `<em>See:</em> <strong>${escapeHtml(item[0])}</strong>`;
+                            body.appendChild(p);
+                        } else if (item && typeof item === 'object') {
+                            // Render Yomitan Structured Content
+                            const node = KikiStructuredContent.render(item);
+                            body.appendChild(node);
+                        }
+                    });
+                }
+                card.appendChild(body);
+
+                resultsContainer.appendChild(card);
+            });
+
+            // Auto-play pronunciation for the first result
+            if (results.length > 0) {
+                audioEngine.play(results[0].term, results[0].reading);
+            }
+        }
+
+        searchBtn.addEventListener('click', performSearch);
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') performSearch();
+        });
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        // Initialize on page load
+        (async () => {
+            await refreshDictList();
+            await syncDictionaryStyles();
+        })();
+    </script>
+</body>
+</html>
