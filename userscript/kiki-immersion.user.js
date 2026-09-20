@@ -74,6 +74,7 @@
     videoId: null,
     hudVisible: false,
     loadingTracks: false,
+    liveMode: false,
     engineVersion: "1.2.0"
   };
 
@@ -3462,6 +3463,8 @@ window.KikiAudioEngine = KikiAudioEngine;
         targetCc = "Home";
       } else if (STATE.cues && STATE.cues.length) {
         targetCc = `CC: ${STATE.cues.length}`;
+      } else if (STATE.liveMode || (typeof lastObservedText !== "undefined" && lastObservedText)) {
+        targetCc = "CC: Live";
       } else if (STATE.loadingTracks) {
         targetCc = "Loading CC...";
       } else {
@@ -5605,6 +5608,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       const liveText = getLiveCaptionText();
       if (liveText && liveText !== lastObservedText) {
         lastObservedText = liveText;
+        STATE.liveMode = true;
         const box = document.getElementById("kiki-captions");
         if (box && typeof window.renderTextToBox === "function") {
           window.renderTextToBox(box, liveText);
@@ -6001,6 +6005,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     liveToastShown = false;
     lastFailedVideoId = "";
     lastLoadAttemptTime = 0;
+    STATE.liveMode = false;
     renderCue(-1);
     closeLookup();
 

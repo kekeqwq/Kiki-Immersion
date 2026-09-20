@@ -292,6 +292,8 @@
         targetCc = "Home";
       } else if (STATE.cues && STATE.cues.length) {
         targetCc = `CC: ${STATE.cues.length}`;
+      } else if (STATE.liveMode || (typeof lastObservedText !== "undefined" && lastObservedText)) {
+        targetCc = "CC: Live";
       } else if (STATE.loadingTracks) {
         targetCc = "Loading CC...";
       } else {

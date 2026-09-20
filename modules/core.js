@@ -53,6 +53,7 @@
     videoId: null,
     hudVisible: false,
     loadingTracks: false,
+    liveMode: false,
     engineVersion: "1.2.0"
   };
 
