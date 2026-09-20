@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.2.3
+// @version      1.2.4
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, and touch/mouse gestures.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -49,7 +49,7 @@
 
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.2.2
+// Version: 1.2.4
 // =============================================================
 
 
@@ -57,7 +57,7 @@
 
 
 
-  window.__kiki_engine_version = "1.2.3";
+  window.__kiki_engine_version = "1.2.4";
 
   const STATE = window.STATE = {
     enabled: true,
@@ -76,31 +76,47 @@
     liveMode: false,
     liveFallbackAllowed: false,
     lastObservedText: "",
-    engineVersion: "1.2.3"
+    engineVersion: "1.2.4"
   };
 
   // -------------------------------------------------------------
   // Trusted Types Policy & Safe HTML Setter
-  // YouTube CSP on WebKit/Safari enforces Trusted Types.
+  // YouTube CSP on Chromium / WebKit enforces Trusted Types.
   // Direct innerHTML assignment throws TypeError: This assignment requires a TrustedHTML
   // -------------------------------------------------------------
-  let kikiPolicy = null;
-  if (typeof window.trustedTypes !== "undefined" && typeof window.trustedTypes.createPolicy === "function") {
+  let kikiPolicy = (typeof window !== "undefined" && window.__kiki_policy) ? window.__kiki_policy : null;
+  const tt = (typeof window !== "undefined" && window.trustedTypes) ||
+             (typeof unsafeWindow !== "undefined" && unsafeWindow.trustedTypes);
+  if (!kikiPolicy && tt && typeof tt.createPolicy === "function") {
     try {
-      kikiPolicy = window.trustedTypes.createPolicy("default", {
+      kikiPolicy = tt.createPolicy("default", {
         createHTML: (s) => s,
         createScript: (s) => s,
         createScriptURL: (s) => s,
       });
+      if (typeof window !== "undefined") window.__kiki_policy = kikiPolicy;
     } catch {
-      try {
-        kikiPolicy = window.trustedTypes.createPolicy("kikiPolicy", {
-          createHTML: (s) => s,
-          createScript: (s) => s,
-          createScriptURL: (s) => s,
-        });
-      } catch {}
+      const candidateNames = [
+        "kiki-core-" + Math.random().toString(36).slice(2, 8),
+        "kikiPolicy",
+        "kiki-policy"
+      ];
+      for (const name of candidateNames) {
+        try {
+          kikiPolicy = tt.createPolicy(name, {
+            createHTML: (s) => s,
+            createScript: (s) => s,
+            createScriptURL: (s) => s,
+          });
+          if (typeof window !== "undefined") window.__kiki_policy = kikiPolicy;
+          break;
+        } catch {}
+      }
     }
+  }
+  if (!kikiPolicy && tt && tt.defaultPolicy) {
+    kikiPolicy = tt.defaultPolicy;
+    if (typeof window !== "undefined") window.__kiki_policy = kikiPolicy;
   }
 
 
@@ -3304,7 +3320,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.2.3
+// Version: 1.2.4
 // =============================================================
 
   function playVideoSync() {
@@ -4940,7 +4956,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - YouTube Adapter & Subtitle Pipeline
-// Version: 1.2.3
+// Version: 1.2.4
 // =============================================================
 
   // -------------------------------------------------------------

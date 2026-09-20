@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.2.3
+// Version: 1.2.4
 // =============================================================
 
   function playVideoSync() {

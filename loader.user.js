@@ -120,7 +120,7 @@
     } catch (e) {}
   }
 
-  const EXPECTED_CACHE_VERSION = "1.2.3";
+  const EXPECTED_CACHE_VERSION = "1.2.4";
 
   function hasAllCachedModules() {
     if (localStorage.getItem("kiki_cache_version") !== EXPECTED_CACHE_VERSION) return false;
@@ -130,17 +130,50 @@
     });
   }
 
-  let kikiPolicy = null;
+  let kikiPolicy = (typeof window !== "undefined" && window.__kiki_policy) ? window.__kiki_policy : null;
   function getPolicy() {
     if (kikiPolicy) return kikiPolicy;
-    if (window.trustedTypes && window.trustedTypes.createPolicy) {
+    const tt = (typeof window !== "undefined" && window.trustedTypes) ||
+               (typeof unsafeWindow !== "undefined" && unsafeWindow.trustedTypes);
+    if (!tt || typeof tt.createPolicy !== "function") return null;
+
+    // 1. Try 'default' policy (auto-resolves strings to TrustedScript/TrustedHTML across all sinks)
+    try {
+      kikiPolicy = tt.createPolicy("default", {
+        createScript: s => s,
+        createHTML: h => h,
+        createScriptURL: u => u
+      });
+      if (typeof window !== "undefined") window.__kiki_policy = kikiPolicy;
+      return kikiPolicy;
+    } catch (e1) {}
+
+    // 2. Try unique policy name to guarantee success without collision
+    const candidateNames = [
+      "kiki-loader-" + Math.random().toString(36).slice(2, 8),
+      "kikiPolicy",
+      "kiki-loader-exec"
+    ];
+    for (const name of candidateNames) {
       try {
-        kikiPolicy = window.trustedTypes.createPolicy("kiki-loader-exec", { createScript: s => s, createHTML: h => h });
-      } catch (e) {
-        kikiPolicy = window.trustedTypes.defaultPolicy || { createScript: s => s };
-      }
+        kikiPolicy = tt.createPolicy(name, {
+          createScript: s => s,
+          createHTML: h => h,
+          createScriptURL: u => u
+        });
+        if (typeof window !== "undefined") window.__kiki_policy = kikiPolicy;
+        return kikiPolicy;
+      } catch (e2) {}
     }
-    return kikiPolicy;
+
+    // 3. Fallback to existing defaultPolicy
+    if (tt.defaultPolicy) {
+      kikiPolicy = tt.defaultPolicy;
+      if (typeof window !== "undefined") window.__kiki_policy = kikiPolicy;
+      return kikiPolicy;
+    }
+
+    return null;
   }
 
   function executeCachedModules() {
@@ -153,8 +186,16 @@
           scriptSource = p.createScript(fullCode);
         } catch (e) {}
       }
-      const runner = new Function(scriptSource);
-      runner();
+      try {
+        const runner = new Function(scriptSource);
+        runner();
+      } catch (fnErr) {
+        // Fallback: inject inline script element into DOM
+        const scriptEl = document.createElement("script");
+        scriptEl.textContent = scriptSource;
+        (document.head || document.documentElement).appendChild(scriptEl);
+        scriptEl.remove();
+      }
     } catch (e) {
       console.error("[Kiki Loader] Module execution error:", e);
       showLoaderHud("❌ Kiki Loader: Execution error: " + e.message, true);

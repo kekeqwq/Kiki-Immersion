@@ -2,11 +2,16 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Frosted Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.2-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.1-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.4-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.1-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
 ## 📢 Release Overview
+
+**v1.2.4 (Chrome Tampermonkey Trusted Types & Fullscreen Aspect Ratio Fix)**:
+- **Full Chromium & Tampermonkey Compatibility**: Resolved `Trusted Types` enforcement errors on YouTube by implementing self-healing policy resolution (`default` policy creation, collision-free candidate names, and DOM script injection fallback).
+- **Exact iPadOS Web Fullscreen Geometry**: Replaced `100vh` with dynamic viewport units (`100dvh` / `100%`) and `object-fit: contain` on `.html5-main-video` to eliminate letterbox cropping and preserve full video aspect ratio across all screen sizes and orientations.
+- **Smart Caption Rendered-Box Anchoring**: Subtitle placement now accurately tracks the actual rendered video frame (`getVideoRenderedRect`), anchoring perfectly above the picture content even in letterboxed or pillarboxed modes.
 
 **Loader v1.0.1 (iPadOS Desktop Redirection Fix)**:
 - **Immediate Desktop Enforcement**: Enforces `PREF` desktop cookies and redirects `m.youtube.com` to `www.youtube.com` right at `document-start` before fetching modules, preventing iPadOS Safari from getting trapped on the mobile web interface during fresh installation.
@@ -166,7 +171,7 @@ Since iPadOS Userscripts does not support direct remote URL script installation,
     } catch (e) {}
   }
 
-  const EXPECTED_CACHE_VERSION = "1.2.3";
+  const EXPECTED_CACHE_VERSION = "1.2.4";
 
   function hasAllCachedModules() {
     if (localStorage.getItem("kiki_cache_version") !== EXPECTED_CACHE_VERSION) return false;
@@ -176,17 +181,50 @@ Since iPadOS Userscripts does not support direct remote URL script installation,
     });
   }
 
-  let kikiPolicy = null;
+  let kikiPolicy = (typeof window !== "undefined" && window.__kiki_policy) ? window.__kiki_policy : null;
   function getPolicy() {
     if (kikiPolicy) return kikiPolicy;
-    if (window.trustedTypes && window.trustedTypes.createPolicy) {
+    const tt = (typeof window !== "undefined" && window.trustedTypes) ||
+               (typeof unsafeWindow !== "undefined" && unsafeWindow.trustedTypes);
+    if (!tt || typeof tt.createPolicy !== "function") return null;
+
+    // 1. Try 'default' policy (auto-resolves strings to TrustedScript/TrustedHTML across all sinks)
+    try {
+      kikiPolicy = tt.createPolicy("default", {
+        createScript: s => s,
+        createHTML: h => h,
+        createScriptURL: u => u
+      });
+      if (typeof window !== "undefined") window.__kiki_policy = kikiPolicy;
+      return kikiPolicy;
+    } catch (e1) {}
+
+    // 2. Try unique policy name to guarantee success without collision
+    const candidateNames = [
+      "kiki-loader-" + Math.random().toString(36).slice(2, 8),
+      "kikiPolicy",
+      "kiki-loader-exec"
+    ];
+    for (const name of candidateNames) {
       try {
-        kikiPolicy = window.trustedTypes.createPolicy("kiki-loader-exec", { createScript: s => s, createHTML: h => h });
-      } catch (e) {
-        kikiPolicy = window.trustedTypes.defaultPolicy || { createScript: s => s };
-      }
+        kikiPolicy = tt.createPolicy(name, {
+          createScript: s => s,
+          createHTML: h => h,
+          createScriptURL: u => u
+        });
+        if (typeof window !== "undefined") window.__kiki_policy = kikiPolicy;
+        return kikiPolicy;
+      } catch (e2) {}
     }
-    return kikiPolicy;
+
+    // 3. Fallback to existing defaultPolicy
+    if (tt.defaultPolicy) {
+      kikiPolicy = tt.defaultPolicy;
+      if (typeof window !== "undefined") window.__kiki_policy = kikiPolicy;
+      return kikiPolicy;
+    }
+
+    return null;
   }
 
   function executeCachedModules() {
@@ -199,8 +237,16 @@ Since iPadOS Userscripts does not support direct remote URL script installation,
           scriptSource = p.createScript(fullCode);
         } catch (e) {}
       }
-      const runner = new Function(scriptSource);
-      runner();
+      try {
+        const runner = new Function(scriptSource);
+        runner();
+      } catch (fnErr) {
+        // Fallback: inject inline script element into DOM
+        const scriptEl = document.createElement("script");
+        scriptEl.textContent = scriptSource;
+        (document.head || document.documentElement).appendChild(scriptEl);
+        scriptEl.remove();
+      }
     } catch (e) {
       console.error("[Kiki Loader] Module execution error:", e);
       showLoaderHud("❌ Kiki Loader: Execution error: " + e.message, true);
