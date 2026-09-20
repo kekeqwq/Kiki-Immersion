@@ -10,6 +10,7 @@
   let capturedBody = "";
   let capturedLastUrl = "";
   let capturedVideoId = "";
+  let lastPoToken = "";
   let selfFetching = 0;
 
   function currentVideoId() {
@@ -25,7 +26,15 @@
   }
 
   function noteTimedtextUrl(url) {
-    if (typeof url !== "string" || !url.includes(MARK) || selfFetching) return;
+    if (typeof url !== "string" || !url.includes(MARK)) return;
+    try {
+      const u = new URL(url, location.href);
+      const pot = u.searchParams.get("pot");
+      if (pot) {
+        lastPoToken = pot;
+        if (typeof STATE !== "undefined") STATE.lastPoToken = pot;
+      }
+    } catch {}
     let urlVid = "";
     try { urlVid = new URL(url, location.href).searchParams.get("v") || ""; } catch {}
     const cid = urlVid || currentVideoId();
@@ -39,6 +48,7 @@
 
   function onCapturedWireBody(body, url) {
     if (!body || body.trim().length < 20) return;
+    noteTimedtextUrl(url);
     let urlVid = "";
     try { urlVid = new URL(url, location.href).searchParams.get("v") || ""; } catch {}
     capturedVideoId = urlVid || currentVideoId();
@@ -49,7 +59,18 @@
     if (!capturedVideoId || capturedVideoId === curVid) {
       const cues = parseAny(body);
       if (cues && cues.length) {
-        applyLoadedCues(cues, "wire-sniffer");
+        let matchedTrack = null;
+        if (typeof STATE !== "undefined" && STATE.tracks && STATE.tracks.length) {
+          try {
+            const u = new URL(url, location.href);
+            const lang = u.searchParams.get("lang");
+            const kind = u.searchParams.get("kind");
+            matchedTrack = STATE.tracks.find(t => 
+              t.languageCode === lang && (kind === "asr" ? t.kind === "asr" : t.kind !== "asr")
+            ) || STATE.tracks.find(t => t.languageCode === lang);
+          } catch {}
+        }
+        applyLoadedCues(cues, "wire-sniffer", matchedTrack || STATE?.activeTrack);
       }
     }
   }
@@ -65,7 +86,7 @@
 
     const promise = origFetch.apply(this, args);
     try {
-      if (typeof reqUrl === "string" && reqUrl.includes(MARK) && !selfFetching) {
+      if (typeof reqUrl === "string" && reqUrl.includes(MARK)) {
         promise.then((res) => {
           try {
             res.clone().text().then((text) => {
@@ -91,13 +112,16 @@
     this.addEventListener("load", function () {
       try {
         const reqUrl = this.__kiki_url;
-        if (typeof reqUrl !== "string" || !reqUrl.includes(MARK) || selfFetching) return;
+        if (typeof reqUrl !== "string" || !reqUrl.includes(MARK)) return;
+        if (this.status && this.status !== 200) return;
         let body = "";
         try {
           if (this.responseType === "" || this.responseType === "text") {
             body = this.responseText || "";
           } else if (this.responseType === "json") {
             body = typeof this.response === "string" ? this.response : JSON.stringify(this.response || "");
+          } else if (this.responseType === "document" && this.responseXML) {
+            body = new XMLSerializer().serializeToString(this.responseXML);
           } else if (this.responseType === "arraybuffer" && this.response) {
             body = new TextDecoder("utf-8").decode(this.response);
           } else if (this.responseType === "blob" && this.response) {
@@ -788,14 +812,16 @@
   }
 
   function isDummyCueText(text) {
-    if (!text) return true;
-    const lower = text.toLowerCase().replace(/\s+/g, " ");
+    if (!text || !text.trim()) return true;
+    const lower = text.toLowerCase().replace(/\s+/g, " ").trim();
+    if (lower.length <= 1) return true;
+    if (lower === "english" || lower === "japanese" || lower === "german" || lower === "french" || lower === "spanish" || lower === "chinese") return true;
     return lower.includes("click for settings") ||
            lower.includes("for settings") ||
            lower.includes("点击以查看设置") ||
            lower.includes("点击以") ||
-           (lower.includes("auto-generated") && lower.includes("english")) ||
-           (lower.includes("自动生成") && lower.includes("英语")) ||
+           lower.includes("auto-generated") ||
+           lower.includes("自动生成") ||
            (lower.includes("settings") && (lower.includes("english") || lower.includes("auto")));
   }
 
@@ -827,6 +853,12 @@
   }
 
   function getLiveCaptionText() {
+    function sanitize(text) {
+      if (!text) return "";
+      const cleaned = text.replace(/^\s*>>\s*/, "").replace(/\s*>>\s*/g, " ").trim();
+      return isDummyCueText(cleaned) ? "" : cleaned;
+    }
+
     // 1. Check HTML5 video textTracks activeCues
     const v = videoEl();
     if (v && v.textTracks && v.textTracks.length) {
@@ -841,7 +873,8 @@
             const t = getCueText(track.activeCues[j]).replace(/<[^>]+>/g, "").trim();
             if (t) text += (text ? " " : "") + t;
           }
-          if (text) return text;
+          const s = sanitize(text);
+          if (s) return s;
         }
       }
     }
@@ -854,7 +887,8 @@
         const t = (s.textContent || "").trim();
         if (t) text += (text ? " " : "") + t;
       });
-      if (text) return text;
+      const s = sanitize(text);
+      if (s) return s;
     }
 
     // 3. Caption visual lines (.caption-visual-line)
@@ -865,7 +899,8 @@
         const t = (l.textContent || "").trim();
         if (t) text += (text ? " " : "") + t;
       });
-      if (text) return text;
+      const s = sanitize(text);
+      if (s) return s;
     }
 
     // 4. Caption windows (.ytp-caption-window, .caption-window)
@@ -876,14 +911,15 @@
         const t = (w.textContent || "").trim();
         if (t) text += (text ? " " : "") + t;
       });
-      if (text) return text;
+      const s = sanitize(text);
+      if (s) return s;
     }
 
     // 5. Container textContent fallback
     const containers = queryCaptionElements(".ytp-caption-window-container");
     for (const c of containers) {
-      const t = (c.textContent || "").trim();
-      if (t) return t.replace(/^\s*>>\s*/, "").replace(/\s*>>\s*/g, " ").trim();
+      const s = sanitize(c.textContent || "");
+      if (s) return s;
     }
 
     return "";
@@ -935,21 +971,37 @@
   function onNativeCaptionsMutated() {
     suppressNativeCaptions();
 
+    // Self-healing: check wire sniffer even if we already have cues or are in liveMode
+    // This allows late-arriving PoToken XHR responses to upgrade us from live→structured
+    const curVid = currentVideoId();
+    if (capturedBody && capturedBody.trim().length > 20) {
+      if (!capturedVideoId || capturedVideoId === curVid) {
+        const cues = parseAny(capturedBody);
+        if (cues && cues.length) {
+          // If we're in liveMode OR have no cues, accept the wire sniffer data
+          if (STATE.liveMode || !STATE.cues || !STATE.cues.length) {
+            applyLoadedCues(cues, "wire-sniffer", STATE.activeTrack);
+            return;
+          }
+        }
+      }
+    }
+
     // If structured cues already loaded, never run live mode!
     if (STATE.cues && STATE.cues.length > 0) return;
 
-    // While actively loading/fetching tracks, DO NOT preempt!
-    if (STATE.loadingTracks || loadingTracks) return;
-
-    // Only allow live fallback if all structured tracks failed or user enabled it
-    if (!STATE.liveFallbackAllowed && !STATE.liveMode) return;
-
-    // If structured cues not yet loaded, check if video.textTracks has loaded genuine cues
+    // Check if video.textTracks has loaded genuine cues
     const trackCues = extractCuesFromVideo();
     if (trackCues && trackCues.length > 2) {
-      applyLoadedCues(trackCues, "video-track");
+      applyLoadedCues(trackCues, "video-track", STATE.activeTrack);
       return;
     }
+
+    // While actively loading/fetching tracks, DO NOT preempt into live mode!
+    if (STATE.loadingTracks || loadingTracks) return;
+
+    // Only allow live fallback if all structured tracks failed AND user enabled it
+    if (!STATE.liveFallbackAllowed && !STATE.liveMode) return;
 
     // True Fallback: render live caption text if available
     const liveText = getLiveCaptionText();
@@ -973,7 +1025,9 @@
     // When video starts playing, if captions haven't loaded yet, immediately fetch
     v.addEventListener("play", () => {
       if (!STATE.cues || !STATE.cues.length) {
-        loadForVideo();
+        lastFailedVideoId = "";
+        ensureCaptionsActive(STATE.activeTrack);
+        setTimeout(() => loadForVideo(true), 250);
       }
     });
 
@@ -1010,7 +1064,8 @@
       const iv = setInterval(() => {
         const v = videoEl();
         const p = playerEl();
-        if (p && v && (v.readyState >= 1 || v.duration > 0 || Date.now() - t0 > 1500)) {
+        const hasPr = p && typeof p.getPlayerResponse === "function" && Boolean(p.getPlayerResponse());
+        if (p && v && (v.readyState >= 1 || v.duration > 0 || hasPr || Date.now() - t0 > 4500)) {
           clearInterval(iv);
           resolve();
         } else if (Date.now() - t0 > 8000) {
@@ -1126,12 +1181,16 @@
 
   async function fetchExact(url, timeoutMs = 2500) {
     if (!url) return "";
-    selfFetching++;
     try {
-      const cleanUrl = url
+      let cleanUrl = url
         .replace(/&amp;/g, "&")
         .replace(/\\u0026/g, "&")
         .replace(/\\\//g, "/");
+
+      if (lastPoToken && !cleanUrl.includes("&pot=") && !cleanUrl.includes("?pot=")) {
+        cleanUrl += (cleanUrl.includes("?") ? "&" : "?") + `potc=1&pot=${encodeURIComponent(lastPoToken)}`;
+      }
+
       const ctrl = new AbortController();
       const tid = setTimeout(() => ctrl.abort(), timeoutMs);
       try {
@@ -1150,9 +1209,7 @@
       } catch {} finally {
         clearTimeout(tid);
       }
-    } finally {
-      selfFetching--;
-    }
+    } catch {}
     return "";
   }
 
@@ -1164,7 +1221,7 @@
     } catch {}
   }
 
-  function ensureCaptionsActive() {
+  function ensureCaptionsActive(targetTrack = null) {
     try {
       const p = playerEl();
       if (p) {
@@ -1172,7 +1229,15 @@
           try { p.loadModule("captions"); } catch {}
         }
         if (typeof p.setOption === "function") {
-          try { p.setOption("captions", "track", { languageCode: "en" }); } catch {}
+          try {
+            const trackOption = {
+              languageCode: targetTrack?.languageCode || "en"
+            };
+            if (targetTrack?.vssId || targetTrack?.vss_id) {
+              trackOption.vss_id = targetTrack.vssId || targetTrack.vss_id;
+            }
+            p.setOption("captions", "track", trackOption);
+          } catch {}
         }
         if (typeof p.toggleSubtitlesOn === "function") {
           try { p.toggleSubtitlesOn(); } catch {}
@@ -1216,10 +1281,11 @@
   async function selectSubtitleTrack(track) {
     if (!track) return;
     STATE.activeTrack = track;
-    updateHud(`CC: ${track.name?.simpleText || track.languageCode} ▾`);
-    toast(`Switching to ${track.name?.simpleText || track.languageCode}...`);
+    const trackLabel = track.name?.simpleText || track.languageCode;
+    updateHud(`CC: ${trackLabel} ▾`);
+    toast(`Switching to ${trackLabel}...`);
 
-    // 1. First try fetching timedtext directly
+    // 1. First try fetching timedtext directly (with PoToken if known)
     if (track.baseUrl) {
       let raw = await fetchExact(track.baseUrl, 2000);
       let cues = parseAny(raw);
@@ -1236,25 +1302,58 @@
       }
     }
 
-    // 2. If timedtext download is blocked (e.g. PoToken), activate player track & engage live fallback
+    // 2. Instruct player to switch to this track (which generates PoToken & sends XHR)
     try {
       const p = playerEl();
       if (p && typeof p.setOption === "function") {
-        p.setOption("captions", "track", {
-          languageCode: track.languageCode,
-          vss_id: track.vssId || track.vss_id || ""
-        });
+        const trkOpt = {
+          languageCode: track.languageCode
+        };
+        if (track.vssId || track.vss_id) {
+          trkOpt.vss_id = track.vssId || track.vss_id;
+        }
+        p.setOption("captions", "track", trkOpt);
       }
     } catch {}
-    ensureCaptionsActive();
-    STATE.cues = [];
-    STATE.liveFallbackAllowed = true;
-    STATE.liveMode = true;
-    STATE.lastObservedText = "";
-    lastObservedText = "";
-    renderCue(-1);
-    updateHud();
-    toast(`Switched to ${track.name?.simpleText || track.languageCode} (Realtime)`);
+    ensureCaptionsActive(track);
+
+    // 3. Wait up to 3000ms for player XHR / wire sniffer
+    const t0 = Date.now();
+    while (Date.now() - t0 < 3000) {
+      await sleep(150);
+      if (capturedBody && capturedBody.trim().length > 20) {
+        const cues = parseAny(capturedBody);
+        if (cues && cues.length) {
+          applyLoadedCues(cues, "wire-sniffer", track);
+          return;
+        }
+      }
+      const trackCues = extractCuesFromVideo();
+      if (trackCues && trackCues.length > 2) {
+        applyLoadedCues(trackCues, "video-track", track);
+        return;
+      }
+      if (STATE.cues && STATE.cues.length > 0) {
+        return;
+      }
+    }
+
+    // 4. Fallback: only engage liveMode if live text is actively observed
+    const liveText = getLiveCaptionText();
+    if (liveText) {
+      STATE.liveFallbackAllowed = true;
+      STATE.liveMode = true;
+      STATE.lastObservedText = liveText;
+      renderCue(-1);
+      updateHud(`CC: Live (${trackLabel}) ▾`);
+      toast(`Switched to ${trackLabel} (Realtime)`);
+    } else {
+      STATE.liveFallbackAllowed = false;
+      STATE.liveMode = false;
+      renderCue(-1);
+      updateHud(`CC: ${trackLabel} ▾`);
+      toast(`Switched to ${trackLabel}`);
+    }
   }
   window.selectSubtitleTrack = selectSubtitleTrack;
 
@@ -1296,7 +1395,7 @@
       if (capturedBody && (capturedVideoId === vid || !capturedVideoId) && capturedBody.trim().length > 20) {
         const cues = parseAny(capturedBody);
         if (cues && cues.length) {
-          applyLoadedCues(cues, "wire-cache");
+          applyLoadedCues(cues, "wire-cache", STATE.activeTrack);
           return;
         }
       }
@@ -1305,7 +1404,7 @@
       let tracks = getAllCaptionTracks(vid);
       if (!tracks || !tracks.length) {
         for (let i = 0; i < 4; i++) {
-          await sleep(250);
+          await sleep(200);
           tracks = getAllCaptionTracks(vid);
           if (tracks && tracks.length) break;
         }
@@ -1341,6 +1440,7 @@
         } catch {}
       }
 
+      let bestTrack = null;
       if (tracks && tracks.length) {
         const vidLang = detectVideoLanguage();
         const sorted = [...tracks].sort((a, b) => getTrackScore(b, vidLang) - getTrackScore(a, vidLang));
@@ -1348,6 +1448,7 @@
         if (!STATE.activeTrack || !sorted.some(t => t.baseUrl === STATE.activeTrack?.baseUrl)) {
           STATE.activeTrack = sorted[0];
         }
+        bestTrack = STATE.activeTrack;
 
         // Limit to top 3 prioritized tracks to avoid long sequential delays
         for (const pick of sorted.slice(0, 3)) {
@@ -1368,7 +1469,34 @@
         }
       }
 
-      // 5. Direct timedtext API calls
+      // 5. Activate Native Module with prioritized track to trigger player XHR with PoToken
+      ensureCaptionsActive(bestTrack);
+
+      // 6. Grace period: wait for Player XHR / Wire Sniffer / textTracks (up to 3500ms)
+      const waitStart = Date.now();
+      while (Date.now() - waitStart < 3500) {
+        await sleep(150);
+
+        if (capturedBody && (capturedVideoId === vid || !capturedVideoId) && capturedBody.trim().length > 20) {
+          const cues = parseAny(capturedBody);
+          if (cues && cues.length) {
+            applyLoadedCues(cues, "wire-sniffer", bestTrack || STATE.activeTrack);
+            return;
+          }
+        }
+
+        const trackCues = extractCuesFromVideo();
+        if (trackCues && trackCues.length > 2) {
+          applyLoadedCues(trackCues, "video-track", bestTrack || STATE.activeTrack);
+          return;
+        }
+
+        if (STATE.cues && STATE.cues.length > 0) {
+          return;
+        }
+      }
+
+      // 7. Direct timedtext API calls (with PoToken if available)
       const directCandidates = [
         `https://www.youtube.com/api/timedtext?v=${vid}&lang=en&fmt=json3`,
         `https://www.youtube.com/api/timedtext?v=${vid}&lang=en&kind=asr&fmt=json3`,
@@ -1377,41 +1505,57 @@
       ];
       for (const cand of directCandidates) {
         try {
-          const raw = await fetchExact(cand, 2000);
+          const raw = await fetchExact(cand, 1500);
           const cues = parseAny(raw);
           if (cues && cues.length) {
-            applyLoadedCues(cues, "direct");
+            applyLoadedCues(cues, "direct", bestTrack);
             return;
           }
         } catch {}
       }
 
-      // 6. Native module activation attempt & textTracks extraction
-      ensureCaptionsActive();
-      const trackCues = extractCuesFromVideo();
-      if (trackCues && trackCues.length > 2) {
-        applyLoadedCues(trackCues, "video-track");
+      // 8. Re-check wire sniffer and textTracks one more time (player XHR may have arrived during step 7)
+      if (capturedBody && (capturedVideoId === vid || !capturedVideoId) && capturedBody.trim().length > 20) {
+        const cues = parseAny(capturedBody);
+        if (cues && cues.length) {
+          applyLoadedCues(cues, "wire-sniffer-late", bestTrack || STATE.activeTrack);
+          return;
+        }
+      }
+      const finalCues = extractCuesFromVideo();
+      if (finalCues && finalCues.length > 2) {
+        applyLoadedCues(finalCues, "video-track", bestTrack);
         return;
       }
 
-      // 7. True Fallback: timedtext download blocked or empty -> engage live caption stream
-      STATE.liveFallbackAllowed = true;
-      lastFailedVideoId = vid;
-      const liveText = getLiveCaptionText();
-      if (liveText) {
-        lastObservedText = liveText;
-        STATE.lastObservedText = liveText;
-        STATE.liveMode = true;
-        const box = document.getElementById("kiki-captions");
-        if (box && typeof window.renderTextToBox === "function") {
-          window.renderTextToBox(box, liveText);
-        }
-        updateHud("CC: Live ▾");
-        if (!liveToastShown) {
-          liveToastShown = true;
-          toast("Captions: Realtime stream fallback");
+      // 9. True Fallback: Only engage live mode if live text is actively present on screen!
+      if (tracks && tracks.length) {
+        const liveText = getLiveCaptionText();
+        const trkLabel = bestTrack?.name?.simpleText || bestTrack?.languageCode || "Track";
+        if (liveText) {
+          // Only set liveFallbackAllowed when there IS actual live text
+          STATE.liveFallbackAllowed = true;
+          lastObservedText = liveText;
+          STATE.lastObservedText = liveText;
+          STATE.liveMode = true;
+          const box = document.getElementById("kiki-captions");
+          if (box && typeof window.renderTextToBox === "function") {
+            window.renderTextToBox(box, liveText);
+          }
+          updateHud(`CC: Live (${trkLabel}) ▾`);
+          if (!liveToastShown) {
+            liveToastShown = true;
+            toast(`Captions: Realtime stream (${trkLabel})`);
+          }
+        } else {
+          // No live text visible — do NOT activate live fallback; keep waiting for wire sniffer
+          STATE.liveFallbackAllowed = false;
+          STATE.liveMode = false;
+          updateHud(`CC: ${trkLabel} ▾`);
         }
       } else {
+        STATE.liveFallbackAllowed = false;
+        lastFailedVideoId = vid;
         updateHud("CC: None ▾");
       }
     } finally {
@@ -1497,8 +1641,17 @@
       if (!v) return;
 
       if (!STATE.cues.length && STATE.videoId) {
-        if (!loadingTracks && !STATE.loadingTracks && !(lastFailedVideoId === STATE.videoId && Date.now() - lastLoadAttemptTime < 30000)) {
+        const isPlaying = v && !v.paused && (v.currentTime > 0 || v.readyState >= 2);
+        const retryTimeout = isPlaying ? 3500 : 20000;
+        if (!loadingTracks && !STATE.loadingTracks && Date.now() - lastLoadAttemptTime > retryTimeout) {
           loadForVideo();
+        }
+      }
+
+      // Self-heal: if stuck in liveMode, periodically retry structured cues
+      if (STATE.liveMode && !STATE.cues.length && STATE.videoId) {
+        if (!loadingTracks && !STATE.loadingTracks && Date.now() - lastLoadAttemptTime > 8000) {
+          loadForVideo(true);
         }
       }
 
@@ -1507,7 +1660,7 @@
         const alreadyOn = btn && btn.getAttribute("aria-pressed") === "true";
         if (!alreadyOn && Date.now() - lastCaptionActivationTime > 2200) {
           lastCaptionActivationTime = Date.now();
-          ensureCaptionsActive();
+          ensureCaptionsActive(STATE.activeTrack);
         }
       }
 
@@ -1554,9 +1707,12 @@
   document.addEventListener("play", (e) => {
     const v = videoEl();
     if (e.target === v) {
-      ensureCaptionsActive();
-      if (!STATE.cues.length && !loadingTracks) {
-        setTimeout(loadForVideo, 300);
+      ensureCaptionsActive(STATE.activeTrack);
+      if (!STATE.cues.length) {
+        lastFailedVideoId = "";
+        if (!loadingTracks) {
+          setTimeout(() => loadForVideo(true), 250);
+        }
       }
     }
   }, true);
@@ -1596,4 +1752,4 @@
 
 
 
-  console.log('[Kiki Immersion] v1.2.2 Modular Engine Loaded on:', location.href);
+  console.log('[Kiki Immersion] v1.2.4 Modular Engine Loaded on:', location.href);
