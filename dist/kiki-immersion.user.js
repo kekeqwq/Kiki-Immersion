@@ -24,16 +24,7 @@
 // Version: 1.2.2
 // =============================================================
 
-  // -------------------------------------------------------------
-  // 1. Force Desktop YouTube & Platform Guard
-  // -------------------------------------------------------------
-  try {
-    document.cookie = "PREF=f6=40000000&f5=30000; domain=.youtube.com; path=/; max-age=31536000; SameSite=Lax";
-  } catch (e) {}
 
-  try {
-    Object.defineProperty(navigator, 'platform', { get: () => "MacIntel" });
-  } catch (e) {}
 
   if (document.documentElement) {
     document.documentElement.classList.add("kiki-lock-chrome");

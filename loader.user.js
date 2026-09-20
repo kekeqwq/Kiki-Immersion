@@ -4,8 +4,18 @@
 // @version      1.0.1
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine & dynamic hot-reload.
 // @author       keke
+// @match        https://m.youtube.com/*
+// @match        https://www.youtube.com/*
+// @match        https://youtube.com/*
+// @match        *://m.youtube.com/*
+// @match        *://www.youtube.com/*
 // @match        *://*.youtube.com/*
 // @match        *://youtube.com/*
+// @include      https://m.youtube.com/*
+// @include      https://www.youtube.com/*
+// @include      https://youtube.com/*
+// @include      *://m.youtube.com/*
+// @include      *://www.youtube.com/*
 // @include      *://*.youtube.com/*
 // @include      *://youtube.com/*
 // @run-at       document-start
@@ -20,22 +30,63 @@
   const MODULES = ["core", "yomitan", "ai", "ui", "youtube"];
   const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/modules/";
 
-  // 1. Force Desktop YouTube: Redirect immediately on m.youtube.com before loading modules
-  try {
-    document.cookie = "PREF=f6=40000000&f5=30000; domain=.youtube.com; path=/; max-age=31536000; SameSite=Lax";
-  } catch (e) {}
+  // 1. Force Desktop YouTube Cookie (app=desktop is required for YouTube server to bypass m.youtube)
+  function ensureDesktopPreferences() {
+    try {
+      const match = document.cookie.match(/(?:^|;\s*)PREF=([^;]*)/);
+      let pref = match ? match[1] : "";
+      if (/app=[^&]*/.test(pref)) {
+        pref = pref.replace(/app=[^&]*/g, "app=desktop");
+      } else {
+        pref = "app=desktop" + (pref ? "&" + pref : "");
+      }
+      if (!pref.includes("f6=40000000")) pref += "&f6=40000000";
+      if (!pref.includes("f5=30000")) pref += "&f5=30000";
+      const baseVal = `PREF=${pref}; max-age=31536000; path=/; Secure; SameSite=Lax`;
+      document.cookie = baseVal;
+      document.cookie = `${baseVal}; domain=.youtube.com`;
+      document.cookie = `${baseVal}; domain=youtube.com`;
+    } catch (e) {}
+  }
 
-  if (location.hostname === "m.youtube.com") {
-    const targetUrl = new URL(location.href);
-    targetUrl.hostname = "www.youtube.com";
-    targetUrl.searchParams.set("app", "desktop");
-    targetUrl.searchParams.set("persist_app", "1");
-    location.replace(targetUrl.toString());
+  ensureDesktopPreferences();
+
+  // 2. Immediately intercept mobile YouTube domain
+  const isMobile = location.hostname === "m.youtube.com" || location.host.includes("m.youtube.com");
+  if (isMobile) {
+    try {
+      const targetUrl = new URL(location.href);
+      targetUrl.hostname = "www.youtube.com";
+      targetUrl.searchParams.set("app", "desktop");
+      targetUrl.searchParams.set("persist_app", "1");
+      location.replace(targetUrl.href);
+    } catch (e) {
+      location.href = "https://www.youtube.com/?app=desktop&persist_app=1";
+    }
     return;
   }
 
+  document.addEventListener("click", (e) => {
+    try {
+      const link = e.target && e.target.closest ? e.target.closest("a") : null;
+      if (link && link.href && link.hostname && link.hostname.includes("m.youtube.com")) {
+        e.preventDefault();
+        e.stopPropagation();
+        const target = new URL(link.href);
+        target.hostname = "www.youtube.com";
+        target.searchParams.set("app", "desktop");
+        target.searchParams.set("persist_app", "1");
+        location.href = target.href;
+      }
+    } catch (err) {}
+  }, true);
+
+  // 3. Spoof desktop browser environment so YouTube desktop web app never bounces back on iPad
   try {
-    Object.defineProperty(navigator, "platform", { get: () => "MacIntel" });
+    const desktopUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+    Object.defineProperty(navigator, "userAgent", { get: () => desktopUA, configurable: true });
+    Object.defineProperty(navigator, "appVersion", { get: () => "5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", configurable: true });
+    Object.defineProperty(navigator, "platform", { get: () => "MacIntel", configurable: true });
   } catch (e) {}
 
   try {
