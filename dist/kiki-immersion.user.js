@@ -3494,6 +3494,76 @@ window.KikiAudioEngine = KikiAudioEngine;
     }
   }
 
+  function ensureRoot() {
+    let root = document.getElementById("kiki-root");
+    const targetHost = document.body || document.documentElement;
+    if (!root && targetHost) {
+      root = document.createElement("div");
+      root.id = "kiki-root";
+      root.style.cssText = "position: fixed !important; inset: 0 !important; pointer-events: none !important; z-index: 2147483640 !important;";
+      setHtml(root, `
+        <div id="kiki-captions" class="${STATE.subsVisible === false ? 'kiki-hidden' : ''}" style="position: fixed !important; pointer-events: auto !important; z-index: 2147483645 !important; text-align: center !important; min-height: 1em !important;"></div>
+      `);
+      targetHost.appendChild(root);
+    }
+    if (root && root.parentElement !== targetHost && targetHost) {
+      targetHost.appendChild(root);
+    }
+
+    ensureYomitanCard();
+    if (typeof ensureCaptionObserver === "function") ensureCaptionObserver();
+    if (typeof bindVideoTrackListeners === "function") bindVideoTrackListeners();
+    if (root) root.style.display = STATE.enabled ? "" : "none";
+    document.documentElement.classList.toggle("kiki-hide-native", !!(STATE.enabled && (STATE.cues.length > 0 || (typeof lastObservedText !== "undefined" && lastObservedText))));
+    document.documentElement.classList.toggle("kiki-lock-chrome", !!STATE.enabled);
+    return root;
+  }
+  window.ensureRoot = ensureRoot;
+
+  function updateCaptionPosition() {
+    const box = document.getElementById("kiki-captions");
+    if (!box) return;
+    if (STATE.subsVisible === false) {
+      box.classList.add("kiki-hidden");
+      return;
+    }
+    box.classList.remove("kiki-hidden");
+    const v = videoEl() || playerEl();
+    const showChrome = document.documentElement.classList.contains("kiki-show-chrome");
+    
+    // Check if native chrome bottom controls or progress bar are visible
+    const cb = document.querySelector(".ytp-chrome-bottom");
+    let chromeHeight = 0;
+    if (showChrome && cb) {
+      const cbRect = cb.getBoundingClientRect();
+      chromeHeight = cbRect.height || 64;
+    }
+    // When native controls are visible: jump up 128px (above control bar & scrubber)
+    // When native controls are hidden: settle at 44px above video bottom
+    // Calculate distance from bottom of viewport to bottom of video
+    if (v) {
+      const r = v.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        const bottomOffset = (window.innerHeight - r.bottom) + (showChrome ? Math.max(128, Math.round(chromeHeight + 68)) : 38);
+        box.style.setProperty("position", "fixed", "important");
+        box.style.setProperty("left", `${Math.round(r.left + r.width / 2)}px`, "important");
+        box.style.setProperty("bottom", `${Math.round(bottomOffset)}px`, "important");
+        box.style.setProperty("top", "auto", "important");
+        box.style.setProperty("transform", "translateX(-50%)", "important");
+        box.style.setProperty("width", `${Math.min(1000, Math.round(r.width * 0.94))}px`, "important");
+        return;
+      }
+    }
+
+    const fallbackBottom = showChrome ? 138 : 52;
+    box.style.setProperty("position", "fixed", "important");
+    box.style.setProperty("left", "50%", "important");
+    box.style.setProperty("bottom", `${fallbackBottom}px`, "important");
+    box.style.setProperty("top", "auto", "important");
+    box.style.setProperty("transform", "translateX(-50%)", "important");
+    box.style.setProperty("width", "min(94%, 1000px)", "important");
+  }
+  window.updateCaptionPosition = updateCaptionPosition;
 
   // -------------------------------------------------------------
   // 7. Yomitan Card & Word Lookup
