@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.2.2
+// Version: 1.2.3
 // =============================================================
 
   function playVideoSync() {
@@ -467,6 +467,38 @@
   }
   window.ensureRoot = ensureRoot;
 
+  function getVideoRenderedRect(v) {
+    const r = v.getBoundingClientRect();
+    const videoWidth = v.videoWidth;
+    const videoHeight = v.videoHeight;
+    if (!videoWidth || !videoHeight || !r.width || !r.height) return r;
+
+    const containerRatio = r.width / r.height;
+    const videoRatio = videoWidth / videoHeight;
+
+    let renderWidth = r.width;
+    let renderHeight = r.height;
+    let left = r.left;
+    let top = r.top;
+
+    if (videoRatio > containerRatio) {
+      renderHeight = r.width / videoRatio;
+      top = r.top + (r.height - renderHeight) / 2;
+    } else {
+      renderWidth = r.height * videoRatio;
+      left = r.left + (r.width - renderWidth) / 2;
+    }
+
+    return {
+      left,
+      top,
+      width: renderWidth,
+      height: renderHeight,
+      right: left + renderWidth,
+      bottom: top + renderHeight
+    };
+  }
+
   function updateCaptionPosition() {
     const box = document.getElementById("kiki-captions");
     if (!box) return;
@@ -486,10 +518,10 @@
       chromeHeight = cbRect.height || 64;
     }
     // When native controls are visible: jump up 128px (above control bar & scrubber)
-    // When native controls are hidden: settle at 44px above video bottom
+    // When native controls are hidden: settle at 38px above video picture bottom
     // Calculate distance from bottom of viewport to bottom of video
     if (v) {
-      const r = v.getBoundingClientRect();
+      const r = getVideoRenderedRect(v);
       if (r.width > 0 && r.height > 0) {
         const bottomOffset = (window.innerHeight - r.bottom) + (showChrome ? Math.max(128, Math.round(chromeHeight + 68)) : 38);
         box.style.setProperty("position", "fixed", "important");

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.2.2
+// @version      1.2.3
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, and touch/mouse gestures.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -57,7 +57,7 @@
 
 
 
-  window.__kiki_engine_version = "1.2.2";
+  window.__kiki_engine_version = "1.2.3";
 
   const STATE = window.STATE = {
     enabled: true,
@@ -76,7 +76,7 @@
     liveMode: false,
     liveFallbackAllowed: false,
     lastObservedText: "",
-    engineVersion: "1.2.2"
+    engineVersion: "1.2.3"
   };
 
   // -------------------------------------------------------------
@@ -190,6 +190,12 @@
     }
 
     /* Webpage Fullscreen Mode */
+    html.kiki-webpage-fs,
+    html.kiki-webpage-fs body {
+      overflow: hidden !important;
+      width: 100% !important;
+      height: 100% !important;
+    }
     html.kiki-webpage-fs ytd-app, html.kiki-webpage-fs #content { overflow: hidden !important; }
     html.kiki-webpage-fs ytd-masthead, html.kiki-webpage-fs #secondary, html.kiki-webpage-fs #below,
     html.kiki-webpage-fs #related, html.kiki-webpage-fs #comments, html.kiki-webpage-fs #chat,
@@ -199,20 +205,53 @@
 
     html.kiki-webpage-fs ytd-watch-flexy, html.kiki-webpage-fs #player-container-outer,
     html.kiki-webpage-fs #player-container-inner, html.kiki-webpage-fs #player-container,
-    html.kiki-webpage-fs #player, html.kiki-webpage-fs ytd-player,
-    html.kiki-webpage-fs #movie_player, html.kiki-webpage-fs .html5-video-player {
-      width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important;
+    html.kiki-webpage-fs #player {
+      width: 100% !important; height: 100% !important; max-width: 100% !important; max-height: 100% !important;
     }
-    html.kiki-webpage-fs ytd-player, html.kiki-webpage-fs #movie_player {
-      position: fixed !important; inset: 0 !important; z-index: 2147483000 !important; background: #000 !important;
+    html.kiki-webpage-fs ytd-player, html.kiki-webpage-fs #movie_player, html.kiki-webpage-fs .html5-video-player {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      width: 100% !important;
+      width: 100vw !important;
+      height: 100% !important;
+      height: 100dvh !important;
+      max-width: 100% !important;
+      max-height: 100% !important;
+      max-height: 100dvh !important;
+      z-index: 2147483000 !important;
+      background: #000 !important;
+      overflow: hidden !important;
     }
     html.kiki-webpage-fs .html5-video-container {
-      width: 100vw !important; height: 100vh !important; left: 0 !important; top: 0 !important;
-      display: flex !important; align-items: center !important; justify-content: center !important;
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      max-width: 100% !important;
+      max-height: 100% !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      overflow: hidden !important;
     }
     html.kiki-webpage-fs video.html5-main-video {
-      position: relative !important; width: auto !important; height: auto !important;
-      max-width: 100vw !important; max-height: 100vh !important; object-fit: contain !important;
+      position: static !important;
+      width: 100% !important;
+      height: 100% !important;
+      max-width: 100% !important;
+      max-height: 100% !important;
+      object-fit: contain !important;
+      object-position: center center !important;
+      top: 0 !important;
+      left: 0 !important;
+      margin: 0 auto !important;
+      transform: none !important;
     }
 
     /* Ensure Video Player container is positioning context */
@@ -3265,7 +3304,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.2.2
+// Version: 1.2.3
 // =============================================================
 
   function playVideoSync() {
@@ -3732,6 +3771,38 @@ window.KikiAudioEngine = KikiAudioEngine;
   }
   window.ensureRoot = ensureRoot;
 
+  function getVideoRenderedRect(v) {
+    const r = v.getBoundingClientRect();
+    const videoWidth = v.videoWidth;
+    const videoHeight = v.videoHeight;
+    if (!videoWidth || !videoHeight || !r.width || !r.height) return r;
+
+    const containerRatio = r.width / r.height;
+    const videoRatio = videoWidth / videoHeight;
+
+    let renderWidth = r.width;
+    let renderHeight = r.height;
+    let left = r.left;
+    let top = r.top;
+
+    if (videoRatio > containerRatio) {
+      renderHeight = r.width / videoRatio;
+      top = r.top + (r.height - renderHeight) / 2;
+    } else {
+      renderWidth = r.height * videoRatio;
+      left = r.left + (r.width - renderWidth) / 2;
+    }
+
+    return {
+      left,
+      top,
+      width: renderWidth,
+      height: renderHeight,
+      right: left + renderWidth,
+      bottom: top + renderHeight
+    };
+  }
+
   function updateCaptionPosition() {
     const box = document.getElementById("kiki-captions");
     if (!box) return;
@@ -3751,10 +3822,10 @@ window.KikiAudioEngine = KikiAudioEngine;
       chromeHeight = cbRect.height || 64;
     }
     // When native controls are visible: jump up 128px (above control bar & scrubber)
-    // When native controls are hidden: settle at 44px above video bottom
+    // When native controls are hidden: settle at 38px above video picture bottom
     // Calculate distance from bottom of viewport to bottom of video
     if (v) {
-      const r = v.getBoundingClientRect();
+      const r = getVideoRenderedRect(v);
       if (r.width > 0 && r.height > 0) {
         const bottomOffset = (window.innerHeight - r.bottom) + (showChrome ? Math.max(128, Math.round(chromeHeight + 68)) : 38);
         box.style.setProperty("position", "fixed", "important");
@@ -4869,7 +4940,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - YouTube Adapter & Subtitle Pipeline
-// Version: 1.2.2
+// Version: 1.2.3
 // =============================================================
 
   // -------------------------------------------------------------

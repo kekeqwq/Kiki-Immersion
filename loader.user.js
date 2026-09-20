@@ -120,7 +120,10 @@
     } catch (e) {}
   }
 
+  const EXPECTED_CACHE_VERSION = "1.2.3";
+
   function hasAllCachedModules() {
+    if (localStorage.getItem("kiki_cache_version") !== EXPECTED_CACHE_VERSION) return false;
     return MODULES.every(m => {
       const c = getCachedModule(m);
       return c && c.length > 50;
@@ -174,7 +177,7 @@
       results.forEach((code, idx) => {
         setCachedModule(MODULES[idx], code);
       });
-      localStorage.setItem("kiki_cache_version", "1.2.2");
+      localStorage.setItem("kiki_cache_version", EXPECTED_CACHE_VERSION);
       localStorage.setItem("kiki_loader_version", KIKI_LOADER_VERSION);
       localStorage.setItem("kiki_cache_time", new Date().toLocaleString());
 
