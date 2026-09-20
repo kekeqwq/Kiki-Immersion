@@ -51,7 +51,7 @@
     if (kikiPolicy) return kikiPolicy;
     if (window.trustedTypes && window.trustedTypes.createPolicy) {
       try {
-        kikiPolicy = window.trustedTypes.createPolicy("kiki-loader-exec", { createScript: s => s });
+        kikiPolicy = window.trustedTypes.createPolicy("kiki-loader-exec", { createScript: s => s, createHTML: h => h });
       } catch (e) {
         kikiPolicy = window.trustedTypes.defaultPolicy || { createScript: s => s };
       }
@@ -87,7 +87,7 @@
       hudToast.style.cssText = "position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:2147483647;background:rgba(15,23,42,0.94);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(99,102,241,0.6);border-radius:14px;padding:10px 20px;color:#E0E7FF;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,0.6);display:flex;align-items:center;gap:10px;pointer-events:none;";
       (document.body || document.documentElement).appendChild(hudToast);
     }
-    hudToast.innerHTML = "<span style=\"display:inline-block;animation:kiki-spin 1s linear infinite;\">⏳</span> <span>Kiki Immersion: 正在拉取最新核心组件...</span><style>@keyframes kiki-spin{100%{transform:rotate(360deg)}}</style>";
+    hudToast.textContent = "⏳ Kiki Immersion: 正在拉取最新核心组件...";
 
     try {
       const results = await Promise.all(MODULES.map(m => fetchModule(m)));
@@ -97,7 +97,7 @@
       localStorage.setItem("kiki_cache_version", KIKI_LOADER_VERSION);
       localStorage.setItem("kiki_cache_time", new Date().toLocaleString());
 
-      hudToast.innerHTML = "<span>✅</span> <span>Kiki Immersion: 核心组件已就绪！</span>";
+      hudToast.textContent = "✅ Kiki Immersion: 核心组件已就绪！";
       setTimeout(() => hudToast.remove(), 1200);
 
       if (isManual) {
@@ -108,7 +108,7 @@
     } catch (err) {
       console.error("[Kiki Loader] Bootstrapping failed:", err);
       if (hudToast) {
-        hudToast.innerHTML = `<span style="color:#F87171;">❌</span> <span>拉取组件失败: ${err.message}</span>`;
+        hudToast.textContent = "❌ 拉取组件失败: " + err.message;
         hudToast.style.borderColor = "#F87171";
         setTimeout(() => hudToast.remove(), 4000);
       }
