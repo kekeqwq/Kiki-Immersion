@@ -54,6 +54,7 @@
     hudVisible: false,
     loadingTracks: false,
     liveMode: false,
+    lastObservedText: "",
     engineVersion: "1.2.0"
   };
 

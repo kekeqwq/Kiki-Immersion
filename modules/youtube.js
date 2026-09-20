@@ -943,6 +943,7 @@
       const liveText = getLiveCaptionText();
       if (liveText && liveText !== lastObservedText) {
         lastObservedText = liveText;
+        STATE.lastObservedText = liveText;
         STATE.liveMode = true;
         const box = document.getElementById("kiki-captions");
         if (box && typeof window.renderTextToBox === "function") {
@@ -1337,6 +1338,7 @@
     STATE.cues = [];
     STATE.idx = -1;
     lastObservedText = "";
+    STATE.lastObservedText = "";
     liveToastShown = false;
     lastFailedVideoId = "";
     lastLoadAttemptTime = 0;
