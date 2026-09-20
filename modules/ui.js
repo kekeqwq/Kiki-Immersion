@@ -763,7 +763,7 @@
       closeLookup();
     }
     const modal = document.getElementById("kiki-settings-modal");
-    if (modal && modal.style.display !== "none" && !e.target.closest("#kiki-settings-modal, .kiki-hud-dict, .kiki-hud-ai")) {
+    if (modal && modal.style.display !== "none" && !e.target.closest("#kiki-settings-modal, #kiki-hud")) {
       modal.style.display = "none";
     }
   }, true);
