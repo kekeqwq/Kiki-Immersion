@@ -46,17 +46,27 @@
     });
   }
 
+  let kikiPolicy = null;
+  function getPolicy() {
+    if (kikiPolicy) return kikiPolicy;
+    if (window.trustedTypes && window.trustedTypes.createPolicy) {
+      try {
+        kikiPolicy = window.trustedTypes.createPolicy("kiki-loader-exec", { createScript: s => s });
+      } catch (e) {
+        kikiPolicy = window.trustedTypes.defaultPolicy || { createScript: s => s };
+      }
+    }
+    return kikiPolicy;
+  }
+
   function executeCachedModules() {
     const fullCode = MODULES.map(m => getCachedModule(m)).join("\n;\n");
     let scriptSource = fullCode;
-    if (window.trustedTypes && window.trustedTypes.createPolicy) {
-      let p;
+    const p = getPolicy();
+    if (p && typeof p.createScript === "function") {
       try {
-        p = window.trustedTypes.createPolicy("kiki-loader-exec", { createScript: s => s });
-      } catch (e) {
-        p = window.trustedTypes.defaultPolicy;
-      }
-      if (p) scriptSource = p.createScript(fullCode);
+        scriptSource = p.createScript(fullCode);
+      } catch (e) {}
     }
     const runner = new Function(scriptSource);
     runner();
