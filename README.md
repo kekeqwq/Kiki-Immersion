@@ -2,11 +2,16 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Frosted Glass Subtitles & Audio Engine for Safari.*
 
-![Platform](https://img.shields.io/badge/platform-Safari-blue.svg) ![Release](https://img.shields.io/badge/release-v1.1.1-emerald.svg) ![Status](https://img.shields.io/badge/status-Verified%20100%25-success.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari-blue.svg) ![Release](https://img.shields.io/badge/release-v1.1.2-emerald.svg) ![Status](https://img.shields.io/badge/status-Verified%20100%25-success.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
 ## 📢 Release Overview
+
+**v1.1.2 (Webpage Fullscreen Double-Click & Gesture Precision Patch)**:
+- **Eliminated Fullscreen Bounces**: Resolved race condition between `pointerdown` double detection and browser native `dblclick` events, and added a 350ms debounce guard to `toggleWebpageFs` to guarantee 100% stable 1-try entry and exit.
+- **Refactored Tap Detection Window**: Expanded double-tap window to a comfortable 380ms with 100px spatial tolerance; decoupled the single-tap pause timer from double-tap state and added playback auto-compensation to prevent accidental pauses.
+- **Optimized iPad Touch Zones**: Refined subtitle seeking touch areas to 18% on the left and right edges, maximizing the center screen area (64%) for reliable fullscreen toggling.
 
 **v1.1.1 (Multi-Word Phrase Matching, Subtitle Toggle & HUD Responsiveness Patch)**:
 - **Yomitan Multi-Word Phrase Matching**: Clicking any word searches for matching multi-word phrases and idioms (e.g. "good night") in installed Yomitan dictionaries, prioritizing matched phrases at the top with multi-word highlights and seamless toggle-to-close behavior.

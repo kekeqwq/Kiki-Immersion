@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion (Safari)
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion-Safari
-// @version      1.1.1
+// @version      1.1.2
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, and touch/mouse gestures tailored for Safari.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -3170,7 +3170,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         const live = lastObservedText ? "YES" : "NO";
         const trackCount = v && v.textTracks ? v.textTracks.length : 0;
         const domCount = queryCaptionElements(".ytp-caption-segment, .caption-visual-line").length;
-        toast(`Kiki v1.1.1 [${status}] | CC=${cueCount} | Live=${live} | DOM=${domCount} | Trk=${trackCount}`);
+        toast(`Kiki v1.1.2 [${status}] | CC=${cueCount} | Live=${live} | DOM=${domCount} | Trk=${trackCount}`);
       });
     }
 
@@ -3380,7 +3380,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       const dy = Math.abs(t.clientY - touchStartY);
       const dt = Date.now() - touchStartTime;
 
-      if (dx > 30 || dy > 30 || dt > 600) return;
+      if (dx > 45 || dy > 45 || dt > 700) return;
 
       if (e.cancelable) e.preventDefault();
       e.stopImmediatePropagation();
@@ -3399,7 +3399,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     if (e.type === "dblclick") {
       if (e.cancelable) e.preventDefault();
       e.stopImmediatePropagation();
-      toggleWebpageFs();
+      // Native dblclick swallowed to prevent duplicate toggleWebpageFs execution
       return;
     }
 
@@ -3407,8 +3407,9 @@ window.KikiAudioEngine = KikiAudioEngine;
     e.stopImmediatePropagation();
   }
 
-  const DOUBLE_MS = 360;
+  const DOUBLE_MS = 380;
   let lastTapInputType = "touch";
+  let singleTapActionFired = false;
   function handleTap(p, cx, cy, inputType = "touch") {
     lastTapInputType = inputType;
     if (STATE.lookupEl) {
@@ -3426,22 +3427,28 @@ window.KikiAudioEngine = KikiAudioEngine;
     const relY = (cy - r.top) / r.height;
     const now = Date.now();
 
-    const isDouble = (now - lastTapTime < DOUBLE_MS) && (Math.abs(cx - lastTapX) < 80) && (Math.abs(cy - lastTapY) < 80);
+    const isDouble = (now - lastTapTime < DOUBLE_MS) && (Math.abs(cx - lastTapX) < 100) && (Math.abs(cy - lastTapY) < 100);
 
     if (isDouble) {
       clearTimeout(singleTapTimer);
       singleTapTimer = null;
       lastTapTime = 0;
 
+      // If single tap timer already fired togglePause(), restore playback on double-tap
+      if (singleTapActionFired) {
+        singleTapActionFired = false;
+        playVideoSync();
+      }
+
       // Mouse double-click anywhere toggles webpage fullscreen.
       // Touch (iPad) double-tap on left seeks -1, right seeks +1, center toggles webpage fullscreen.
       if (inputType === "mouse") {
         toggleWebpageFs();
       } else {
-        if (relX < 0.25) {
+        if (relX < 0.18) {
           seekCue(-1);
           toast("← previous line");
-        } else if (relX > 0.75) {
+        } else if (relX > 0.82) {
           seekCue(1);
           toast("next line →");
         } else {
@@ -3454,6 +3461,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     lastTapTime = now;
     lastTapX = cx;
     lastTapY = cy;
+    singleTapActionFired = false;
     clearTimeout(singleTapTimer);
 
     // Single click/tap top-left (<= 25% width & <= 28% height): Toggle Kiki Top Bar
@@ -3471,12 +3479,12 @@ window.KikiAudioEngine = KikiAudioEngine;
     }
 
     singleTapTimer = setTimeout(() => {
-      lastTapTime = 0;
+      singleTapActionFired = true;
       togglePause();
-    }, 260);
+    }, 280);
   }
 
-    window.toggleHud = toggleHud;
+  window.toggleHud = toggleHud;
   function toggleHud(force) {
     STATE.hudVisible = typeof force === "boolean" ? force : !STATE.hudVisible;
     const hud = ensureHud();
@@ -3502,14 +3510,24 @@ window.KikiAudioEngine = KikiAudioEngine;
     if (STATE.hudVisible) toggleHud(false);
   }
 
+  let lastFsToggleTime = 0;
   window.toggleWebpageFs = toggleWebpageFs;
   function toggleWebpageFs(force) {
+    const now = Date.now();
+    if (typeof force !== "boolean" && now - lastFsToggleTime < 350) {
+      return;
+    }
+    lastFsToggleTime = now;
     STATE.fs = typeof force === "boolean" ? force : !STATE.fs;
     document.documentElement.classList.toggle("kiki-webpage-fs", STATE.fs);
     updateHud();
+    updateCaptionPosition();
     toast(STATE.fs ? "Webpage Fullscreen" : "Exit Fullscreen");
     window.dispatchEvent(new Event("resize"));
-    setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
+    setTimeout(() => {
+      window.dispatchEvent(new Event("resize"));
+      updateCaptionPosition();
+    }, 100);
   }
 
   function showNativeChrome() {
@@ -5329,7 +5347,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         const vState = v ? (v.paused ? "Paused" : "Play") : "NoVid";
         const hudState = hudEl ? (hudEl.offsetWidth > 0 ? `${hudEl.offsetWidth}x${hudEl.offsetHeight}` : "0px") : "NULL";
         const trkCount = v && v.textTracks ? v.textTracks.length : 0;
-        toast(`✦ Kiki v1.1.1 [HUD:${hudState}|${vState}|TT:${trkCount}]`);
+        toast(`✦ Kiki v1.1.2 [HUD:${hudState}|${vState}|TT:${trkCount}]`);
       }, 700);
       setTimeout(() => {
         ensureHud();
