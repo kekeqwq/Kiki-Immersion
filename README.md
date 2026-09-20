@@ -92,8 +92,20 @@ Choose either installation method based on your device and browser:
   }
 
   function executeCachedModules() {
-    const fullCode = MODULES.map(m => getCachedModule(m)).join("\n;\n");
-    const runner = new Function(fullCode);
+    const fullCode = MODULES.map(m => getCachedModule(m)).join("
+;
+");
+    let scriptSource = fullCode;
+    if (window.trustedTypes && window.trustedTypes.createPolicy) {
+      let p;
+      try {
+        p = window.trustedTypes.createPolicy("kiki-loader-exec", { createScript: s => s });
+      } catch (e) {
+        p = window.trustedTypes.defaultPolicy;
+      }
+      if (p) scriptSource = p.createScript(fullCode);
+    }
+    const runner = new Function(scriptSource);
     runner();
   }
 
