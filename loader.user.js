@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.2.0
+// @version      1.0.0
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine & dynamic hot-reload.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -16,7 +16,7 @@
 (() => {
   "use strict";
 
-  const KIKI_LOADER_VERSION = "1.2.0";
+  const KIKI_LOADER_VERSION = "1.0.0";
   const MODULES = ["core", "yomitan", "ai", "ui", "youtube"];
   const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/modules/";
 
@@ -87,7 +87,7 @@
       hudToast.style.cssText = "position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:2147483647;background:rgba(15,23,42,0.94);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(99,102,241,0.6);border-radius:14px;padding:10px 20px;color:#E0E7FF;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,0.6);display:flex;align-items:center;gap:10px;pointer-events:none;";
       (document.body || document.documentElement).appendChild(hudToast);
     }
-    hudToast.textContent = "⏳ Kiki Immersion: 正在拉取最新核心组件...";
+    hudToast.textContent = "⏳ Kiki Immersion: Fetching core modules...";
 
     try {
       const results = await Promise.all(MODULES.map(m => fetchModule(m)));
@@ -97,7 +97,7 @@
       localStorage.setItem("kiki_cache_version", KIKI_LOADER_VERSION);
       localStorage.setItem("kiki_cache_time", new Date().toLocaleString());
 
-      hudToast.textContent = "✅ Kiki Immersion: 核心组件已就绪！";
+      hudToast.textContent = "✅ Kiki Immersion: Core modules ready!";
       setTimeout(() => hudToast.remove(), 1200);
 
       if (isManual) {
@@ -108,7 +108,7 @@
     } catch (err) {
       console.error("[Kiki Loader] Bootstrapping failed:", err);
       if (hudToast) {
-        hudToast.textContent = "❌ 拉取组件失败: " + err.message;
+        hudToast.textContent = "❌ Failed to fetch modules: " + err.message;
         hudToast.style.borderColor = "#F87171";
         setTimeout(() => hudToast.remove(), 4000);
       }

@@ -2871,9 +2871,9 @@ window.KikiAudioEngine = KikiAudioEngine;
             <span class="kiki-card-term" style="font-size: 22px !important; font-weight: 800; color: #FFF; line-height: 1.2;">${escapeHtml(displayTerm)}</span>
             <span style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; font-size: 11px; font-weight: 700; padding: 2.5px 8px; border-radius: 6px;">✦ AI Context</span>
             <select class="kiki-card-mode-select" style="background: rgba(255,255,255,0.12); color: #E2E8F0; font-size: 11.5px; font-weight: 600; padding: 2px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); cursor: pointer; outline: none;">
-              <option value="quick" ${curMode === "quick" ? "selected" : ""}>⚡ 简答速查</option>
-              <option value="deep" ${curMode === "deep" ? "selected" : ""}>📚 深度精学</option>
-              <option value="custom" ${curMode === "custom" ? "selected" : ""}>⚙️ 自定义</option>
+              <option value="quick" ${curMode === "quick" ? "selected" : ""}>⚡ Quick</option>
+              <option value="deep" ${curMode === "deep" ? "selected" : ""}>📚 Deep</option>
+              <option value="custom" ${curMode === "custom" ? "selected" : ""}>⚙️ Custom</option>
             </select>
             <span style="background: rgba(255,255,255,0.08); color: #94A3B8; font-size: 11px; padding: 2px 6px; border-radius: 4px;">${escapeHtml(cfg.apiModel || 'gpt-4o-mini')}</span>
           </div>
@@ -2897,8 +2897,8 @@ window.KikiAudioEngine = KikiAudioEngine;
       <!-- Follow-up Interactive Input Bar -->
       <div class="kiki-ai-input-wrap" style="border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 10px; margin-top: 10px;">
         <div style="display: flex; gap: 8px; align-items: center;">
-          <input type="text" class="kiki-ai-followup-input" placeholder="${isEn ? 'Ask follow-up question or explore grammar…' : '继续追问、探索语法或背景…'}" style="flex: 1; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 8px 12px; color: #FFF; font-size: 13px; outline: none; box-sizing: border-box;">
-          <button type="button" class="kiki-ai-followup-send" style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; border: none; border-radius: 8px; padding: 8px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; user-select: none;">${isEn ? 'Send' : '发送'}</button>
+          <input type="text" class="kiki-ai-followup-input" placeholder="Ask follow-up question or explore grammar…" style="flex: 1; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 8px 12px; color: #FFF; font-size: 13px; outline: none; box-sizing: border-box;">
+          <button type="button" class="kiki-ai-followup-send" style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; border: none; border-radius: 8px; padding: 8px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; user-select: none;">Send</button>
         </div>
       </div>
     `);
@@ -3005,7 +3005,7 @@ window.KikiAudioEngine = KikiAudioEngine;
                 if (thoughtToggleBtn) thoughtToggleBtn.textContent = isEn ? "Expand" : "展开";
                 if (thoughtStatus) {
                   const charCount = accumulatedReasoning.length;
-                  thoughtStatus.innerHTML = `✦ ${isEn ? 'Thinking completed' : '思考完成'} ${charCount > 0 ? `(${charCount}字)` : ''}`;
+                  thoughtStatus.innerHTML = `✦ Thinking completed ${charCount > 0 ? `(${charCount}字)` : ''}`;
                   thoughtStatus.style.color = "#8B5CF6";
                 }
               }
@@ -3024,7 +3024,7 @@ window.KikiAudioEngine = KikiAudioEngine;
           if (thoughtToggleBtn) thoughtToggleBtn.textContent = isEn ? "Expand" : "展开";
           if (thoughtStatus) {
             const charCount = accumulatedReasoning.length;
-            thoughtStatus.innerHTML = `✦ ${isEn ? 'Thinking completed' : '思考完成'} ${charCount > 0 ? `(${charCount}字)` : ''}`;
+            thoughtStatus.innerHTML = `✦ Thinking completed ${charCount > 0 ? `(${charCount}字)` : ''}`;
             thoughtStatus.style.color = "#8B5CF6";
           }
         }
@@ -3100,16 +3100,16 @@ window.KikiAudioEngine = KikiAudioEngine;
         <div class="kiki-ai-thought-box" style="display: none; background: rgba(255, 255, 255, 0.05); border-left: 3px solid #8B5CF6; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 12.5px; color: #94A3B8; line-height: 1.5;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; user-select: none;">
             <span class="kiki-ai-thought-status" style="font-weight: 700; color: #C4B5FD; display: inline-flex; align-items: center; gap: 6px;">
-              <span>✦</span> ${isEn ? 'Thinking…' : '思考中…'}
+              <span>✦</span> Thinking…
             </span>
-            <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0 4px;">${isEn ? 'Collapse' : '收起'}</button>
+            <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0 4px;">Collapse</button>
           </div>
           <div class="kiki-ai-thought-text" style="max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, monospace; font-size: 12px; opacity: 0.88; color: #CBD5E1; line-height: 1.45;"></div>
         </div>
 
         <div class="kiki-ai-answer" style="font-size: 15px; line-height: 1.65; color: #F1F5F9;">
           <span class="kiki-ai-initial-status" style="color: #94A3B8; display: inline-flex; align-items: center; gap: 6px;">
-            ✦ ${isEn ? 'Generating…' : '生成中…'}
+            ✦ Generating…
           </span>
         </div>
       `;
@@ -3138,16 +3138,16 @@ window.KikiAudioEngine = KikiAudioEngine;
       <div class="kiki-ai-thought-box" style="display: none; background: rgba(255, 255, 255, 0.05); border-left: 3px solid #8B5CF6; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 12.5px; color: #94A3B8; line-height: 1.5;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; user-select: none;">
           <span class="kiki-ai-thought-status" style="font-weight: 700; color: #C4B5FD; display: inline-flex; align-items: center; gap: 6px;">
-            <span>✦</span> ${isEn ? 'Thinking…' : '思考中…'}
+            <span>✦</span> Thinking…
           </span>
-          <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0 4px;">${isEn ? 'Collapse' : '收起'}</button>
+          <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0 4px;">Collapse</button>
         </div>
         <div class="kiki-ai-thought-text" style="max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, monospace; font-size: 12px; opacity: 0.88; color: #CBD5E1; line-height: 1.45;"></div>
       </div>
 
       <div class="kiki-ai-answer" style="font-size: 15px; line-height: 1.65; color: #F1F5F9;">
         <span class="kiki-ai-initial-status" style="color: #94A3B8; display: inline-flex; align-items: center; gap: 6px;">
-          ✦ ${isEn ? 'Connecting to AI…' : '连接 AI 中…'}
+          ✦ Connecting to AI…
         </span>
       </div>
     `;
@@ -4003,7 +4003,7 @@ window.KikiAudioEngine = KikiAudioEngine;
           const btn = modal.querySelector("#kiki-hot-reload-btn");
           if (btn) {
             btn.disabled = true;
-            btn.innerHTML = "<span>⏳ 正在从 GitHub 拉取最新核心模块...</span>";
+            btn.innerHTML = "<span>⏳ Fetching latest modules from GitHub...</span>";
           }
           try {
             if (typeof window.__kiki_reload_modules === "function") {
@@ -4019,24 +4019,24 @@ window.KikiAudioEngine = KikiAudioEngine;
               }));
               localStorage.setItem("kiki_cache_version", "1.2.0");
               localStorage.setItem("kiki_cache_time", new Date().toLocaleString());
-              toast("✅ 核心组件已覆盖更新，正在重载...");
+              toast("✅ Core modules updated, reloading...");
               setTimeout(() => location.reload(), 800);
             }
           } catch (err) {
-            alert("更新失败: " + err.message);
+            alert("Update failed: " + err.message);
             if (btn) {
               btn.disabled = false;
-              btn.innerHTML = "<span>⚡ 检查并重新从 GitHub 拉取缓存 (一键热更新)</span>";
+              btn.innerHTML = "<span>⚡ Check & Update Modules from GitHub (Hot-Reload)</span>";
             }
           }
         });
 
         modal.querySelector("#kiki-clear-cache-btn")?.addEventListener("click", (e) => {
           e.stopPropagation();
-          if (confirm("确定要清空本地缓存的 Kiki 核心模块吗？清空后将在下次刷新时重新从 GitHub 拉取。")) {
+          if (confirm("Are you sure you want to clear the local module cache? Modules will be re-fetched on next reload.")) {
             ["core", "yomitan", "ai", "ui", "youtube"].forEach(m => localStorage.removeItem("kiki_mod_" + m));
             localStorage.removeItem("kiki_cache_time");
-            toast("🗑 本地缓存已清空");
+            toast("🗑 Local module cache cleared");
             renderModal();
           }
         });
@@ -4077,14 +4077,14 @@ window.KikiAudioEngine = KikiAudioEngine;
           </div>
         `;
             } else if (activeTab === "about") {
-        const cacheTime = localStorage.getItem("kiki_cache_time") || "初始装载 / 本地运行";
+        const cacheTime = localStorage.getItem("kiki_cache_time") || "Initial / Local";
         const cacheVer = localStorage.getItem("kiki_cache_version") || "1.2.0";
         const modulesList = ["core", "yomitan", "ai", "ui", "youtube"];
         const modStatus = modulesList.map(m => {
           const has = !!localStorage.getItem("kiki_mod_" + m);
           return `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;color:#CBD5E1;border-bottom:1px dashed rgba(255,255,255,0.08);">
             <span>• ${m}.js</span>
-            <span style="color:${has ? '#34D399' : '#818CF8'};font-weight:600;">${has ? '已缓存 (Cached)' : '就绪 (Active)'}</span>
+            <span style="color:${has ? '#34D399' : '#818CF8'};font-weight:600;">${has ? 'Cached' : 'Active'}</span>
           </div>`;
         }).join("");
 
@@ -4101,22 +4101,22 @@ window.KikiAudioEngine = KikiAudioEngine;
             </div>
 
             <div style="background: rgba(255, 255, 255, 0.05); border-radius: 10px; padding: 10px 12px;">
-              <div style="font-size: 12px; font-weight: 700; color: #E2E8F0; margin-bottom: 6px;">📦 已加载核心模块状态</div>
+              <div style="font-size: 12px; font-weight: 700; color: #E2E8F0; margin-bottom: 6px;">📦 Core Modules Status</div>
               ${modStatus}
               <div style="font-size: 11px; color: #94A3B8; margin-top: 8px;">
-                缓存状态: <span style="color: #E2E8F0;">${escapeHtml(cacheTime)}</span>
+                Cache Status: <span style="color: #E2E8F0;">${escapeHtml(cacheTime)}</span>
               </div>
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 8px;">
               <button type="button" id="kiki-hot-reload-btn" style="background: linear-gradient(135deg, #2563EB, #6366F1); color: #FFF; border: none; border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 12px rgba(37,99,235,0.35);">
-                <span>⚡ 检查并重新从 GitHub 拉取缓存 (一键热更新)</span>
+                <span>⚡ Check & Update Modules from GitHub (Hot-Reload)</span>
               </button>
               <button type="button" id="kiki-clear-cache-btn" style="background: rgba(255, 255, 255, 0.08); color: #CBD5E1; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">
-                🗑 清空模块本地缓存
+                🗑 Clear Local Module Cache
               </button>
               <a href="https://github.com/kekeqwq/Kiki-Immersion" target="_blank" rel="noopener" style="text-align: center; font-size: 12px; color: #818CF8; text-decoration: none; padding-top: 4px;">
-                🔗 访问 GitHub 仓库 (kekeqwq/Kiki-Immersion)
+                🔗 GitHub Repository (kekeqwq/Kiki-Immersion)
               </a>
             </div>
           </div>
@@ -4153,25 +4153,25 @@ window.KikiAudioEngine = KikiAudioEngine;
 
             <div style="display: flex; gap: 10px;">
               <div style="flex: 1;">
-                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">AI 解析模式 (MODE)</label>
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">AI EXPLANATION MODE</label>
                 <select id="kiki-ai-mode-select" style="width: 100%; box-sizing: border-box; background: #18181B; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 10px; color: #FFF; font-size: 13px;">
-                  <option value="quick" ${aiCfg.aiMode === "quick" ? "selected" : ""}>⚡ 简答速查模式 (2~4句，适合观影不打断)</option>
-                  <option value="deep" ${aiCfg.aiMode === "deep" ? "selected" : ""}>📚 深度精学模式 (详细含义/搭配/语法/例句)</option>
-                  <option value="custom" ${aiCfg.aiMode === "custom" ? "selected" : ""}>⚙️ 自定义 Prompt 模式</option>
+                  <option value="quick" ${aiCfg.aiMode === "quick" ? "selected" : ""}>⚡ Quick Glance (2-4 sentences, minimal distraction)</option>
+                  <option value="deep" ${aiCfg.aiMode === "deep" ? "selected" : ""}>📚 Deep Study (Detailed syntax, collocations & examples)</option>
+                  <option value="custom" ${aiCfg.aiMode === "custom" ? "selected" : ""}>⚙️ Custom Prompt Template</option>
                 </select>
               </div>
               <div style="width: 175px;">
-                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">MAX TOKENS 上限</label>
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">MAX TOKENS LIMIT</label>
                 <select id="kiki-ai-tokens-select" style="width: 100%; box-sizing: border-box; background: #18181B; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 10px; color: #FFF; font-size: 13px;">
-                  <option value="4096" ${String(aiCfg.maxTokens) === "4096" ? "selected" : ""}>推荐 (4096 Tokens)</option>
-                  <option value="8192" ${String(aiCfg.maxTokens) === "8192" ? "selected" : ""}>长文深度 (8192 Tokens)</option>
-                  <option value="2048" ${String(aiCfg.maxTokens) === "2048" ? "selected" : ""}>极速省流 (2048 Tokens)</option>
-                  <option value="custom" ${!["2048", "4096", "8192"].includes(String(aiCfg.maxTokens)) ? "selected" : ""}>自定义数值</option>
+                  <option value="4096" ${String(aiCfg.maxTokens) === "4096" ? "selected" : ""}>Recommended (4096 Tokens)</option>
+                  <option value="8192" ${String(aiCfg.maxTokens) === "8192" ? "selected" : ""}>Deep Reasoning (8192 Tokens)</option>
+                  <option value="2048" ${String(aiCfg.maxTokens) === "2048" ? "selected" : ""}>Fast & Light (2048 Tokens)</option>
+                  <option value="custom" ${!["2048", "4096", "8192"].includes(String(aiCfg.maxTokens)) ? "selected" : ""}>Custom Value</option>
                 </select>
               </div>
             </div>
             <div id="kiki-ai-tokens-custom-wrap" style="display: ${!["2048", "4096", "8192"].includes(String(aiCfg.maxTokens)) ? "block" : "none"};">
-              <label style="display: block; font-size: 11px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">自定义 MAX TOKENS 数值</label>
+              <label style="display: block; font-size: 11px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">CUSTOM MAX TOKENS VALUE</label>
               <input type="number" id="kiki-ai-tokens-custom-input" value="${escapeHtml(aiCfg.maxTokens || '4096')}" placeholder="4096" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 7px 12px; color: #FFF; font-size: 13px;">
             </div>
 
@@ -4198,9 +4198,9 @@ window.KikiAudioEngine = KikiAudioEngine;
       setHtml(modal, `
         <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255, 255, 255, 0.15); padding-bottom: 12px;">
           <div style="display: flex; gap: 6px;">
-            <button type="button" class="kiki-tab-btn" data-tab="dict" style="background: ${activeTab === 'dict' ? '#2563EB' : 'rgba(255,255,255,0.08)'}; color: #FFF; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">📖 词典</button>
-            <button type="button" class="kiki-tab-btn" data-tab="ai" style="background: ${activeTab === 'ai' ? '#6366F1' : 'rgba(255,255,255,0.08)'}; color: #FFF; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">🤖 AI 语境</button>
-            <button type="button" class="kiki-tab-btn" data-tab="about" style="background: ${activeTab === 'about' ? '#10B981' : 'rgba(255,255,255,0.08)'}; color: #FFF; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">ℹ️ 关于/热更</button>
+            <button type="button" class="kiki-tab-btn" data-tab="dict" style="background: ${activeTab === 'dict' ? '#2563EB' : 'rgba(255,255,255,0.08)'}; color: #FFF; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">📖 Dictionaries</button>
+            <button type="button" class="kiki-tab-btn" data-tab="ai" style="background: ${activeTab === 'ai' ? '#6366F1' : 'rgba(255,255,255,0.08)'}; color: #FFF; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">🤖 AI Context</button>
+            <button type="button" class="kiki-tab-btn" data-tab="about" style="background: ${activeTab === 'about' ? '#10B981' : 'rgba(255,255,255,0.08)'}; color: #FFF; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">ℹ️ About & Updates</button>
           </div>
           <button type="button" class="kiki-modal-close" style="background: transparent; border: none; color: #FFF; font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
         </div>
@@ -4256,7 +4256,7 @@ window.KikiAudioEngine = KikiAudioEngine;
           const btn = modal.querySelector("#kiki-hot-reload-btn");
           if (btn) {
             btn.disabled = true;
-            btn.innerHTML = "<span>⏳ 正在从 GitHub 拉取最新核心模块...</span>";
+            btn.innerHTML = "<span>⏳ Fetching latest modules from GitHub...</span>";
           }
           try {
             if (typeof window.__kiki_reload_modules === "function") {
@@ -4272,24 +4272,24 @@ window.KikiAudioEngine = KikiAudioEngine;
               }));
               localStorage.setItem("kiki_cache_version", "1.2.0");
               localStorage.setItem("kiki_cache_time", new Date().toLocaleString());
-              toast("✅ 核心组件已覆盖更新，正在重载...");
+              toast("✅ Core modules updated, reloading...");
               setTimeout(() => location.reload(), 800);
             }
           } catch (err) {
-            alert("更新失败: " + err.message);
+            alert("Update failed: " + err.message);
             if (btn) {
               btn.disabled = false;
-              btn.innerHTML = "<span>⚡ 检查并重新从 GitHub 拉取缓存 (一键热更新)</span>";
+              btn.innerHTML = "<span>⚡ Check & Update Modules from GitHub (Hot-Reload)</span>";
             }
           }
         });
 
         modal.querySelector("#kiki-clear-cache-btn")?.addEventListener("click", (e) => {
           e.stopPropagation();
-          if (confirm("确定要清空本地缓存的 Kiki 核心模块吗？清空后将在下次刷新时重新从 GitHub 拉取。")) {
+          if (confirm("Are you sure you want to clear the local module cache? Modules will be re-fetched on next reload.")) {
             ["core", "yomitan", "ai", "ui", "youtube"].forEach(m => localStorage.removeItem("kiki_mod_" + m));
             localStorage.removeItem("kiki_cache_time");
-            toast("🗑 本地缓存已清空");
+            toast("🗑 Local module cache cleared");
             renderModal();
           }
         });

@@ -237,9 +237,9 @@
             <span class="kiki-card-term" style="font-size: 22px !important; font-weight: 800; color: #FFF; line-height: 1.2;">${escapeHtml(displayTerm)}</span>
             <span style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; font-size: 11px; font-weight: 700; padding: 2.5px 8px; border-radius: 6px;">✦ AI Context</span>
             <select class="kiki-card-mode-select" style="background: rgba(255,255,255,0.12); color: #E2E8F0; font-size: 11.5px; font-weight: 600; padding: 2px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); cursor: pointer; outline: none;">
-              <option value="quick" ${curMode === "quick" ? "selected" : ""}>⚡ 简答速查</option>
-              <option value="deep" ${curMode === "deep" ? "selected" : ""}>📚 深度精学</option>
-              <option value="custom" ${curMode === "custom" ? "selected" : ""}>⚙️ 自定义</option>
+              <option value="quick" ${curMode === "quick" ? "selected" : ""}>⚡ Quick</option>
+              <option value="deep" ${curMode === "deep" ? "selected" : ""}>📚 Deep</option>
+              <option value="custom" ${curMode === "custom" ? "selected" : ""}>⚙️ Custom</option>
             </select>
             <span style="background: rgba(255,255,255,0.08); color: #94A3B8; font-size: 11px; padding: 2px 6px; border-radius: 4px;">${escapeHtml(cfg.apiModel || 'gpt-4o-mini')}</span>
           </div>
@@ -263,8 +263,8 @@
       <!-- Follow-up Interactive Input Bar -->
       <div class="kiki-ai-input-wrap" style="border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 10px; margin-top: 10px;">
         <div style="display: flex; gap: 8px; align-items: center;">
-          <input type="text" class="kiki-ai-followup-input" placeholder="${isEn ? 'Ask follow-up question or explore grammar…' : '继续追问、探索语法或背景…'}" style="flex: 1; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 8px 12px; color: #FFF; font-size: 13px; outline: none; box-sizing: border-box;">
-          <button type="button" class="kiki-ai-followup-send" style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; border: none; border-radius: 8px; padding: 8px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; user-select: none;">${isEn ? 'Send' : '发送'}</button>
+          <input type="text" class="kiki-ai-followup-input" placeholder="Ask follow-up question or explore grammar…" style="flex: 1; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 8px 12px; color: #FFF; font-size: 13px; outline: none; box-sizing: border-box;">
+          <button type="button" class="kiki-ai-followup-send" style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; border: none; border-radius: 8px; padding: 8px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; user-select: none;">Send</button>
         </div>
       </div>
     `);
@@ -371,7 +371,7 @@
                 if (thoughtToggleBtn) thoughtToggleBtn.textContent = isEn ? "Expand" : "展开";
                 if (thoughtStatus) {
                   const charCount = accumulatedReasoning.length;
-                  thoughtStatus.innerHTML = `✦ ${isEn ? 'Thinking completed' : '思考完成'} ${charCount > 0 ? `(${charCount}字)` : ''}`;
+                  thoughtStatus.innerHTML = `✦ Thinking completed ${charCount > 0 ? `(${charCount}字)` : ''}`;
                   thoughtStatus.style.color = "#8B5CF6";
                 }
               }
@@ -390,7 +390,7 @@
           if (thoughtToggleBtn) thoughtToggleBtn.textContent = isEn ? "Expand" : "展开";
           if (thoughtStatus) {
             const charCount = accumulatedReasoning.length;
-            thoughtStatus.innerHTML = `✦ ${isEn ? 'Thinking completed' : '思考完成'} ${charCount > 0 ? `(${charCount}字)` : ''}`;
+            thoughtStatus.innerHTML = `✦ Thinking completed ${charCount > 0 ? `(${charCount}字)` : ''}`;
             thoughtStatus.style.color = "#8B5CF6";
           }
         }
@@ -466,16 +466,16 @@
         <div class="kiki-ai-thought-box" style="display: none; background: rgba(255, 255, 255, 0.05); border-left: 3px solid #8B5CF6; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 12.5px; color: #94A3B8; line-height: 1.5;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; user-select: none;">
             <span class="kiki-ai-thought-status" style="font-weight: 700; color: #C4B5FD; display: inline-flex; align-items: center; gap: 6px;">
-              <span>✦</span> ${isEn ? 'Thinking…' : '思考中…'}
+              <span>✦</span> Thinking…
             </span>
-            <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0 4px;">${isEn ? 'Collapse' : '收起'}</button>
+            <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0 4px;">Collapse</button>
           </div>
           <div class="kiki-ai-thought-text" style="max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, monospace; font-size: 12px; opacity: 0.88; color: #CBD5E1; line-height: 1.45;"></div>
         </div>
 
         <div class="kiki-ai-answer" style="font-size: 15px; line-height: 1.65; color: #F1F5F9;">
           <span class="kiki-ai-initial-status" style="color: #94A3B8; display: inline-flex; align-items: center; gap: 6px;">
-            ✦ ${isEn ? 'Generating…' : '生成中…'}
+            ✦ Generating…
           </span>
         </div>
       `;
@@ -504,16 +504,16 @@
       <div class="kiki-ai-thought-box" style="display: none; background: rgba(255, 255, 255, 0.05); border-left: 3px solid #8B5CF6; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 12.5px; color: #94A3B8; line-height: 1.5;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; user-select: none;">
           <span class="kiki-ai-thought-status" style="font-weight: 700; color: #C4B5FD; display: inline-flex; align-items: center; gap: 6px;">
-            <span>✦</span> ${isEn ? 'Thinking…' : '思考中…'}
+            <span>✦</span> Thinking…
           </span>
-          <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0 4px;">${isEn ? 'Collapse' : '收起'}</button>
+          <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0 4px;">Collapse</button>
         </div>
         <div class="kiki-ai-thought-text" style="max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, monospace; font-size: 12px; opacity: 0.88; color: #CBD5E1; line-height: 1.45;"></div>
       </div>
 
       <div class="kiki-ai-answer" style="font-size: 15px; line-height: 1.65; color: #F1F5F9;">
         <span class="kiki-ai-initial-status" style="color: #94A3B8; display: inline-flex; align-items: center; gap: 6px;">
-          ✦ ${isEn ? 'Connecting to AI…' : '连接 AI 中…'}
+          ✦ Connecting to AI…
         </span>
       </div>
     `;
