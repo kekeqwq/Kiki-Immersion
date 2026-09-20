@@ -169,8 +169,13 @@
     const targetHost = document.body || document.documentElement;
     if (!targetHost) return null;
     let hud = document.getElementById("kiki-hud");
-    if (hud && hud.parentElement !== targetHost) {
-      targetHost.appendChild(hud);
+    if (hud) {
+      if (hud.parentElement !== targetHost) {
+        targetHost.appendChild(hud);
+      }
+      hud.style.setProperty("display", "flex", "important");
+      hud.style.setProperty("visibility", "visible", "important");
+      hud.style.setProperty("opacity", "1", "important");
     }
     if (!hud) {
       hud = document.createElement("div");
