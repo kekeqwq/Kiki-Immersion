@@ -1,0 +1,33 @@
+{
+  "name": "Kiki Immersion",
+  "version": "1.2.0",
+  "updated": "2026-09-20",
+  "repository": "https://github.com/kekeqwq/Kiki-Immersion",
+  "modules": [
+    {
+      "name": "core",
+      "path": "modules/core.js",
+      "description": "Core state, styling, storage, and utility helpers"
+    },
+    {
+      "name": "yomitan",
+      "path": "modules/yomitan.js",
+      "description": "Offline IndexedDB Yomitan dictionary engine, deinflector, and audio playback"
+    },
+    {
+      "name": "ai",
+      "path": "modules/ai.js",
+      "description": "OpenAI streaming client, MarginNote exploration pills, and multi-turn chat"
+    },
+    {
+      "name": "ui",
+      "path": "modules/ui.js",
+      "description": "HUD bar, Yomitan card UI, settings modal, about/hot-update modal, and subtitles overlay"
+    },
+    {
+      "name": "youtube",
+      "path": "modules/youtube.js",
+      "description": "YouTube player hooks, timedtext track scraper, fullscreen gestures, and SPA observer"
+    }
+  ]
+}
