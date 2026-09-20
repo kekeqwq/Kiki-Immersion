@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion (Safari)
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion-Safari
-// @version      1.1.2
+// @version      1.1.3
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, and touch/mouse gestures tailored for Safari.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -504,6 +504,20 @@ window.KikiStructuredContent = KikiStructuredContent;
       position: relative !important;
     }
 
+    /* Suppress YouTube Bottom-Right Miniplayer & Continue Watching Promo */
+    ytd-miniplayer,
+    #miniplayer,
+    ytd-miniplayer-renderer,
+    ytd-mealbar-promo-renderer,
+    yt-mealbar-promo-renderer {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      opacity: 0 !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+
     /* Native YouTube Captions - Suppressed when Kiki is active */
     html.kiki-hide-native .ytp-caption-window-container,
     html.kiki-hide-native .ytp-caption-window,
@@ -628,8 +642,8 @@ window.KikiStructuredContent = KikiStructuredContent;
     #kiki-yomitan-card.show { display: block !important; }
     .kiki-card-header { margin-bottom: 12px; }
     .kiki-card-term-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
-    .kiki-card-term { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.01em; color: #FFFFFF !important; }
-    .kiki-card-reading { font-size: 1.05rem; opacity: 0.9; color: #9B9890 !important; font-weight: 500; }
+    .kiki-card-term { font-size: 22px !important; font-weight: 800; letter-spacing: -0.01em; color: #FFFFFF !important; line-height: 1.25 !important; }
+    .kiki-card-reading { font-size: 14.5px !important; opacity: 0.9; color: #CBD5E1 !important; font-weight: 500; }
     .kiki-card-audio-btn {
       background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2);
       color: #FFF; border-radius: 50%; width: 28px; height: 28px;
@@ -639,7 +653,7 @@ window.KikiStructuredContent = KikiStructuredContent;
     .kiki-card-audio-btn:hover, .kiki-card-audio-btn:active { background: rgba(255, 255, 255, 0.28); }
     .kiki-card-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
     .kiki-badge {
-      font-size: 0.76rem; font-weight: 600; padding: 2.5px 8px; border-radius: 4px; line-height: 1.35;
+      font-size: 11.5px !important; font-weight: 600; padding: 2.5px 8px !important; border-radius: 4px; line-height: 1.35;
       display: inline-flex; align-items: center;
     }
     .kiki-badge-dict { background: rgba(255, 255, 255, 0.08); color: #9B9890; border: 1px solid rgba(255, 255, 255, 0.14); }
@@ -647,8 +661,15 @@ window.KikiStructuredContent = KikiStructuredContent;
     .kiki-badge-pos { color: #E86B5A; background: rgba(232, 107, 90, 0.15); border: 1px solid rgba(232, 107, 90, 0.32); }
     .kiki-badge-level { color: #60A5FA; background: rgba(37, 99, 235, 0.15); border: 1px solid rgba(37, 99, 235, 0.32); }
     .kiki-badge-vocab { color: #A78BFA; background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(124, 58, 237, 0.32); }
-    .kiki-card-body { font-size: 1.02rem; line-height: 1.62; margin-top: 10px; color: #EFEBE3 !important; }
-    .kiki-card-body p { margin-bottom: 6px; }
+    .kiki-card-body { font-size: 15px !important; line-height: 1.65 !important; margin-top: 12px; color: #F1F5F9 !important; }
+    .kiki-card-body p { margin-bottom: 8px !important; font-size: 15px !important; line-height: 1.65 !important; }
+    .kiki-card-body ul, .kiki-card-body ol { margin: 6px 0 10px 18px !important; padding: 0 !important; }
+    .kiki-card-body li { font-size: 15px !important; line-height: 1.65 !important; margin-bottom: 6px !important; }
+    .kiki-card-body table { font-size: 14.5px !important; border-collapse: collapse; }
+    .kiki-card-body td, .kiki-card-body th { padding: 4px 8px !important; font-size: 14.5px !important; }
+    .kiki-card-body span, .kiki-card-body div { font-size: inherit; line-height: inherit; }
+    .kiki-card-body strong, .kiki-card-body b { font-weight: 700; color: #FFFFFF !important; }
+    .gloss-sc-span, .gloss-sc-div, .gloss-sc-p, .gloss-sc-li { font-size: 15px !important; line-height: 1.65 !important; }
     .kiki-card-empty { padding: 16px 0; text-align: center; opacity: 0.9; }
 
     /* AI Enhancements & Button Styles */
@@ -2509,13 +2530,43 @@ window.KikiAudioEngine = KikiAudioEngine;
   // -------------------------------------------------------------
   // 5. Dictionary & AI Lookup Engine
   // -------------------------------------------------------------
+  const AI_MODES = {
+    quick: {
+      id: "quick",
+      nameZh: "⚡ 简答速查",
+      nameEn: "⚡ Quick & Concise",
+      descZh: "2–4 句解释，适合观影快速理解",
+      descEn: "2–4 sentences, great for uninterrupted watching",
+      promptZh: "你是简洁的语言老师。学习者在字幕「{{sentence}}」里点了「{{word}}」。若该词像语音识别错误或网络新词，先猜测本意。用通顺中文解释它在本句中的意思，2–4 句。必要时注明词性。不要整句逐字翻译。\n\n在回答最后以 <<<EXPLORE>>> 开头列出 2–3 个学习者可能想继续探索的方向（如本词语法句法、历史/文化背景、类似词辨析或实用造句，每行以 - 开头），并以 <<<END_EXPLORE>>> 结尾。",
+      promptEn: "You are a concise language tutor. The learner tapped \"{{word}}\" in this subtitle: \"{{sentence}}\". If it looks like a speech-to-text error or internet slang, infer the intended word. Explain the meaning in simple English in 2-4 short sentences. Mention part of speech if clear. Do not translate the whole line unless needed for sense.\n\nAt the end, list 2-3 follow-up exploration topics (e.g. grammar, cultural background, confusing words, usage) wrapped between <<<EXPLORE>>> and <<<END_EXPLORE>>> with each topic starting with - ."
+    },
+    deep: {
+      id: "deep",
+      nameZh: "📚 深度精学",
+      nameEn: "📚 Deep Learning",
+      descZh: "全面教学解析：词义辨析、词性搭配、实用例句与记忆点",
+      descEn: "In-depth breakdown: nuances, collocations, grammar & examples",
+      promptZh: "你是资深语言外教。学习者在字幕「{{sentence}}」里点了「{{word}}」。请结合上下文详细教学解析：1. 本词/短语在本句中的精准含义与词性（若是网络新词或语音识别错误请推测本意）；2. 核心语法搭配、习惯用法或文化背景；3. 提供 2 个贴近日常生活的地道例句（附中文对照）；4. 记忆技巧或易混辨析。排版清晰美观。\n\n在回答最后以 <<<EXPLORE>>> 开头列出 2–3 个深入追问或拓展探索方向（每行以 - 开头），并以 <<<END_EXPLORE>>> 结尾。",
+      promptEn: "You are an experienced language mentor. The learner tapped \"{{word}}\" in this subtitle: \"{{sentence}}\". Provide an insightful deep-dive breakdown: 1. Accurate contextual meaning and part of speech in this line (infer intended word if speech-to-text error or slang); 2. Core grammatical usage, collocations, or cultural nuances; 3. Two natural example sentences with translations; 4. Memory mnemonic or confusing word comparison. Keep formatting clean and structured.\n\nAt the end, list 2-3 follow-up exploration topics wrapped between <<<EXPLORE>>> and <<<END_EXPLORE>>> with each topic starting with - ."
+    },
+    custom: {
+      id: "custom",
+      nameZh: "⚙️ 自定义",
+      nameEn: "⚙️ Custom Prompt",
+      descZh: "自由编写自定义 Prompt 模板",
+      descEn: "Use your own custom prompt template"
+    }
+  };
+
   const AI_DEFAULTS = {
     apiBase: "https://api.openai.com/v1",
     apiKey: "",
     apiModel: "gpt-4o-mini",
     aiLang: "zh",
-    promptZh: "你是简洁的语言老师。学习者在字幕「{{sentence}}」里点了「{{word}}」。若该词像语音识别错误或网络新词，先猜测本意。用通顺中文解释它在本句中的意思，2–4 句。必要时注明词性。不要整句逐字翻译。",
-    promptEn: "You are a concise language tutor. The learner tapped \"{{word}}\" in this subtitle: \"{{sentence}}\". If it looks like a speech-to-text error or internet slang, infer the intended word. Explain the meaning in simple English in 2-4 short sentences. Mention part of speech if clear. Do not translate the whole line unless needed for sense."
+    aiMode: "quick",
+    maxTokens: "4096",
+    promptZh: AI_MODES.quick.promptZh,
+    promptEn: AI_MODES.quick.promptEn
   };
 
   function getAiConfig() {
@@ -2524,6 +2575,8 @@ window.KikiAudioEngine = KikiAudioEngine;
       apiKey: localStorage.getItem("kiki_ai_key") || "",
       apiModel: localStorage.getItem("kiki_ai_model") || AI_DEFAULTS.apiModel,
       aiLang: localStorage.getItem("kiki_ai_lang") || AI_DEFAULTS.aiLang,
+      aiMode: localStorage.getItem("kiki_ai_mode") || AI_DEFAULTS.aiMode,
+      maxTokens: localStorage.getItem("kiki_ai_max_tokens") || AI_DEFAULTS.maxTokens,
       promptZh: localStorage.getItem("kiki_ai_prompt_zh") || AI_DEFAULTS.promptZh,
       promptEn: localStorage.getItem("kiki_ai_prompt_en") || AI_DEFAULTS.promptEn
     };
@@ -2534,6 +2587,8 @@ window.KikiAudioEngine = KikiAudioEngine;
     if (cfg.apiKey !== undefined) localStorage.setItem("kiki_ai_key", (cfg.apiKey || "").trim());
     if (cfg.apiModel !== undefined) localStorage.setItem("kiki_ai_model", (cfg.apiModel || "").trim());
     if (cfg.aiLang !== undefined) localStorage.setItem("kiki_ai_lang", cfg.aiLang || "zh");
+    if (cfg.aiMode !== undefined) localStorage.setItem("kiki_ai_mode", cfg.aiMode || "quick");
+    if (cfg.maxTokens !== undefined) localStorage.setItem("kiki_ai_max_tokens", String(cfg.maxTokens || "4096"));
     if (cfg.promptZh !== undefined) localStorage.setItem("kiki_ai_prompt_zh", cfg.promptZh);
     if (cfg.promptEn !== undefined) localStorage.setItem("kiki_ai_prompt_en", cfg.promptEn);
     updateHud();
@@ -2576,26 +2631,31 @@ window.KikiAudioEngine = KikiAudioEngine;
     }
   }
 
-  async function streamChat({ base, key, model, system, user, signal, onChunk }) {
+  async function streamChat({ base, key, model, system, user, messages, maxTokens, signal, onChunk, onReasoningChunk }) {
     let root = (base || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
     const url = root.endsWith("/chat/completions") ? root : root + "/chat/completions";
+
+    const chatMessages = messages && messages.length
+      ? messages
+      : [
+          { role: "system", content: system },
+          { role: "user", content: user }
+        ];
 
     const body = {
       model: model || "gpt-4o-mini",
       stream: true,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user }
-      ]
+      messages: chatMessages
     };
 
-    const isReasoning = /^o[13]/.test(body.model);
-    if (isReasoning) {
-      body.max_completion_tokens = 400;
+    const tokenLimit = parseInt(maxTokens, 10) || 4096;
+    const isOModel = /^o[13]/i.test(body.model);
+    if (isOModel) {
+      body.max_completion_tokens = tokenLimit;
       try { body.reasoning_effort = "low"; } catch {}
     } else {
-      body.temperature = 0.3;
-      body.max_tokens = 400;
+      body.temperature = 0.6;
+      body.max_tokens = tokenLimit;
     }
 
     let firstChunk = false;
@@ -2603,9 +2663,9 @@ window.KikiAudioEngine = KikiAudioEngine;
     const timeoutPromise = new Promise((_, reject) => {
       timer = setTimeout(() => {
         if (!firstChunk) {
-          reject(new Error("Request timed out (10s)"));
+          reject(new Error("Request timed out (15s)"));
         }
-      }, 10000);
+      }, 15000);
     });
 
     const fetchPromise = (async () => {
@@ -2624,6 +2684,12 @@ window.KikiAudioEngine = KikiAudioEngine;
         throw new Error("HTTP " + res.status + " " + errText.slice(0, 240));
       }
 
+      firstChunk = true;
+      clearTimeout(timer);
+
+      let accumulatedReasoning = "";
+      let accumulatedContent = "";
+
       const contentType = res.headers.get("content-type") || "";
       if (contentType.includes("text/event-stream") && res.body) {
         const reader = res.body.getReader();
@@ -2634,11 +2700,6 @@ window.KikiAudioEngine = KikiAudioEngine;
           const { done, value } = await reader.read();
           if (done) break;
 
-          if (!firstChunk) {
-            firstChunk = true;
-            clearTimeout(timer);
-          }
-
           buf += decoder.decode(value, { stream: true });
           const lines = buf.split("\n");
           buf = lines.pop();
@@ -2646,17 +2707,24 @@ window.KikiAudioEngine = KikiAudioEngine;
           for (const rawLine of lines) {
             const line = rawLine.trim();
             if (!line || line.startsWith(":")) continue;
-            if (line === "data: [DONE]") return;
+            if (line === "data: [DONE]") break;
             if (line.startsWith("data:")) {
               const jsonStr = line.slice(5).trim();
               try {
                 const json = JSON.parse(jsonStr);
                 const delta = json.choices?.[0]?.delta;
                 const content = delta?.content;
+                const reasoning = delta?.reasoning_content;
                 if (content) {
+                  accumulatedContent += content;
                   onChunk(content, false);
-                } else if (delta?.reasoning_content && !firstChunk) {
-                  onChunk("", true);
+                } else if (reasoning) {
+                  accumulatedReasoning += reasoning;
+                  if (typeof onReasoningChunk === "function") {
+                    onReasoningChunk(reasoning, accumulatedReasoning);
+                  } else {
+                    onChunk("", true);
+                  }
                 }
               } catch {}
             }
@@ -2666,18 +2734,48 @@ window.KikiAudioEngine = KikiAudioEngine;
         if (buf.trim().startsWith("data:") && buf.trim() !== "data: [DONE]") {
           try {
             const json = JSON.parse(buf.trim().slice(5).trim());
-            const content = json.choices?.[0]?.delta?.content;
-            if (content) onChunk(content, false);
+            const delta = json.choices?.[0]?.delta;
+            if (delta?.content) {
+              accumulatedContent += delta.content;
+              onChunk(delta.content, false);
+            } else if (delta?.reasoning_content) {
+              accumulatedReasoning += delta.reasoning_content;
+              if (typeof onReasoningChunk === "function") {
+                onReasoningChunk(delta.reasoning_content, accumulatedReasoning);
+              } else {
+                onChunk("", true);
+              }
+            }
           } catch {}
         }
       } else {
-        firstChunk = true;
-        clearTimeout(timer);
         const text = await res.text();
         const json = JSON.parse(text);
-        const out = json.choices?.[0]?.message?.content;
-        if (!out) throw new Error("Empty model response");
-        onChunk(out, false);
+        const msg = json.choices?.[0]?.message;
+        const out = msg?.content || "";
+        const reasoning = msg?.reasoning_content || "";
+        if (out) {
+          accumulatedContent = out;
+          onChunk(out, false);
+        } else if (reasoning) {
+          accumulatedReasoning = reasoning;
+          if (typeof onReasoningChunk === "function") {
+            onReasoningChunk(reasoning, accumulatedReasoning);
+          } else {
+            onChunk("", true);
+          }
+        } else {
+          throw new Error("Empty model response");
+        }
+      }
+
+      // Safe fallback: If content is empty but model produced reasoning, provide the reasoning conclusion
+      if (!accumulatedContent && accumulatedReasoning) {
+        const clean = accumulatedReasoning.replace(/\n+/g, " ").trim();
+        const fallbackText = clean.slice(-260).trim();
+        if (fallbackText) {
+          onChunk(fallbackText, false);
+        }
       }
     })();
 
@@ -3170,7 +3268,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         const live = lastObservedText ? "YES" : "NO";
         const trackCount = v && v.textTracks ? v.textTracks.length : 0;
         const domCount = queryCaptionElements(".ytp-caption-segment, .caption-visual-line").length;
-        toast(`Kiki v1.1.2 [${status}] | CC=${cueCount} | Live=${live} | DOM=${domCount} | Trk=${trackCount}`);
+        toast(`Kiki v1.1.3 [${status}] | CC=${cueCount} | Live=${live} | DOM=${domCount} | Trk=${trackCount}`);
       });
     }
 
@@ -3772,6 +3870,30 @@ window.KikiAudioEngine = KikiAudioEngine;
               </div>
             </div>
 
+            <div style="display: flex; gap: 10px;">
+              <div style="flex: 1;">
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">AI 解析模式 (MODE)</label>
+                <select id="kiki-ai-mode-select" style="width: 100%; box-sizing: border-box; background: #18181B; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 10px; color: #FFF; font-size: 13px;">
+                  <option value="quick" ${aiCfg.aiMode === "quick" ? "selected" : ""}>⚡ 简答速查模式 (2~4句，适合观影不打断)</option>
+                  <option value="deep" ${aiCfg.aiMode === "deep" ? "selected" : ""}>📚 深度精学模式 (详细含义/搭配/语法/例句)</option>
+                  <option value="custom" ${aiCfg.aiMode === "custom" ? "selected" : ""}>⚙️ 自定义 Prompt 模式</option>
+                </select>
+              </div>
+              <div style="width: 175px;">
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">MAX TOKENS 上限</label>
+                <select id="kiki-ai-tokens-select" style="width: 100%; box-sizing: border-box; background: #18181B; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 10px; color: #FFF; font-size: 13px;">
+                  <option value="4096" ${String(aiCfg.maxTokens) === "4096" ? "selected" : ""}>推荐 (4096 Tokens)</option>
+                  <option value="8192" ${String(aiCfg.maxTokens) === "8192" ? "selected" : ""}>长文深度 (8192 Tokens)</option>
+                  <option value="2048" ${String(aiCfg.maxTokens) === "2048" ? "selected" : ""}>极速省流 (2048 Tokens)</option>
+                  <option value="custom" ${!["2048", "4096", "8192"].includes(String(aiCfg.maxTokens)) ? "selected" : ""}>自定义数值</option>
+                </select>
+              </div>
+            </div>
+            <div id="kiki-ai-tokens-custom-wrap" style="display: ${!["2048", "4096", "8192"].includes(String(aiCfg.maxTokens)) ? "block" : "none"};">
+              <label style="display: block; font-size: 11px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">自定义 MAX TOKENS 数值</label>
+              <input type="number" id="kiki-ai-tokens-custom-input" value="${escapeHtml(aiCfg.maxTokens || '4096')}" placeholder="4096" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 7px 12px; color: #FFF; font-size: 13px;">
+            </div>
+
             <div>
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                 <label style="font-size: 11.5px; font-weight: 600; color: #94A3B8;">PROMPT TEMPLATE (<span id="kiki-ai-prompt-lang-label">${aiCfg.aiLang === "en" ? "EN" : "ZH"}</span>)</label>
@@ -3901,6 +4023,17 @@ window.KikiAudioEngine = KikiAudioEngine;
           });
         }
 
+        const modeSelect = modal.querySelector("#kiki-ai-mode-select");
+        const tokensSelect = modal.querySelector("#kiki-ai-tokens-select");
+        const tokensCustomWrap = modal.querySelector("#kiki-ai-tokens-custom-wrap");
+        const tokensCustomInput = modal.querySelector("#kiki-ai-tokens-custom-input");
+
+        tokensSelect?.addEventListener("change", () => {
+          if (tokensCustomWrap) {
+            tokensCustomWrap.style.display = tokensSelect.value === "custom" ? "block" : "none";
+          }
+        });
+
         const langSelect = modal.querySelector("#kiki-ai-lang-select");
         const promptInput = modal.querySelector("#kiki-ai-prompt-input");
         const promptLangLabel = modal.querySelector("#kiki-ai-prompt-lang-label");
@@ -3908,6 +4041,21 @@ window.KikiAudioEngine = KikiAudioEngine;
 
         let cachedPromptZh = aiCfg.promptZh;
         let cachedPromptEn = aiCfg.promptEn;
+
+        modeSelect?.addEventListener("change", () => {
+          const m = modeSelect.value;
+          const currentLang = langSelect?.value || "zh";
+          if (m === "deep") {
+            cachedPromptZh = AI_MODES.deep.promptZh;
+            cachedPromptEn = AI_MODES.deep.promptEn;
+          } else if (m === "quick") {
+            cachedPromptZh = AI_MODES.quick.promptZh;
+            cachedPromptEn = AI_MODES.quick.promptEn;
+          }
+          if (promptInput) {
+            promptInput.value = currentLang === "en" ? cachedPromptEn : cachedPromptZh;
+          }
+        });
 
         langSelect?.addEventListener("change", () => {
           const currentLang = langSelect.value;
@@ -3928,14 +4076,14 @@ window.KikiAudioEngine = KikiAudioEngine;
 
         resetPromptBtn?.addEventListener("click", () => {
           const currentLang = langSelect?.value || "zh";
-          if (currentLang === "en") {
-            cachedPromptEn = AI_DEFAULTS.promptEn;
-            if (promptInput) promptInput.value = AI_DEFAULTS.promptEn;
-          } else {
-            cachedPromptZh = AI_DEFAULTS.promptZh;
-            if (promptInput) promptInput.value = AI_DEFAULTS.promptZh;
+          const m = modeSelect?.value || "quick";
+          const modeObj = AI_MODES[m] || AI_MODES.quick;
+          cachedPromptEn = modeObj.promptEn || AI_MODES.quick.promptEn;
+          cachedPromptZh = modeObj.promptZh || AI_MODES.quick.promptZh;
+          if (promptInput) {
+            promptInput.value = currentLang === "en" ? cachedPromptEn : cachedPromptZh;
           }
-          toast("Prompt reset to default template.");
+          toast("Prompt reset to template.");
         });
 
         const saveBtn = modal.querySelector("#kiki-ai-save-btn");
@@ -3947,6 +4095,13 @@ window.KikiAudioEngine = KikiAudioEngine;
             const key = modal.querySelector("#kiki-ai-key-input")?.value || "";
             const model = modal.querySelector("#kiki-ai-model-input")?.value || "";
             const lang = modal.querySelector("#kiki-ai-lang-select")?.value || "zh";
+            const mode = modeSelect?.value || "quick";
+
+            let maxTok = tokensSelect?.value || "4096";
+            if (maxTok === "custom") {
+              maxTok = (tokensCustomInput?.value || "4096").trim();
+            }
+
             if (promptInput) {
               if (lang === "en") {
                 cachedPromptEn = promptInput.value;
@@ -3959,6 +4114,8 @@ window.KikiAudioEngine = KikiAudioEngine;
               apiKey: key,
               apiModel: model,
               aiLang: lang,
+              aiMode: mode,
+              maxTokens: maxTok,
               promptZh: cachedPromptZh,
               promptEn: cachedPromptEn
             });
@@ -4028,12 +4185,13 @@ window.KikiAudioEngine = KikiAudioEngine;
     card.style.position = "fixed";
     card.style.left = "50%";
     card.style.transform = "translateX(-50%)";
-    card.style.width = `min(580px, calc(100vw - 28px))`;
+    card.style.width = `min(600px, calc(100vw - 28px))`;
     card.style.right = "auto";
     const bottomOffset = window.innerHeight - capRect.top + 14;
     card.style.bottom = `${Math.max(70, Math.round(bottomOffset))}px`;
     card.style.top = "auto";
-    card.style.maxHeight = `${Math.min(480, Math.round(capRect.top - pad * 2))}px`;
+    const availHeight = Math.round(capRect.top - pad * 2);
+    card.style.maxHeight = `${Math.min(620, Math.max(380, availHeight))}px`;
   }
 
   function getSentenceContext() {
@@ -4123,13 +4281,58 @@ window.KikiAudioEngine = KikiAudioEngine;
     }
   }
 
+  function parseContentAndSuggestions(rawText, isEn, term) {
+    if (!rawText) return { content: "", suggestions: [] };
+    const markerStart = "<<<EXPLORE>>>";
+    const markerEnd = "<<<END_EXPLORE>>>";
+    const sIdx = rawText.indexOf(markerStart);
+    if (sIdx === -1) {
+      return {
+        content: rawText.trim(),
+        suggestions: [
+          isEn ? `Grammar & syntax breakdown of "${term}"` : `深入剖析「${term}」在本句的语法结构`,
+          isEn ? `More real-world example sentences` : `提供更多生活化地道例句`,
+          isEn ? `Cultural background & similar nuances` : `探索文化背景与易混淆辨析`
+        ]
+      };
+    }
+    const content = rawText.slice(0, sIdx).trim();
+    const eIdx = rawText.indexOf(markerEnd, sIdx + markerStart.length);
+    const exploreBlock = eIdx !== -1 
+      ? rawText.slice(sIdx + markerStart.length, eIdx)
+      : rawText.slice(sIdx + markerStart.length);
+    
+    const lines = exploreBlock
+      .split("\n")
+      .map(l => l.replace(/^[\s*\-—–•\d.]+/, "").trim())
+      .filter(l => l.length > 1 && !l.startsWith("<"));
+    
+    return {
+      content,
+      suggestions: lines.length ? lines.slice(0, 4) : [
+        isEn ? `Grammar & syntax breakdown of "${term}"` : `深入剖析「${term}」在本句的语法结构`,
+        isEn ? `More real-world example sentences` : `提供更多生活化地道例句`,
+        isEn ? `Cultural background & similar nuances` : `探索文化背景与易混淆辨析`
+      ]
+    };
+  }
+
+  const PILL_THEMES = [
+    { border: "rgba(244, 63, 94, 0.45)", bg: "rgba(244, 63, 94, 0.12)", color: "#FDA4AF", hover: "rgba(244, 63, 94, 0.22)" },
+    { border: "rgba(245, 158, 11, 0.45)", bg: "rgba(245, 158, 11, 0.12)", color: "#FCD34D", hover: "rgba(245, 158, 11, 0.22)" },
+    { border: "rgba(16, 185, 129, 0.45)", bg: "rgba(16, 185, 129, 0.12)", color: "#6EE7B7", hover: "rgba(16, 185, 129, 0.22)" },
+    { border: "rgba(139, 92, 246, 0.45)", bg: "rgba(139, 92, 246, 0.12)", color: "#C4B5FD", hover: "rgba(139, 92, 246, 0.22)" }
+  ];
+
   async function explainWithAiInCard(card, term, sentence) {
+    window.explainWithAiInCard = explainWithAiInCard;
     STATE.aiToken = (STATE.aiToken || 0) + 1;
     const token = STATE.aiToken;
     abortActiveAi();
 
     const cfg = getAiConfig();
     const isEn = cfg.aiLang === "en";
+    const curMode = cfg.aiMode || "quick";
     const isWholeSentence = !term || term === sentence;
     const wordPlaceholder = isWholeSentence
       ? (isEn ? "entire sentence" : "全句")
@@ -4138,13 +4341,26 @@ window.KikiAudioEngine = KikiAudioEngine;
       ? (isEn ? "Entire Subtitle" : "全句解析")
       : term;
 
-    const tmpl = isEn ? cfg.promptEn : cfg.promptZh;
+    let tmpl = "";
+    if (curMode === "deep") {
+      tmpl = isEn ? AI_MODES.deep.promptEn : AI_MODES.deep.promptZh;
+    } else if (curMode === "custom") {
+      tmpl = isEn ? (cfg.promptEn || AI_MODES.quick.promptEn) : (cfg.promptZh || AI_MODES.quick.promptZh);
+    } else {
+      tmpl = isEn ? AI_MODES.quick.promptEn : AI_MODES.quick.promptZh;
+    }
+
     const system = String(tmpl || AI_DEFAULTS[isEn ? "promptEn" : "promptZh"])
       .replaceAll("{{word}}", wordPlaceholder)
       .replaceAll("{{sentence}}", sentence || "");
-    const user = isEn
+    const initialUserPrompt = isEn
       ? (isWholeSentence ? `Subtitle: ${sentence}` : `Word: ${term}\nSubtitle: ${sentence}`)
       : (isWholeSentence ? `字幕：${sentence}` : `词：${term}\n字幕：${sentence}`);
+
+    STATE.aiMessages = [
+      { role: "system", content: system },
+      { role: "user", content: initialUserPrompt }
+    ];
 
     if (STATE.lookupEl) {
       STATE.lookupEl.classList.add("kiki-active");
@@ -4154,22 +4370,38 @@ window.KikiAudioEngine = KikiAudioEngine;
       <div class="kiki-card-header">
         <div class="kiki-card-term-row" style="justify-content: space-between; align-items: center;">
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span class="kiki-card-term">${escapeHtml(displayTerm)}</span>
-            <span style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px;">✦ AI Context</span>
-            <span style="background: rgba(255,255,255,0.12); color: #DDD; font-size: 11px; padding: 2px 6px; border-radius: 4px;">${escapeHtml(cfg.apiModel || 'gpt-4o-mini')}</span>
+            <span class="kiki-card-term" style="font-size: 22px !important; font-weight: 800; color: #FFF; line-height: 1.2;">${escapeHtml(displayTerm)}</span>
+            <span style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; font-size: 11px; font-weight: 700; padding: 2.5px 8px; border-radius: 6px;">✦ AI Context</span>
+            <select class="kiki-card-mode-select" style="background: rgba(255,255,255,0.12); color: #E2E8F0; font-size: 11.5px; font-weight: 600; padding: 2px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); cursor: pointer; outline: none;">
+              <option value="quick" ${curMode === "quick" ? "selected" : ""}>⚡ 简答速查</option>
+              <option value="deep" ${curMode === "deep" ? "selected" : ""}>📚 深度精学</option>
+              <option value="custom" ${curMode === "custom" ? "selected" : ""}>⚙️ 自定义</option>
+            </select>
+            <span style="background: rgba(255,255,255,0.08); color: #94A3B8; font-size: 11px; padding: 2px 6px; border-radius: 4px;">${escapeHtml(cfg.apiModel || 'gpt-4o-mini')}</span>
           </div>
-          <button type="button" class="kiki-card-close-btn" style="background: transparent; border: none; color: #BBB; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+          <button type="button" class="kiki-card-close-btn" style="background: transparent; border: none; color: #BBB; font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
         </div>
       </div>
 
-      <div style="background: rgba(255, 255, 255, 0.06); border-left: 3px solid #6366F1; padding: 7px 12px; border-radius: 0 8px 8px 0; margin-bottom: 12px; font-size: 12.5px; color: #CBD5E1; font-style: italic; line-height: 1.4;">
+      <div style="background: rgba(255, 255, 255, 0.06); border-left: 3px solid #6366F1; padding: 7px 12px; border-radius: 0 8px 8px 0; margin-bottom: 12px; font-size: 13.5px; color: #CBD5E1; font-style: italic; line-height: 1.45;">
         “${escapeHtml(sentence || "(no sentence context)")}”
       </div>
 
-      <div class="kiki-ai-body" style="font-size: 14px; line-height: 1.6; color: #F1F5F9; min-height: 48px; max-height: 320px; overflow-y: auto;">
-        <span class="kiki-ai-thinking" style="color: #94A3B8; display: inline-flex; align-items: center; gap: 6px;">
-          ✦ Thinking in context…
-        </span>
+      <div class="kiki-ai-scroll-container" style="font-size: 15px; line-height: 1.65; color: #F1F5F9; max-height: 380px; overflow-y: auto; padding-right: 2px;">
+        <div class="kiki-ai-chat-thread">
+          <!-- Turns rendered here -->
+        </div>
+
+        <!-- Follow-up Suggestions Area -->
+        <div class="kiki-ai-suggestions-container" style="display: none; flex-direction: column; gap: 7px; margin-top: 14px; margin-bottom: 6px;"></div>
+      </div>
+
+      <!-- Follow-up Interactive Input Bar -->
+      <div class="kiki-ai-input-wrap" style="border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 10px; margin-top: 10px;">
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input type="text" class="kiki-ai-followup-input" placeholder="${isEn ? 'Ask follow-up question or explore grammar…' : '继续追问、探索语法或背景…'}" style="flex: 1; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 8px 12px; color: #FFF; font-size: 13px; outline: none; box-sizing: border-box;">
+          <button type="button" class="kiki-ai-followup-send" style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; border: none; border-radius: 8px; padding: 8px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; user-select: none;">${isEn ? 'Send' : '发送'}</button>
+        </div>
       </div>
     `);
 
@@ -4178,50 +4410,254 @@ window.KikiAudioEngine = KikiAudioEngine;
       closeLookup();
     });
 
-    const bodyEl = card.querySelector(".kiki-ai-body");
-    let accumulated = "";
+    const modeSelect = card.querySelector(".kiki-card-mode-select");
+    modeSelect?.addEventListener("change", (e) => {
+      e.stopPropagation();
+      const newMode = modeSelect.value;
+      saveAiConfig({ aiMode: newMode });
+      explainWithAiInCard(card, term, sentence);
+    });
 
-    activeAiAbort = new AbortController();
-    const curAbort = activeAiAbort;
+    const scrollContainer = card.querySelector(".kiki-ai-scroll-container");
+    const chatThread = card.querySelector(".kiki-ai-chat-thread");
+    const suggestionsContainer = card.querySelector(".kiki-ai-suggestions-container");
+    const followupInput = card.querySelector(".kiki-ai-followup-input");
+    const followupSendBtn = card.querySelector(".kiki-ai-followup-send");
 
-    try {
-      await streamChat({
-        base: cfg.apiBase,
-        key: cfg.apiKey,
-        model: cfg.apiModel,
-        system,
-        user,
-        signal: curAbort.signal,
-        onChunk: (text, thinking) => {
-          if (token !== STATE.aiToken || !card.classList.contains("show")) return;
-          if (thinking && !accumulated) {
-            setHtml(bodyEl, `<span class="kiki-ai-thinking" style="color: #94A3B8;">✦ Reasoning…</span>`);
-          } else if (text) {
-            accumulated += text;
-            setHtml(bodyEl, renderMarkdownText(accumulated));
+    function renderSuggestions(pills) {
+      if (!suggestionsContainer) return;
+      suggestionsContainer.innerHTML = "";
+      if (!pills || !pills.length) {
+        suggestionsContainer.style.display = "none";
+        return;
+      }
+      suggestionsContainer.style.display = "flex";
+      pills.forEach((pText, pIdx) => {
+        const theme = PILL_THEMES[pIdx % PILL_THEMES.length];
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "kiki-ai-pill-btn";
+        btn.style.cssText = `border: 1px solid ${theme.border}; background: ${theme.bg}; color: ${theme.color}; border-radius: 9px; padding: 7px 12px; font-size: 12.5px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.15s; line-height: 1.4; display: flex; align-items: center; justify-content: space-between; user-select: none;`;
+        btn.innerHTML = `
+          <span>${escapeHtml(pText)}</span>
+          <span style="opacity: 0.6; font-size: 14px; margin-left: 6px;">→</span>
+        `;
+        btn.addEventListener("mouseenter", () => { btn.style.background = theme.hover; });
+        btn.addEventListener("mouseleave", () => { btn.style.background = theme.bg; });
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          triggerFollowUp(pText);
+        });
+        suggestionsContainer.appendChild(btn);
+      });
+      if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    }
+
+    async function streamAssistantTurn(turnEl, messagesToSend) {
+      const thoughtBox = turnEl.querySelector(".kiki-ai-thought-box");
+      const thoughtStatus = turnEl.querySelector(".kiki-ai-thought-status");
+      const thoughtText = turnEl.querySelector(".kiki-ai-thought-text");
+      const thoughtToggleBtn = turnEl.querySelector(".kiki-ai-thought-toggle-btn");
+      const answerEl = turnEl.querySelector(".kiki-ai-answer");
+      const initialStatus = turnEl.querySelector(".kiki-ai-initial-status");
+
+      let thoughtAutoCollapsed = false;
+      let isThoughtCollapsed = false;
+
+      thoughtToggleBtn?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        isThoughtCollapsed = !isThoughtCollapsed;
+        if (thoughtText) thoughtText.style.display = isThoughtCollapsed ? "none" : "block";
+        if (thoughtToggleBtn) thoughtToggleBtn.textContent = isThoughtCollapsed ? (isEn ? "Expand" : "展开") : (isEn ? "Collapse" : "收起");
+      });
+
+      let accumulatedContent = "";
+      let accumulatedReasoning = "";
+
+      activeAiAbort = new AbortController();
+      const curAbort = activeAiAbort;
+
+      try {
+        await streamChat({
+          base: cfg.apiBase,
+          key: cfg.apiKey,
+          model: cfg.apiModel,
+          messages: messagesToSend,
+          maxTokens: cfg.maxTokens,
+          signal: curAbort.signal,
+          onReasoningChunk: (chunk, allReasoning) => {
+            if (token !== STATE.aiToken || !card.classList.contains("show")) return;
+            accumulatedReasoning = allReasoning;
+            if (thoughtBox) thoughtBox.style.display = "block";
+            if (initialStatus) initialStatus.style.display = "none";
+            if (thoughtText) {
+              thoughtText.textContent = allReasoning;
+              thoughtText.scrollTop = thoughtText.scrollHeight;
+            }
+          },
+          onChunk: (text, thinking) => {
+            if (token !== STATE.aiToken || !card.classList.contains("show")) return;
+            if (thinking) return;
+            if (text) {
+              accumulatedContent += text;
+              if (!thoughtAutoCollapsed && accumulatedReasoning) {
+                thoughtAutoCollapsed = true;
+                isThoughtCollapsed = true;
+                if (thoughtText) thoughtText.style.display = "none";
+                if (thoughtToggleBtn) thoughtToggleBtn.textContent = isEn ? "Expand" : "展开";
+                if (thoughtStatus) {
+                  const charCount = accumulatedReasoning.length;
+                  thoughtStatus.innerHTML = `✦ ${isEn ? 'Thinking completed' : '思考完成'} ${charCount > 0 ? `(${charCount}字)` : ''}`;
+                  thoughtStatus.style.color = "#8B5CF6";
+                }
+              }
+              if (initialStatus) initialStatus.style.display = "none";
+              const parsed = parseContentAndSuggestions(accumulatedContent, isEn, term);
+              setHtml(answerEl, renderMarkdownText(parsed.content));
+              if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
+            }
+          }
+        });
+
+        // Ensure thinking box collapses when finished
+        if (accumulatedReasoning && thoughtBox && !isThoughtCollapsed) {
+          isThoughtCollapsed = true;
+          if (thoughtText) thoughtText.style.display = "none";
+          if (thoughtToggleBtn) thoughtToggleBtn.textContent = isEn ? "Expand" : "展开";
+          if (thoughtStatus) {
+            const charCount = accumulatedReasoning.length;
+            thoughtStatus.innerHTML = `✦ ${isEn ? 'Thinking completed' : '思考完成'} ${charCount > 0 ? `(${charCount}字)` : ''}`;
+            thoughtStatus.style.color = "#8B5CF6";
           }
         }
-      });
-      if (token === STATE.aiToken && card.classList.contains("show") && !accumulated) {
-        setHtml(bodyEl, `<span style="color: #94A3B8;">(Empty response from AI)</span>`);
+
+        if (token === STATE.aiToken && card.classList.contains("show")) {
+          if (!accumulatedContent) {
+            if (accumulatedReasoning) {
+              const clean = accumulatedReasoning.replace(/\n+/g, " ").trim();
+              const fallbackText = clean.slice(-260).trim();
+              setHtml(answerEl, renderMarkdownText(fallbackText));
+              STATE.aiMessages.push({ role: "assistant", content: fallbackText });
+            } else {
+              setHtml(answerEl, `<span style="color: #94A3B8;">(Empty response from AI)</span>`);
+            }
+          } else {
+            const parsed = parseContentAndSuggestions(accumulatedContent, isEn, term);
+            setHtml(answerEl, renderMarkdownText(parsed.content));
+            STATE.aiMessages.push({ role: "assistant", content: parsed.content });
+            renderSuggestions(parsed.suggestions);
+          }
+        }
+      } catch (err) {
+        if (token !== STATE.aiToken || !card.classList.contains("show")) return;
+        if (curAbort.signal.aborted) return;
+        setHtml(answerEl, `
+          <div style="color: #F87171; font-size: 13.5px; line-height: 1.5; padding: 6px 0;">
+            <div style="font-weight: 700; margin-bottom: 4px;">AI Request Failed</div>
+            <div style="opacity: 0.9; margin-bottom: 8px;">${escapeHtml(err.message || String(err))}</div>
+            <button type="button" class="kiki-open-ai-settings-btn" style="background: rgba(99, 102, 241, 0.3); color: #C7D2FE; border: 1px solid rgba(165, 180, 252, 0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer;">⚙ Check AI Configuration</button>
+          </div>
+        `);
+        card.querySelector(".kiki-open-ai-settings-btn")?.addEventListener("click", () => {
+          showSettingsModal("ai");
+        });
+      } finally {
+        if (activeAiAbort === curAbort) activeAiAbort = null;
+        if (followupInput) followupInput.disabled = false;
+        if (followupSendBtn) {
+          followupSendBtn.disabled = false;
+          followupSendBtn.textContent = isEn ? "Send" : "发送";
+        }
       }
-    } catch (err) {
-      if (token !== STATE.aiToken || !card.classList.contains("show")) return;
-      if (curAbort.signal.aborted) return;
-      setHtml(bodyEl, `
-        <div style="color: #F87171; font-size: 13px; line-height: 1.5; padding: 6px 0;">
-          <div style="font-weight: 700; margin-bottom: 4px;">AI Request Failed</div>
-          <div style="opacity: 0.9; margin-bottom: 8px;">${escapeHtml(err.message || String(err))}</div>
-          <button type="button" class="kiki-open-ai-settings-btn" style="background: rgba(99, 102, 241, 0.3); color: #C7D2FE; border: 1px solid rgba(165, 180, 252, 0.4); border-radius: 6px; padding: 5px 10px; font-size: 11.5px; cursor: pointer;">⚙ Check AI Configuration</button>
-        </div>
-      `);
-      card.querySelector(".kiki-open-ai-settings-btn")?.addEventListener("click", () => {
-        showSettingsModal("ai");
-      });
-    } finally {
-      if (activeAiAbort === curAbort) activeAiAbort = null;
     }
+
+    async function triggerFollowUp(userText) {
+      if (!userText || !userText.trim()) return;
+      const query = userText.trim();
+
+      if (suggestionsContainer) suggestionsContainer.style.display = "none";
+      if (followupInput) {
+        followupInput.value = "";
+        followupInput.disabled = true;
+      }
+      if (followupSendBtn) {
+        followupSendBtn.disabled = true;
+        followupSendBtn.textContent = "…";
+      }
+
+      // Append user bubble
+      const userMsgDiv = document.createElement("div");
+      userMsgDiv.style.cssText = "margin: 14px 0 10px; display: flex; justify-content: flex-end;";
+      userMsgDiv.innerHTML = `
+        <div style="background: rgba(99, 102, 241, 0.28); border: 1px solid rgba(165, 180, 252, 0.4); border-radius: 12px 12px 2px 12px; padding: 8px 13px; font-size: 13.5px; color: #E0E7FF; font-weight: 500; max-width: 86%;">
+          ${escapeHtml(query)}
+        </div>
+      `;
+      chatThread?.appendChild(userMsgDiv);
+
+      // Append assistant turn container
+      const turnDiv = document.createElement("div");
+      turnDiv.style.cssText = "border-top: 1px dashed rgba(255, 255, 255, 0.15); padding-top: 12px; margin-top: 10px;";
+      turnDiv.innerHTML = `
+        <div class="kiki-ai-thought-box" style="display: none; background: rgba(255, 255, 255, 0.05); border-left: 3px solid #8B5CF6; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 12.5px; color: #94A3B8; line-height: 1.5;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; user-select: none;">
+            <span class="kiki-ai-thought-status" style="font-weight: 700; color: #C4B5FD; display: inline-flex; align-items: center; gap: 6px;">
+              <span>✦</span> ${isEn ? 'Thinking…' : '思考中…'}
+            </span>
+            <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0 4px;">${isEn ? 'Collapse' : '收起'}</button>
+          </div>
+          <div class="kiki-ai-thought-text" style="max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, monospace; font-size: 12px; opacity: 0.88; color: #CBD5E1; line-height: 1.45;"></div>
+        </div>
+
+        <div class="kiki-ai-answer" style="font-size: 15px; line-height: 1.65; color: #F1F5F9;">
+          <span class="kiki-ai-initial-status" style="color: #94A3B8; display: inline-flex; align-items: center; gap: 6px;">
+            ✦ ${isEn ? 'Generating…' : '生成中…'}
+          </span>
+        </div>
+      `;
+      chatThread?.appendChild(turnDiv);
+      if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
+
+      STATE.aiMessages.push({ role: "user", content: query });
+      await streamAssistantTurn(turnDiv, STATE.aiMessages);
+    }
+
+    // Input listeners
+    followupSendBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (followupInput) triggerFollowUp(followupInput.value);
+    });
+    followupInput?.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") {
+        triggerFollowUp(followupInput.value);
+      }
+    });
+
+    // Initial first turn container
+    const initialTurnDiv = document.createElement("div");
+    initialTurnDiv.innerHTML = `
+      <div class="kiki-ai-thought-box" style="display: none; background: rgba(255, 255, 255, 0.05); border-left: 3px solid #8B5CF6; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 12.5px; color: #94A3B8; line-height: 1.5;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; user-select: none;">
+          <span class="kiki-ai-thought-status" style="font-weight: 700; color: #C4B5FD; display: inline-flex; align-items: center; gap: 6px;">
+            <span>✦</span> ${isEn ? 'Thinking…' : '思考中…'}
+          </span>
+          <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0 4px;">${isEn ? 'Collapse' : '收起'}</button>
+        </div>
+        <div class="kiki-ai-thought-text" style="max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, monospace; font-size: 12px; opacity: 0.88; color: #CBD5E1; line-height: 1.45;"></div>
+      </div>
+
+      <div class="kiki-ai-answer" style="font-size: 15px; line-height: 1.65; color: #F1F5F9;">
+        <span class="kiki-ai-initial-status" style="color: #94A3B8; display: inline-flex; align-items: center; gap: 6px;">
+          ✦ ${isEn ? 'Connecting to AI…' : '连接 AI 中…'}
+        </span>
+      </div>
+    `;
+    chatThread?.appendChild(initialTurnDiv);
+
+    await streamAssistantTurn(initialTurnDiv, STATE.aiMessages);
   }
+  window.explainWithAiInCard = explainWithAiInCard;
 
   async function showYomitanCard(wordEl, term) {
     window.showYomitanCard = showYomitanCard;
@@ -4777,6 +5213,18 @@ window.KikiAudioEngine = KikiAudioEngine;
     return "";
   }
 
+  function isDummyCueText(text) {
+    if (!text) return true;
+    const lower = text.toLowerCase().replace(/\s+/g, " ");
+    return lower.includes("click for settings") ||
+           lower.includes("for settings") ||
+           lower.includes("点击以查看设置") ||
+           lower.includes("点击以") ||
+           (lower.includes("auto-generated") && lower.includes("english")) ||
+           (lower.includes("自动生成") && lower.includes("英语")) ||
+           (lower.includes("settings") && (lower.includes("english") || lower.includes("auto")));
+  }
+
   function extractCuesFromVideo() {
     const v = videoEl();
     if (!v || !v.textTracks || !v.textTracks.length) return [];
@@ -4790,7 +5238,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         for (let j = 0; j < track.cues.length; j++) {
           const c = track.cues[j];
           const t = getCueText(c).replace(/<[^>]+>/g, "").trim();
-          if (t) {
+          if (t && !isDummyCueText(t)) {
             cues.push({
               start: Math.round(c.startTime * 1000),
               end: Math.round(c.endTime * 1000),
@@ -4798,7 +5246,7 @@ window.KikiAudioEngine = KikiAudioEngine;
             });
           }
         }
-        if (cues.length > 0) return cues;
+        if (cues.length > 2) return cues;
       }
     }
     return [];
@@ -4913,10 +5361,10 @@ window.KikiAudioEngine = KikiAudioEngine;
   function onNativeCaptionsMutated() {
     suppressNativeCaptions();
 
-    // If structured cues not yet loaded, check if video.textTracks has loaded cues
+    // If structured cues not yet loaded, check if video.textTracks has loaded genuine cues
     if (!STATE.cues || !STATE.cues.length) {
       const trackCues = extractCuesFromVideo();
-      if (trackCues && trackCues.length > 0) {
+      if (trackCues && trackCues.length > 2) {
         applyLoadedCues(trackCues, "video-track");
       }
     }
@@ -4924,8 +5372,17 @@ window.KikiAudioEngine = KikiAudioEngine;
 
   function bindVideoTrackListeners() {
     const v = videoEl();
-    if (!v || !v.textTracks || v._kiki_tracks_bound) return;
+    if (!v || v._kiki_tracks_bound) return;
     v._kiki_tracks_bound = true;
+
+    // When video starts playing, if captions haven't loaded yet, immediately fetch
+    v.addEventListener("play", () => {
+      if (!STATE.cues || !STATE.cues.length) {
+        loadForVideo();
+      }
+    });
+
+    if (!v.textTracks) return;
 
     function checkTrack(track) {
       if (!track) return;
@@ -5095,6 +5552,10 @@ window.KikiAudioEngine = KikiAudioEngine;
   }
 
   function applyLoadedCues(cues, source) {
+    if (!cues || !cues.length) return;
+    if (cues.length <= 2 && cues.some((c) => isDummyCueText(c.text))) {
+      return;
+    }
     STATE.cues = cues;
     STATE.idx = -1;
     renderCue(-1);
@@ -5208,7 +5669,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       // 6. Native module activation attempt & textTracks extraction
       ensureCaptionsActive();
       const trackCues = extractCuesFromVideo();
-      if (trackCues && trackCues.length > 0) {
+      if (trackCues && trackCues.length > 2) {
         applyLoadedCues(trackCues, "video-track");
         return;
       }
@@ -5217,6 +5678,31 @@ window.KikiAudioEngine = KikiAudioEngine;
       updateHud("✦ CC: Off");
     } finally {
       loadingTracks = false;
+    }
+  }
+
+  function dismissMiniplayer() {
+    try {
+      const mini = document.querySelectorAll(
+        "ytd-miniplayer, #miniplayer, ytd-miniplayer-renderer, ytd-mealbar-promo-renderer, yt-mealbar-promo-renderer"
+      );
+      mini.forEach((m) => {
+        if (!currentVideoId()) {
+          const v = m.querySelector("video");
+          if (v && !v.paused) v.pause();
+        }
+        m.remove();
+      });
+    } catch {}
+  }
+
+  function tryAutoplay() {
+    const v = videoEl();
+    if (v && v.paused && v.currentTime === 0) {
+      try {
+        const p = v.play();
+        if (p && typeof p.catch === "function") p.catch(() => {});
+      } catch {}
     }
   }
 
@@ -5243,11 +5729,13 @@ window.KikiAudioEngine = KikiAudioEngine;
     ensureRoot();
     ensureCaptionObserver();
     bindVideoTrackListeners();
+    tryAutoplay();
     await loadForVideo();
   }
 
   function tick() {
     try {
+      dismissMiniplayer();
       ensureHud();
       ensureRoot();
       ensureCaptionObserver();
@@ -5275,7 +5763,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       if (!STATE.cues.length && STATE.videoId) {
         const btn = document.querySelector(".ytp-subtitles-button");
         const alreadyOn = btn && btn.getAttribute("aria-pressed") === "true";
-        if (!alreadyOn && !v.paused && Date.now() - lastCaptionActivationTime > 2500) {
+        if (!alreadyOn && Date.now() - lastCaptionActivationTime > 2200) {
           lastCaptionActivationTime = Date.now();
           ensureCaptionsActive();
         }
@@ -5347,7 +5835,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         const vState = v ? (v.paused ? "Paused" : "Play") : "NoVid";
         const hudState = hudEl ? (hudEl.offsetWidth > 0 ? `${hudEl.offsetWidth}x${hudEl.offsetHeight}` : "0px") : "NULL";
         const trkCount = v && v.textTracks ? v.textTracks.length : 0;
-        toast(`✦ Kiki v1.1.2 [HUD:${hudState}|${vState}|TT:${trkCount}]`);
+        toast(`✦ Kiki v1.1.3 [HUD:${hudState}|${vState}|TT:${trkCount}]`);
       }, 700);
       setTimeout(() => {
         ensureHud();

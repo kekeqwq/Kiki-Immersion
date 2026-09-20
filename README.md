@@ -2,11 +2,19 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Frosted Glass Subtitles & Audio Engine for Safari.*
 
-![Platform](https://img.shields.io/badge/platform-Safari-blue.svg) ![Release](https://img.shields.io/badge/release-v1.1.2-emerald.svg) ![Status](https://img.shields.io/badge/status-Verified%20100%25-success.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari-blue.svg) ![Release](https://img.shields.io/badge/release-v1.1.3-emerald.svg) ![Status](https://img.shields.io/badge/status-Verified%20100%25-success.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
 ## 📢 Release Overview
+
+**v1.1.3 (AI Context Exploration, Auto-Collapsing Reasoning & High-DPI Font Patch)**:
+- **MarginNote 4 Style Follow-Up Exploration**: AI explanations dynamically parse context-aware exploration pills (`<<<EXPLORE>>>`) tailored to the video sentence and response, allowing one-tap follow-up into grammar, collocations, or cultural background.
+- **Interactive Multi-Turn Dialogue & Custom Inquiries**: Pinned follow-up input bar at the bottom of the card enables continuous multi-turn conversations with full conversation memory.
+- **Real-Time Reasoning Progress & Auto-Collapse**: Reasoning tokens stream live as an engaging "progress bar" during model inference, and auto-collapse into a neat, purple status bar (`✦ 思考完成 (XXXX字)`) with an expand/collapse toggle once generation begins.
+- **Flexible AI Mode Switcher**: Integrated header mode selector for one-click switching between `⚡ 简答速查` (Quick Glance), `📚 深度精学` (Deep Study), and `⚙️ 自定义` (Custom).
+- **Yomitan High-DPI Font Enlargement**: Overcame YouTube's root `10px` rem trap by enforcing explicit pixel typography (`22px` headwords, `15px` definitions/p/tables with `1.65` line height), matching the crisp readability of modern desktop cards.
+- **Configurable Max Tokens Presets**: Friendly dropdown presets (`4096` default, `8192`, `2048`, custom) in settings to prevent response cutoff on deep-reasoning models.
 
 **v1.1.2 (Webpage Fullscreen Double-Click & Gesture Precision Patch)**:
 - **Eliminated Fullscreen Bounces**: Resolved race condition between `pointerdown` double detection and browser native `dblclick` events, and added a 350ms debounce guard to `toggleWebpageFs` to guarantee 100% stable 1-try entry and exit.
