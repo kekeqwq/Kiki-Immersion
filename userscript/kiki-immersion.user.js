@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion (Safari)
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion-Safari
-// @version      1.0.0
+// @version      1.1.0
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, and touch/mouse gestures tailored for Safari.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -647,6 +647,51 @@ window.KikiStructuredContent = KikiStructuredContent;
     .kiki-card-body { font-size: 1.02rem; line-height: 1.62; margin-top: 10px; color: #EFEBE3 !important; }
     .kiki-card-body p { margin-bottom: 6px; }
     .kiki-card-empty { padding: 16px 0; text-align: center; opacity: 0.9; }
+
+    /* AI Enhancements & Button Styles */
+    .kiki-cap-ai-btn {
+      display: inline-flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important;
+      width: 38px !important; height: 38px !important; min-width: 38px !important; min-height: 38px !important;
+      background: rgba(99, 102, 241, 0.38) !important;
+      backdrop-filter: blur(12px) !important; -webkit-backdrop-filter: blur(12px) !important;
+      border: 1.5px solid rgba(165, 180, 252, 0.5) !important; border-radius: 11px !important;
+      margin-right: 10px !important; padding: 0 !important;
+      cursor: pointer !important; vertical-align: middle !important; transition: all 0.15s ease !important;
+      user-select: none !important; -webkit-user-select: none !important; touch-action: manipulation !important;
+      line-height: 1 !important; box-sizing: border-box !important;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+    }
+    .kiki-cap-ai-btn .kiki-ai-icon {
+      font-size: 13px !important; line-height: 1 !important; margin-bottom: 2px !important; color: #A5B4FC !important;
+    }
+    .kiki-cap-ai-btn .kiki-ai-text {
+      font-size: 10.5px !important; font-weight: 800 !important; letter-spacing: 0.5px !important; line-height: 1 !important; color: #FFFFFF !important;
+    }
+    .kiki-cap-ai-btn:hover, .kiki-cap-ai-btn:active {
+      background: rgba(99, 102, 241, 0.82) !important; border-color: #C7D2FE !important;
+      box-shadow: 0 0 14px rgba(99, 102, 241, 0.65) !important;
+      transform: scale(0.96) !important;
+    }
+    .kiki-cap-ai-btn:hover .kiki-ai-icon, .kiki-cap-ai-btn:active .kiki-ai-icon {
+      color: #FFFFFF !important;
+    }
+    .kiki-card-ai-switch-btn {
+      background: rgba(99, 102, 241, 0.25) !important; color: #C7D2FE !important;
+      border: 1px solid rgba(165, 180, 252, 0.35) !important; border-radius: 6px !important;
+      padding: 3px 8px !important; font-size: 11.5px !important; font-weight: 600 !important;
+      cursor: pointer !important; display: inline-flex !important; align-items: center !important; gap: 4px !important;
+      user-select: none !important; -webkit-user-select: none !important;
+    }
+    .kiki-card-ai-switch-btn:hover {
+      background: rgba(99, 102, 241, 0.5) !important; color: #FFF !important;
+    }
+    .kiki-ai-thinking {
+      animation: kikiPulse 1.5s infinite ease-in-out !important;
+    }
+    @keyframes kikiPulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
 
     /* On-Screen Feedback Toast (Frosted Glassmorphism) */
     #kiki-toast {
@@ -2453,8 +2498,198 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 
   // -------------------------------------------------------------
-  // 5. Dictionary Lookup Engine (First-Party Offline IndexedDB)
+  // 5. Dictionary & AI Lookup Engine
   // -------------------------------------------------------------
+  const AI_DEFAULTS = {
+    apiBase: "https://api.openai.com/v1",
+    apiKey: "",
+    apiModel: "gpt-4o-mini",
+    aiLang: "zh",
+    promptZh: "你是简洁的语言老师。学习者在字幕「{{sentence}}」里点了「{{word}}」。若该词像语音识别错误或网络新词，先猜测本意。用通顺中文解释它在本句中的意思，2–4 句。必要时注明词性。不要整句逐字翻译。",
+    promptEn: "You are a concise language tutor. The learner tapped \"{{word}}\" in this subtitle: \"{{sentence}}\". If it looks like a speech-to-text error or internet slang, infer the intended word. Explain the meaning in simple English in 2-4 short sentences. Mention part of speech if clear. Do not translate the whole line unless needed for sense."
+  };
+
+  function getAiConfig() {
+    return {
+      apiBase: localStorage.getItem("kiki_ai_base") || AI_DEFAULTS.apiBase,
+      apiKey: localStorage.getItem("kiki_ai_key") || "",
+      apiModel: localStorage.getItem("kiki_ai_model") || AI_DEFAULTS.apiModel,
+      aiLang: localStorage.getItem("kiki_ai_lang") || AI_DEFAULTS.aiLang,
+      promptZh: localStorage.getItem("kiki_ai_prompt_zh") || AI_DEFAULTS.promptZh,
+      promptEn: localStorage.getItem("kiki_ai_prompt_en") || AI_DEFAULTS.promptEn
+    };
+  }
+
+  function saveAiConfig(cfg) {
+    if (cfg.apiBase !== undefined) localStorage.setItem("kiki_ai_base", (cfg.apiBase || "").trim());
+    if (cfg.apiKey !== undefined) localStorage.setItem("kiki_ai_key", (cfg.apiKey || "").trim());
+    if (cfg.apiModel !== undefined) localStorage.setItem("kiki_ai_model", (cfg.apiModel || "").trim());
+    if (cfg.aiLang !== undefined) localStorage.setItem("kiki_ai_lang", cfg.aiLang || "zh");
+    if (cfg.promptZh !== undefined) localStorage.setItem("kiki_ai_prompt_zh", cfg.promptZh);
+    if (cfg.promptEn !== undefined) localStorage.setItem("kiki_ai_prompt_en", cfg.promptEn);
+    updateHud();
+  }
+
+  let activeAiAbort = null;
+  function abortActiveAi() {
+    if (activeAiAbort) {
+      try { activeAiAbort.abort(); } catch {}
+      activeAiAbort = null;
+    }
+  }
+
+  async function pingAiConnection({ base, key, model }) {
+    let root = (base || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
+    const url = root.endsWith("/chat/completions") ? root : root + "/chat/completions";
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + key
+        },
+        body: JSON.stringify({
+          model: model || "gpt-4o-mini",
+          messages: [{ role: "user", content: "ping" }],
+          max_tokens: 5
+        }),
+        signal: controller.signal
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error("HTTP " + res.status + " " + txt.slice(0, 140));
+      }
+      return { ok: true };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function streamChat({ base, key, model, system, user, signal, onChunk }) {
+    let root = (base || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
+    const url = root.endsWith("/chat/completions") ? root : root + "/chat/completions";
+
+    const body = {
+      model: model || "gpt-4o-mini",
+      stream: true,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user }
+      ]
+    };
+
+    const isReasoning = /^o[13]/.test(body.model);
+    if (isReasoning) {
+      body.max_completion_tokens = 400;
+      try { body.reasoning_effort = "low"; } catch {}
+    } else {
+      body.temperature = 0.3;
+      body.max_tokens = 400;
+    }
+
+    let firstChunk = false;
+    let timer = null;
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        if (!firstChunk) {
+          reject(new Error("Request timed out (10s)"));
+        }
+      }, 10000);
+    });
+
+    const fetchPromise = (async () => {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + key
+        },
+        body: JSON.stringify(body),
+        signal
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error("HTTP " + res.status + " " + errText.slice(0, 240));
+      }
+
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("text/event-stream") && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          if (!firstChunk) {
+            firstChunk = true;
+            clearTimeout(timer);
+          }
+
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop();
+
+          for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line || line.startsWith(":")) continue;
+            if (line === "data: [DONE]") return;
+            if (line.startsWith("data:")) {
+              const jsonStr = line.slice(5).trim();
+              try {
+                const json = JSON.parse(jsonStr);
+                const delta = json.choices?.[0]?.delta;
+                const content = delta?.content;
+                if (content) {
+                  onChunk(content, false);
+                } else if (delta?.reasoning_content && !firstChunk) {
+                  onChunk("", true);
+                }
+              } catch {}
+            }
+          }
+        }
+
+        if (buf.trim().startsWith("data:") && buf.trim() !== "data: [DONE]") {
+          try {
+            const json = JSON.parse(buf.trim().slice(5).trim());
+            const content = json.choices?.[0]?.delta?.content;
+            if (content) onChunk(content, false);
+          } catch {}
+        }
+      } else {
+        firstChunk = true;
+        clearTimeout(timer);
+        const text = await res.text();
+        const json = JSON.parse(text);
+        const out = json.choices?.[0]?.message?.content;
+        if (!out) throw new Error("Empty model response");
+        onChunk(out, false);
+      }
+    })();
+
+    try {
+      await Promise.race([fetchPromise, timeoutPromise]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function renderMarkdownText(text) {
+    if (!text) return "";
+    let html = escapeHtml(text);
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/__(.*?)__/g, '<strong>$1</strong>');
+    html = html.replace(/\*([^\*]+)\*/g, '<em>$1</em>');
+    html = html.replace(/`([^`]+)`/g, '<code style="background: rgba(255,255,255,0.15); padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 0.9em;">$1</code>');
+    html = html.replace(/\n/g, '<br>');
+    return html;
+  }
+
   async function lookupWord(term) {
     try {
       const localResults = await localSearch.search(term);
@@ -2701,6 +2936,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         <button type="button" class="kiki-hud-btn kiki-hud-title" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 700 !important; white-space: nowrap !important;" title="Tap for diagnostics">✦ Kiki</button>
         <button type="button" class="kiki-hud-btn kiki-hud-cc" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;">CC: Searching...</button>
         <button type="button" class="kiki-hud-btn kiki-hud-dict" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;">📖 Dict: 0</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-ai" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="AI API Configuration">🤖 AI: Off</button>
         <button type="button" class="kiki-hud-btn kiki-hud-fs" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;">⛶ Fullscreen</button>
         <button type="button" class="kiki-hud-btn kiki-hud-ctrl" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;">⚙ Controls</button>
       `);
@@ -2719,7 +2955,12 @@ window.KikiAudioEngine = KikiAudioEngine;
 
       hud.querySelector(".kiki-hud-dict").addEventListener("click", (e) => {
         e.stopPropagation();
-        showDictManagerModal();
+        showSettingsModal("dict");
+      });
+
+      hud.querySelector(".kiki-hud-ai").addEventListener("click", (e) => {
+        e.stopPropagation();
+        showSettingsModal("ai");
       });
 
       hud.querySelector(".kiki-hud-cc").addEventListener("click", (e) => {
@@ -2737,7 +2978,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         const live = lastObservedText ? "YES" : "NO";
         const trackCount = v && v.textTracks ? v.textTracks.length : 0;
         const domCount = queryCaptionElements(".ytp-caption-segment, .caption-visual-line").length;
-        toast(`Kiki v1.0.0 [${status}] | CC=${cueCount} | Live=${live} | DOM=${domCount} | Trk=${trackCount}`);
+        toast(`Kiki v1.1.0 [${status}] | CC=${cueCount} | Live=${live} | DOM=${domCount} | Trk=${trackCount}`);
       });
     }
 
@@ -2773,6 +3014,14 @@ window.KikiAudioEngine = KikiAudioEngine;
     const dictBtn = hud.querySelector(".kiki-hud-dict");
     if (dictBtn) {
       dictBtn.textContent = cachedDictCount > 0 ? `📖 Dict: ${cachedDictCount}` : "📖 Import Dict";
+    }
+    const aiBtn = hud.querySelector(".kiki-hud-ai");
+    if (aiBtn) {
+      const cfg = getAiConfig();
+      const hasKey = !!(cfg.apiKey && cfg.apiKey.trim());
+      aiBtn.textContent = hasKey ? "🤖 AI: On" : "🤖 AI: Off";
+      aiBtn.style.setProperty("background", hasKey ? "rgba(99, 102, 241, 0.35)" : "rgba(255, 255, 255, 0.2)", "important");
+      aiBtn.style.setProperty("border-color", hasKey ? "rgba(165, 180, 252, 0.5)" : "rgba(255, 255, 255, 0.3)", "important");
     }
   }
 
@@ -3132,7 +3381,11 @@ window.KikiAudioEngine = KikiAudioEngine;
     const term = (w.dataset.word || w.textContent).trim();
     if (!term) return;
 
-    if (STATE.lookupEl === w) {
+    const card = $("#kiki-yomitan-card");
+    const isCardOpen = card && card.classList.contains("show");
+
+    // If card is open, clicking the active word closes the card and resumes playback immediately
+    if (isCardOpen && (STATE.lookupEl === w || STATE.lookupWord === term || w.classList.contains("kiki-active"))) {
       closeLookup();
       return;
     }
@@ -3149,25 +3402,39 @@ window.KikiAudioEngine = KikiAudioEngine;
   }
 
 
-  async function showDictManagerModal() {
-    window.showDictManagerModal = showDictManagerModal;
-    let modal = document.getElementById("kiki-dict-modal");
+  async function clearAllStorageAndConfig() {
+    if (confirm("Are you sure you want to clear ALL dictionaries, local storage, and AI configurations? This action cannot be undone.")) {
+      await localDB.clearAllStorage();
+      localStorage.removeItem("kiki_ai_base");
+      localStorage.removeItem("kiki_ai_key");
+      localStorage.removeItem("kiki_ai_model");
+      localStorage.removeItem("kiki_ai_lang");
+      localStorage.removeItem("kiki_ai_prompt_zh");
+      localStorage.removeItem("kiki_ai_prompt_en");
+      await refreshDictStats();
+      toast("✦ All dictionaries and AI configurations cleared.");
+      showSettingsModal("dict");
+    }
+  }
+
+  async function showSettingsModal(initialTab = "dict") {
+    let modal = document.getElementById("kiki-settings-modal");
     if (!modal) {
       modal = document.createElement("div");
-      modal.id = "kiki-dict-modal";
+      modal.id = "kiki-settings-modal";
       modal.style.cssText = `
         position: fixed !important;
         top: 50% !important;
         left: 50% !important;
         transform: translate(-50%, -50%) !important;
-        width: min(92vw, 480px) !important;
-        max-height: 85vh !important;
+        width: min(92vw, 500px) !important;
+        max-height: 88vh !important;
         background: rgba(22, 22, 26, 0.96) !important;
         backdrop-filter: blur(24px) saturate(180%) !important;
         -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
         border: 1px solid rgba(255, 255, 255, 0.2) !important;
-        border-radius: 16px !important;
-        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6) !important;
+        border-radius: 18px !important;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75) !important;
         z-index: 2147483647 !important;
         color: #FFFFFF !important;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
@@ -3181,106 +3448,496 @@ window.KikiAudioEngine = KikiAudioEngine;
     }
 
     modal.style.display = "flex";
-    const dicts = await localDB.getDictionaries();
+    let activeTab = initialTab;
 
-    let listHtml = "";
-    if (!dicts || !dicts.length) {
-      listHtml = `<div style="font-size: 13px; color: #AAA; padding: 12px 0; text-align: center;">No dictionaries installed yet in YouTube offline storage.</div>`;
-    } else {
-      listHtml = dicts.map(d => `
-        <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.08); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1);">
-          <div style="display: flex; flex-direction: column; gap: 2px;">
-            <span style="font-size: 13px; font-weight: 600; color: #FFF;">${escapeHtml(d.title)}</span>
-            <span style="font-size: 11px; color: #AAA;">${(d.termCount || 0).toLocaleString()} entries</span>
+    async function renderModal() {
+      const dicts = await localDB.getDictionaries();
+      const aiCfg = getAiConfig();
+
+      let contentHtml = "";
+
+      if (activeTab === "dict") {
+        let listHtml = "";
+        if (!dicts || !dicts.length) {
+          listHtml = `<div style="font-size: 13px; color: #AAA; padding: 16px 0; text-align: center;">No dictionaries installed yet in YouTube offline storage.</div>`;
+        } else {
+          listHtml = dicts.map(d => `
+            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.08); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1);">
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-size: 13px; font-weight: 600; color: #FFF;">${escapeHtml(d.title)}</span>
+                <span style="font-size: 11px; color: #AAA;">${(d.termCount || 0).toLocaleString()} entries</span>
+              </div>
+              <button type="button" class="kiki-del-dict-btn" data-id="${escapeHtml(d.id)}" style="background: rgba(239, 68, 68, 0.25); color: #FCA5A5; border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer;">Delete</button>
+            </div>
+          `).join("");
+        }
+
+        contentHtml = `
+          <div style="display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto;">
+            ${listHtml}
           </div>
-          <button type="button" class="kiki-del-dict-btn" data-id="${escapeHtml(d.id)}" style="background: rgba(239, 68, 68, 0.25); color: #FCA5A5; border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer;">Delete</button>
+
+          <div style="display: flex; flex-direction: column; gap: 10px; border-top: 1px solid rgba(255, 255, 255, 0.15); padding-top: 12px;">
+            <label style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #2563EB; color: #FFFFFF; padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; user-select: none;">
+              <span>📥 Import Yomitan Dict (.zip)</span>
+              <input type="file" class="kiki-modal-file-input" accept=".zip" style="display: none;">
+            </label>
+            <div class="kiki-modal-progress" style="display: none; flex-direction: column; gap: 6px;">
+              <div style="background: rgba(255, 255, 255, 0.15); border-radius: 4px; overflow: hidden; height: 6px;">
+                <div class="kiki-modal-prog-fill" style="background: #10B981; height: 100%; width: 0%; transition: width 0.2s;"></div>
+              </div>
+              <span class="kiki-modal-prog-text" style="font-size: 11px; opacity: 0.9; color: #EEE;">Preparing...</span>
+            </div>
+          </div>
+        `;
+      } else {
+        contentHtml = `
+          <div style="display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow-y: auto; padding-right: 4px;">
+            <div>
+              <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">API BASE URL</label>
+              <input type="text" id="kiki-ai-base-input" value="${escapeHtml(aiCfg.apiBase)}" placeholder="https://api.openai.com/v1" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 12px; color: #FFF; font-size: 13px;">
+            </div>
+
+            <div>
+              <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">API KEY (OPENAI COMPATIBLE)</label>
+              <div style="display: flex; gap: 6px;">
+                <input type="password" id="kiki-ai-key-input" value="${escapeHtml(aiCfg.apiKey)}" placeholder="sk-..." style="flex: 1; box-sizing: border-box; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 12px; color: #FFF; font-size: 13px;">
+                <button type="button" id="kiki-ai-key-toggle" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #FFF; border-radius: 8px; padding: 0 10px; font-size: 11px; cursor: pointer;">Show</button>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+              <div style="flex: 1;">
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">MODEL</label>
+                <input type="text" id="kiki-ai-model-input" value="${escapeHtml(aiCfg.apiModel)}" placeholder="gpt-4o-mini" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 12px; color: #FFF; font-size: 13px;">
+              </div>
+              <div style="width: 130px;">
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">LANGUAGE</label>
+                <select id="kiki-ai-lang-select" style="width: 100%; box-sizing: border-box; background: #18181B; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 10px; color: #FFF; font-size: 13px;">
+                  <option value="zh" ${aiCfg.aiLang === "zh" ? "selected" : ""}>中文 (Zh)</option>
+                  <option value="en" ${aiCfg.aiLang === "en" ? "selected" : ""}>English (En)</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label style="font-size: 11.5px; font-weight: 600; color: #94A3B8;">PROMPT TEMPLATE (<span id="kiki-ai-prompt-lang-label">${aiCfg.aiLang === "en" ? "EN" : "ZH"}</span>)</label>
+                <button type="button" id="kiki-ai-prompt-reset-btn" style="background: transparent; border: none; color: #A5B4FC; font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 0;">Reset Default</button>
+              </div>
+              <textarea id="kiki-ai-prompt-input" rows="4" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 10px; color: #FFF; font-size: 12px; line-height: 1.45; resize: vertical; font-family: inherit;">${escapeHtml(aiCfg.aiLang === "en" ? aiCfg.promptEn : aiCfg.promptZh)}</textarea>
+              <div style="font-size: 10.5px; color: #94A3B8; margin-top: 3px;">
+                Tags: <code>{{word}}</code> = tapped word, <code>{{sentence}}</code> = subtitle context.
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-top: 2px; align-items: center;">
+              <button type="button" id="kiki-ai-save-btn" style="flex: 1; background: #6366F1; color: #FFFFFF; border: none; border-radius: 8px; padding: 9px 14px; font-size: 13px; font-weight: 600; cursor: pointer;">Save AI Config</button>
+              <button type="button" id="kiki-ai-ping-btn" style="background: rgba(255,255,255,0.12); color: #E0E7FF; border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; padding: 9px 12px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;">Ping AI</button>
+            </div>
+            <div id="kiki-ai-ping-result" style="display: none; font-size: 11.5px; padding: 6px 10px; border-radius: 6px;"></div>
+          </div>
+        `;
+      }
+
+      setHtml(modal, `
+        <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255, 255, 255, 0.15); padding-bottom: 12px;">
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="kiki-tab-btn" data-tab="dict" style="background: ${activeTab === 'dict' ? '#2563EB' : 'rgba(255,255,255,0.08)'}; color: #FFF; border: none; border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.15s;">📖 Dictionaries</button>
+            <button type="button" class="kiki-tab-btn" data-tab="ai" style="background: ${activeTab === 'ai' ? '#6366F1' : 'rgba(255,255,255,0.08)'}; color: #FFF; border: none; border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.15s;">🤖 AI Configuration</button>
+          </div>
+          <button type="button" class="kiki-modal-close" style="background: transparent; border: none; color: #FFF; font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
         </div>
-      `).join("");
-    }
 
-    setHtml(modal, `
-      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255, 255, 255, 0.15); padding-bottom: 10px;">
-        <div style="font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
-          <span>📖 Yomitan Dictionary Manager</span>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          ${contentHtml}
         </div>
-        <button type="button" class="kiki-modal-close" style="background: transparent; border: none; color: #FFF; font-size: 20px; cursor: pointer; line-height: 1;">&times;</button>
-      </div>
 
-      <div style="display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto;">
-        ${listHtml}
-      </div>
-
-      <div style="border-top: 1px solid rgba(255, 255, 255, 0.15); padding-top: 12px; display: flex; flex-direction: column; gap: 10px;">
-        <div style="display: flex; gap: 8px;">
-          <label style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #2563EB; color: #FFFFFF; padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; user-select: none;">
-            <span>📥 Import Dict (.zip)</span>
-            <input type="file" class="kiki-modal-file-input" accept=".zip" style="display: none;">
-          </label>
-          <button type="button" class="kiki-modal-clear-all" style="background: rgba(239, 68, 68, 0.18); color: #FCA5A5; border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 10px; padding: 10px 12px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;">
-            🗑 Clear All
+        <div style="border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 10px; display: flex; justify-content: flex-end;">
+          <button type="button" class="kiki-modal-clear-all" style="background: rgba(239, 68, 68, 0.18); color: #FCA5A5; border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 8px; padding: 7px 12px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
+            🗑 Clear All (Dicts & AI Config)
           </button>
         </div>
-        <div class="kiki-modal-progress" style="display: none; flex-direction: column; gap: 6px;">
-          <div style="background: rgba(255, 255, 255, 0.15); border-radius: 4px; overflow: hidden; height: 6px;">
-            <div class="kiki-modal-prog-fill" style="background: #10B981; height: 100%; width: 0%; transition: width 0.2s;"></div>
+      `);
+
+      modal.querySelector(".kiki-modal-close")?.addEventListener("click", () => {
+        modal.style.display = "none";
+      });
+
+      modal.querySelectorAll(".kiki-tab-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          activeTab = btn.dataset.tab;
+          renderModal();
+        });
+      });
+
+      modal.querySelector(".kiki-modal-clear-all")?.addEventListener("click", () => {
+        clearAllStorageAndConfig();
+      });
+
+      if (activeTab === "dict") {
+        modal.querySelectorAll(".kiki-del-dict-btn").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            const id = btn.dataset.id;
+            btn.textContent = "Deleting...";
+            await localDB.deleteDictionary(id);
+            await refreshDictStats();
+            renderModal();
+          });
+        });
+
+        const fileInput = modal.querySelector(".kiki-modal-file-input");
+        if (fileInput) {
+          fileInput.addEventListener("change", async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            const prog = modal.querySelector(".kiki-modal-progress");
+            const progFill = modal.querySelector(".kiki-modal-prog-fill");
+            const progText = modal.querySelector(".kiki-modal-prog-text");
+            if (prog) prog.style.display = "flex";
+
+            try {
+              toast("Starting Yomitan Import...");
+              const dictInfo = await localImporter.importZip(file, ({ message, percentage }) => {
+                if (progFill) progFill.style.width = percentage + "%";
+                if (progText) progText.textContent = `${percentage}%: ${message}`;
+              });
+              await refreshDictStats();
+              toast(`✦ Installed: ${dictInfo.title} (${dictInfo.termCount.toLocaleString()} terms)`);
+              renderModal();
+            } catch (err) {
+              console.error("[Kiki dict import error]", err);
+              toast("Import error: " + err.message);
+              if (progText) progText.textContent = "Error: " + err.message;
+            }
+          });
+        }
+      } else {
+        const keyInput = modal.querySelector("#kiki-ai-key-input");
+        const toggleBtn = modal.querySelector("#kiki-ai-key-toggle");
+        if (toggleBtn && keyInput) {
+          toggleBtn.addEventListener("click", () => {
+            if (keyInput.type === "password") {
+              keyInput.type = "text";
+              toggleBtn.textContent = "Hide";
+            } else {
+              keyInput.type = "password";
+              toggleBtn.textContent = "Show";
+            }
+          });
+        }
+
+        const langSelect = modal.querySelector("#kiki-ai-lang-select");
+        const promptInput = modal.querySelector("#kiki-ai-prompt-input");
+        const promptLangLabel = modal.querySelector("#kiki-ai-prompt-lang-label");
+        const resetPromptBtn = modal.querySelector("#kiki-ai-prompt-reset-btn");
+
+        let cachedPromptZh = aiCfg.promptZh;
+        let cachedPromptEn = aiCfg.promptEn;
+
+        langSelect?.addEventListener("change", () => {
+          const currentLang = langSelect.value;
+          if (currentLang === "en") {
+            if (promptInput) {
+              cachedPromptZh = promptInput.value;
+              promptInput.value = cachedPromptEn;
+            }
+            if (promptLangLabel) promptLangLabel.textContent = "EN";
+          } else {
+            if (promptInput) {
+              cachedPromptEn = promptInput.value;
+              promptInput.value = cachedPromptZh;
+            }
+            if (promptLangLabel) promptLangLabel.textContent = "ZH";
+          }
+        });
+
+        resetPromptBtn?.addEventListener("click", () => {
+          const currentLang = langSelect?.value || "zh";
+          if (currentLang === "en") {
+            cachedPromptEn = AI_DEFAULTS.promptEn;
+            if (promptInput) promptInput.value = AI_DEFAULTS.promptEn;
+          } else {
+            cachedPromptZh = AI_DEFAULTS.promptZh;
+            if (promptInput) promptInput.value = AI_DEFAULTS.promptZh;
+          }
+          toast("Prompt reset to default template.");
+        });
+
+        const saveBtn = modal.querySelector("#kiki-ai-save-btn");
+        if (saveBtn) {
+          saveBtn.addEventListener("click", () => {
+            const base = modal.querySelector("#kiki-ai-base-input")?.value || "";
+            const key = modal.querySelector("#kiki-ai-key-input")?.value || "";
+            const model = modal.querySelector("#kiki-ai-model-input")?.value || "";
+            const lang = modal.querySelector("#kiki-ai-lang-select")?.value || "zh";
+            if (promptInput) {
+              if (lang === "en") {
+                cachedPromptEn = promptInput.value;
+              } else {
+                cachedPromptZh = promptInput.value;
+              }
+            }
+            saveAiConfig({
+              apiBase: base,
+              apiKey: key,
+              apiModel: model,
+              aiLang: lang,
+              promptZh: cachedPromptZh,
+              promptEn: cachedPromptEn
+            });
+            toast("✦ AI configuration saved.");
+            saveBtn.textContent = "✓ Saved!";
+            setTimeout(() => { saveBtn.textContent = "Save AI Config"; }, 1500);
+          });
+        }
+
+        const pingBtn = modal.querySelector("#kiki-ai-ping-btn");
+        const pingResult = modal.querySelector("#kiki-ai-ping-result");
+        if (pingBtn && pingResult) {
+          pingBtn.addEventListener("click", async () => {
+            const base = modal.querySelector("#kiki-ai-base-input")?.value || "";
+            const key = modal.querySelector("#kiki-ai-key-input")?.value || "";
+            const model = modal.querySelector("#kiki-ai-model-input")?.value || "";
+            if (!key.trim()) {
+              pingResult.style.display = "block";
+              pingResult.style.background = "rgba(239, 68, 68, 0.2)";
+              pingResult.style.color = "#FCA5A5";
+              pingResult.textContent = "Please enter an API Key first.";
+              return;
+            }
+            pingBtn.disabled = true;
+            pingBtn.textContent = "Pinging...";
+            pingResult.style.display = "block";
+            pingResult.style.background = "rgba(255, 255, 255, 0.1)";
+            pingResult.style.color = "#EEE";
+            pingResult.textContent = "Testing connection to " + (base || "OpenAI") + "...";
+
+            try {
+              const res = await pingAiConnection({ base, key, model });
+              if (res.ok) {
+                pingResult.style.background = "rgba(16, 185, 129, 0.2)";
+                pingResult.style.color = "#6EE7B7";
+                pingResult.textContent = "✓ Connected successfully! Model is responsive.";
+              }
+            } catch (err) {
+              pingResult.style.background = "rgba(239, 68, 68, 0.2)";
+              pingResult.style.color = "#FCA5A5";
+              pingResult.textContent = "✗ Connection failed: " + err.message;
+            } finally {
+              pingBtn.disabled = false;
+              pingBtn.textContent = "Ping AI";
+            }
+          });
+        }
+      }
+    }
+
+    renderModal();
+  }
+  window.showSettingsModal = showSettingsModal;
+  window.showDictManagerModal = showSettingsModal;
+
+  function positionCardAboveSubtitles(card) {
+    const capBox = document.getElementById("kiki-captions");
+    const pad = 14;
+    const capRect = capBox ? capBox.getBoundingClientRect() : { top: window.innerHeight - 100 };
+
+    card.style.position = "fixed";
+    card.style.left = "50%";
+    card.style.transform = "translateX(-50%)";
+    card.style.width = `min(580px, calc(100vw - 28px))`;
+    card.style.right = "auto";
+    const bottomOffset = window.innerHeight - capRect.top + 14;
+    card.style.bottom = `${Math.max(70, Math.round(bottomOffset))}px`;
+    card.style.top = "auto";
+    card.style.maxHeight = `${Math.min(480, Math.round(capRect.top - pad * 2))}px`;
+  }
+
+  function getSentenceContext() {
+    if (STATE.idx >= 0 && STATE.idx < STATE.cues.length) {
+      return (STATE.cues[STATE.idx].text || "").trim();
+    }
+    const capBox = document.getElementById("kiki-captions");
+    if (capBox) {
+      const line = capBox.querySelector(".kiki-line");
+      if (line) {
+        const clone = line.cloneNode(true);
+        clone.querySelectorAll(".kiki-cap-ai-btn").forEach(b => b.remove());
+        return (clone.textContent || "").trim();
+      }
+    }
+    return "";
+  }
+
+  function renderNoDefinitionCard(card, term) {
+    setHtml(card, `
+      <div class="kiki-card-header">
+        <div class="kiki-card-term-row" style="justify-content: space-between; align-items: center;">
+          <span class="kiki-card-term">${escapeHtml(term)}</span>
+          <button type="button" class="kiki-card-close-btn" style="background: transparent; border: none; color: #BBB; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+        </div>
+      </div>
+      <div class="kiki-card-empty" style="padding: 10px 4px 6px;">
+        <div style="font-size: 14px; font-weight: 700; margin-bottom: 6px; color: #FFF;">No definition found in local dictionary.</div>
+        <div style="font-size: 12px; opacity: 0.85; margin-bottom: 14px; line-height: 1.4; color: #DDD;">
+          Import an offline dictionary package or configure your AI API key for contextual fallback explanations:
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <label class="kiki-import-trigger-btn" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #2563EB; color: #FFFFFF; padding: 9px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; user-select: none;">
+            <span>📥 Import Yomitan Dictionary (.zip)</span>
+            <input type="file" class="kiki-card-file-input" accept=".zip" style="display: none;">
+          </label>
+          <button type="button" class="kiki-card-open-ai-cfg-btn" style="background: rgba(99, 102, 241, 0.25); color: #C7D2FE; border: 1px solid rgba(165, 180, 252, 0.4); border-radius: 8px; padding: 9px 16px; font-size: 12px; font-weight: 600; cursor: pointer;">
+            🤖 Configure AI API Key (Auto Fallback)
+          </button>
+          <div class="kiki-card-progress" style="display: none; flex-direction: column; gap: 5px; margin-top: 6px;">
+            <div style="background: rgba(255, 255, 255, 0.15); border-radius: 4px; overflow: hidden; height: 6px;">
+              <div class="kiki-card-prog-fill" style="background: #10B981; height: 100%; width: 0%; transition: width 0.2s;"></div>
+            </div>
+            <span class="kiki-card-prog-text" style="font-size: 11px; opacity: 0.9; color: #EEE;">Preparing...</span>
           </div>
-          <span class="kiki-modal-prog-text" style="font-size: 11px; opacity: 0.9; color: #EEE;">Preparing...</span>
         </div>
       </div>
     `);
 
-    modal.querySelector(".kiki-modal-close").addEventListener("click", () => {
-      modal.style.display = "none";
+    card.querySelector(".kiki-card-close-btn")?.addEventListener("click", () => {
+      closeLookup();
     });
 
-    const clearBtn = modal.querySelector(".kiki-modal-clear-all");
-    if (clearBtn) {
-      clearBtn.addEventListener("click", async () => {
-        if (confirm("Are you sure you want to clear all installed dictionaries and local storage? This action cannot be undone.")) {
-          clearBtn.textContent = "Clearing...";
-          await localDB.clearAllStorage();
-          await refreshDictStats();
-          toast("✦ All offline dictionary data cleared.");
-          showDictManagerModal();
-        }
-      });
-    }
-
-    modal.querySelectorAll(".kiki-del-dict-btn").forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        const id = btn.dataset.id;
-        btn.textContent = "Deleting...";
-        await localDB.deleteDictionary(id);
-        await refreshDictStats();
-        showDictManagerModal();
-      });
+    card.querySelector(".kiki-card-open-ai-cfg-btn")?.addEventListener("click", () => {
+      showSettingsModal("ai");
     });
 
-    const fileInput = modal.querySelector(".kiki-modal-file-input");
+    const fileInput = card.querySelector(".kiki-card-file-input");
     if (fileInput) {
       fileInput.addEventListener("change", async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        const prog = modal.querySelector(".kiki-modal-progress");
-        const progFill = modal.querySelector(".kiki-modal-prog-fill");
-        const progText = modal.querySelector(".kiki-modal-prog-text");
-        if (prog) prog.style.display = "flex";
+        const progContainer = card.querySelector(".kiki-card-progress");
+        const progFill = card.querySelector(".kiki-card-prog-fill");
+        const progText = card.querySelector(".kiki-card-prog-text");
+        if (progContainer) progContainer.style.display = "flex";
 
         try {
-          toast("Starting Yomitan Import...");
+          toast("Starting Dictionary Import...");
           const dictInfo = await localImporter.importZip(file, ({ message, percentage }) => {
             if (progFill) progFill.style.width = percentage + "%";
             if (progText) progText.textContent = `${percentage}%: ${message}`;
           });
           await refreshDictStats();
           toast(`✦ Installed: ${dictInfo.title} (${dictInfo.termCount.toLocaleString()} terms)`);
-          showDictManagerModal();
+          const newRes = await localSearch.search(term);
+          if (newRes && newRes.length) {
+            renderYomitanDefinitions(card, term, newRes);
+            localAudio.play(newRes[0].term || term, newRes[0].reading || '');
+          }
         } catch (err) {
           console.error("[Kiki dict import error]", err);
           toast("Import error: " + err.message);
           if (progText) progText.textContent = "Error: " + err.message;
         }
       });
+    }
+  }
+
+  async function explainWithAiInCard(card, term, sentence) {
+    STATE.aiToken = (STATE.aiToken || 0) + 1;
+    const token = STATE.aiToken;
+    abortActiveAi();
+
+    const cfg = getAiConfig();
+    const isEn = cfg.aiLang === "en";
+    const isWholeSentence = !term || term === sentence;
+    const wordPlaceholder = isWholeSentence
+      ? (isEn ? "entire sentence" : "全句")
+      : term;
+    const displayTerm = isWholeSentence
+      ? (isEn ? "Entire Subtitle" : "全句解析")
+      : term;
+
+    const tmpl = isEn ? cfg.promptEn : cfg.promptZh;
+    const system = String(tmpl || AI_DEFAULTS[isEn ? "promptEn" : "promptZh"])
+      .replaceAll("{{word}}", wordPlaceholder)
+      .replaceAll("{{sentence}}", sentence || "");
+    const user = isEn
+      ? (isWholeSentence ? `Subtitle: ${sentence}` : `Word: ${term}\nSubtitle: ${sentence}`)
+      : (isWholeSentence ? `字幕：${sentence}` : `词：${term}\n字幕：${sentence}`);
+
+    if (STATE.lookupEl) {
+      STATE.lookupEl.classList.add("kiki-active");
+    }
+
+    setHtml(card, `
+      <div class="kiki-card-header">
+        <div class="kiki-card-term-row" style="justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span class="kiki-card-term">${escapeHtml(displayTerm)}</span>
+            <span style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px;">✦ AI Context</span>
+            <span style="background: rgba(255,255,255,0.12); color: #DDD; font-size: 11px; padding: 2px 6px; border-radius: 4px;">${escapeHtml(cfg.apiModel || 'gpt-4o-mini')}</span>
+          </div>
+          <button type="button" class="kiki-card-close-btn" style="background: transparent; border: none; color: #BBB; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+        </div>
+      </div>
+
+      <div style="background: rgba(255, 255, 255, 0.06); border-left: 3px solid #6366F1; padding: 7px 12px; border-radius: 0 8px 8px 0; margin-bottom: 12px; font-size: 12.5px; color: #CBD5E1; font-style: italic; line-height: 1.4;">
+        “${escapeHtml(sentence || "(no sentence context)")}”
+      </div>
+
+      <div class="kiki-ai-body" style="font-size: 14px; line-height: 1.6; color: #F1F5F9; min-height: 48px; max-height: 320px; overflow-y: auto;">
+        <span class="kiki-ai-thinking" style="color: #94A3B8; display: inline-flex; align-items: center; gap: 6px;">
+          ✦ Thinking in context…
+        </span>
+      </div>
+    `);
+
+    card.querySelector(".kiki-card-close-btn")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeLookup();
+    });
+
+    const bodyEl = card.querySelector(".kiki-ai-body");
+    let accumulated = "";
+
+    activeAiAbort = new AbortController();
+    const curAbort = activeAiAbort;
+
+    try {
+      await streamChat({
+        base: cfg.apiBase,
+        key: cfg.apiKey,
+        model: cfg.apiModel,
+        system,
+        user,
+        signal: curAbort.signal,
+        onChunk: (text, thinking) => {
+          if (token !== STATE.aiToken || !card.classList.contains("show")) return;
+          if (thinking && !accumulated) {
+            setHtml(bodyEl, `<span class="kiki-ai-thinking" style="color: #94A3B8;">✦ Reasoning…</span>`);
+          } else if (text) {
+            accumulated += text;
+            setHtml(bodyEl, renderMarkdownText(accumulated));
+          }
+        }
+      });
+      if (token === STATE.aiToken && card.classList.contains("show") && !accumulated) {
+        setHtml(bodyEl, `<span style="color: #94A3B8;">(Empty response from AI)</span>`);
+      }
+    } catch (err) {
+      if (token !== STATE.aiToken || !card.classList.contains("show")) return;
+      if (curAbort.signal.aborted) return;
+      setHtml(bodyEl, `
+        <div style="color: #F87171; font-size: 13px; line-height: 1.5; padding: 6px 0;">
+          <div style="font-weight: 700; margin-bottom: 4px;">AI Request Failed</div>
+          <div style="opacity: 0.9; margin-bottom: 8px;">${escapeHtml(err.message || String(err))}</div>
+          <button type="button" class="kiki-open-ai-settings-btn" style="background: rgba(99, 102, 241, 0.3); color: #C7D2FE; border: 1px solid rgba(165, 180, 252, 0.4); border-radius: 6px; padding: 5px 10px; font-size: 11.5px; cursor: pointer;">⚙ Check AI Configuration</button>
+        </div>
+      `);
+      card.querySelector(".kiki-open-ai-settings-btn")?.addEventListener("click", () => {
+        showSettingsModal("ai");
+      });
+    } finally {
+      if (activeAiAbort === curAbort) activeAiAbort = null;
     }
   }
 
@@ -3299,82 +3956,18 @@ window.KikiAudioEngine = KikiAudioEngine;
     `);
     card.classList.add("show");
 
-    // Compute stable position strictly ABOVE floating subtitles (Fixed Center)
-    const capBox = document.getElementById("kiki-captions");
-    const capRect = capBox ? capBox.getBoundingClientRect() : wordEl.getBoundingClientRect();
-    const pad = 14;
-
-    card.style.position = "fixed";
-    card.style.left = "50%";
-    card.style.transform = "translateX(-50%)";
-    card.style.width = `min(580px, calc(100vw - 28px))`;
-    card.style.right = "auto";
-    // Anchor bottom of card 14px ABOVE top of caption box so it NEVER blocks subtitles!
-    const bottomOffset = window.innerHeight - capRect.top + 14;
-    card.style.bottom = `${Math.round(bottomOffset)}px`;
-    card.style.top = "auto";
-    card.style.maxHeight = `${Math.min(480, Math.round(capRect.top - pad * 2))}px`;
+    positionCardAboveSubtitles(card);
 
     const results = await lookupWord(term);
     if (!card.classList.contains("show") || STATE.lookupWord !== term) return;
 
     if (!results || !results.length) {
-      setHtml(card, `
-        <div class="kiki-card-header">
-          <div class="kiki-card-term-row">
-            <span class="kiki-card-term">${escapeHtml(term)}</span>
-          </div>
-        </div>
-        <div class="kiki-card-empty" style="padding: 12px 6px 8px;">
-          <div style="font-size: 14px; font-weight: 700; margin-bottom: 6px; color: #FFF;">No definition found in local dictionary.</div>
-          <div style="font-size: 11px; opacity: 0.85; margin-bottom: 12px; line-height: 1.4; color: #DDD;">
-            Import your Yomitan <code>.zip</code> dictionary (e.g. OALD 10, JMdict) directly into YouTube for instant offline lookup:
-          </div>
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            <label class="kiki-import-trigger-btn" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #2563EB; color: #FFFFFF; padding: 9px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; user-select: none;">
-              <span>📥 Import Yomitan Dictionary (.zip)</span>
-              <input type="file" class="kiki-card-file-input" accept=".zip" style="display: none;">
-            </label>
-            <div class="kiki-card-progress" style="display: none; flex-direction: column; gap: 5px; margin-top: 6px;">
-              <div style="background: rgba(255, 255, 255, 0.15); border-radius: 4px; overflow: hidden; height: 6px;">
-                <div class="kiki-card-prog-fill" style="background: #10B981; height: 100%; width: 0%; transition: width 0.2s;"></div>
-              </div>
-              <span class="kiki-card-prog-text" style="font-size: 11px; opacity: 0.9; color: #EEE;">Preparing...</span>
-            </div>
-          </div>
-        </div>
-      `);
-
-      const fileInput = card.querySelector(".kiki-card-file-input");
-      if (fileInput) {
-        fileInput.addEventListener("change", async (e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          const progContainer = card.querySelector(".kiki-card-progress");
-          const progFill = card.querySelector(".kiki-card-prog-fill");
-          const progText = card.querySelector(".kiki-card-prog-text");
-          if (progContainer) progContainer.style.display = "flex";
-
-          try {
-            toast("Starting Dictionary Import...");
-            const dictInfo = await localImporter.importZip(file, ({ message, percentage }) => {
-              if (progFill) progFill.style.width = percentage + "%";
-              if (progText) progText.textContent = `${percentage}%: ${message}`;
-            });
-            await refreshDictStats();
-            toast(`✦ Installed: ${dictInfo.title} (${dictInfo.termCount.toLocaleString()} terms)`);
-            const newRes = await localSearch.search(term);
-            if (newRes && newRes.length) {
-              renderYomitanDefinitions(card, term, newRes);
-              localAudio.play(newRes[0].term || term, newRes[0].reading || '');
-            }
-          } catch (err) {
-            console.error("[Kiki dict import error]", err);
-            toast("Import error: " + err.message);
-            if (progText) progText.textContent = "Error: " + err.message;
-          }
-        });
+      const cfg = getAiConfig();
+      if (cfg.apiKey && cfg.apiKey.trim()) {
+        explainWithAiInCard(card, term, getSentenceContext());
+        return;
       }
+      renderNoDefinitionCard(card, term);
       return;
     }
 
@@ -3419,6 +4012,36 @@ window.KikiAudioEngine = KikiAudioEngine;
       });
       row.appendChild(audioBtn);
 
+      if (idx === 0) {
+        const aiSwitchBtn = document.createElement("button");
+        aiSwitchBtn.type = "button";
+        aiSwitchBtn.className = "kiki-card-ai-switch-btn";
+        aiSwitchBtn.title = "Force AI Context Explanation";
+        aiSwitchBtn.textContent = "✦ Ask AI";
+        aiSwitchBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const cfg = getAiConfig();
+          if (!cfg.apiKey || !cfg.apiKey.trim()) {
+            showSettingsModal("ai");
+            toast("Please configure your AI API Key first.");
+            return;
+          }
+          explainWithAiInCard(card, originalTerm, getSentenceContext());
+        });
+        row.appendChild(aiSwitchBtn);
+
+        const closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.className = "kiki-card-close-btn";
+        closeBtn.style.cssText = "margin-left: auto; background: transparent; border: none; color: #BBB; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px;";
+        closeBtn.innerHTML = "&times;";
+        closeBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          closeLookup();
+        });
+        row.appendChild(closeBtn);
+      }
+
       if (res.reading && res.reading !== res.term) {
         const rSpan = document.createElement("span");
         rSpan.className = "kiki-card-reading";
@@ -3440,53 +4063,53 @@ window.KikiAudioEngine = KikiAudioEngine;
       } else if (res.reason) {
         const b = document.createElement("span");
         b.className = "kiki-badge kiki-badge-redirect";
-        b.textContent = `‹ ${res.reason}`;
+        b.textContent = `← ${res.reason}`;
         badges.appendChild(b);
       }
 
-      // Definition tags (POS, CEFR Level, Vocab list)
-      if (res.defTags) {
-        const tokens = res.defTags.split(/\s+/).filter(Boolean);
-        tokens.forEach(tok => {
-          const b = document.createElement("span");
-          let cls = "kiki-badge-pos";
-          if (/^[A-C][1-2]$/i.test(tok)) {
-            cls = "kiki-badge-level";
-          } else if (/Oxford|OPAL|3000|5000/i.test(tok)) {
-            cls = "kiki-badge-vocab";
-          } else if (tok === "non-lemma") {
-            cls = "kiki-badge-dict";
-          }
-          b.className = `kiki-badge ${cls}`;
-          b.textContent = tok;
-          badges.appendChild(b);
-        });
-      }
-
-      if (res.dictTitle) {
+      (res.dictionaries || []).forEach((dict) => {
         const b = document.createElement("span");
         b.className = "kiki-badge kiki-badge-dict";
-        b.textContent = res.dictTitle;
+        b.textContent = dict;
         badges.appendChild(b);
-      }
+      });
 
-      if (badges.children.length) header.appendChild(badges);
+      (res.pos || []).forEach((pos) => {
+        const b = document.createElement("span");
+        b.className = "kiki-badge kiki-badge-pos";
+        b.textContent = pos;
+        badges.appendChild(b);
+      });
+
+      (res.level || []).forEach((lvl) => {
+        const b = document.createElement("span");
+        b.className = "kiki-badge kiki-badge-level";
+        b.textContent = lvl;
+        badges.appendChild(b);
+      });
+
+      (res.vocab || []).forEach((vcb) => {
+        const b = document.createElement("span");
+        b.className = "kiki-badge kiki-badge-vocab";
+        b.textContent = vcb;
+        badges.appendChild(b);
+      });
+
+      if (badges.children.length > 0) {
+        header.appendChild(badges);
+      }
       entryDiv.appendChild(header);
 
       const body = document.createElement("div");
       body.className = "kiki-card-body";
 
-      if (Array.isArray(res.glossary)) {
+      if (res.glossary && res.glossary.length) {
         res.glossary.forEach((item) => {
-          if (typeof item === 'string') {
+          if (typeof item === "string") {
             const p = document.createElement("p");
             p.textContent = item;
             body.appendChild(p);
-          } else if (Array.isArray(item) && typeof item[0] === 'string') {
-            const p = document.createElement("p");
-            setHtml(p, `<em>See:</em> <strong>${escapeHtml(item[0])}</strong>`);
-            body.appendChild(p);
-          } else if (item && typeof item === 'object') {
+          } else if (typeof item === "object" && item !== null) {
             body.appendChild(KikiStructuredContent.render(item));
           }
         });
@@ -3498,6 +4121,7 @@ window.KikiAudioEngine = KikiAudioEngine;
   }
 
   function closeLookup() {
+    abortActiveAi();
     STATE.lookupEl = null;
     STATE.lookupWord = "";
     document.querySelectorAll(".kiki-word.kiki-active").forEach((n) => n.classList.remove("kiki-active"));
@@ -3512,7 +4136,9 @@ window.KikiAudioEngine = KikiAudioEngine;
   }
 
   document.addEventListener("pointerdown", (e) => {
-    if (STATE.lookupEl && !e.target.closest("#kiki-yomitan-card, .kiki-word")) {
+    const card = $("#kiki-yomitan-card");
+    const cardOpen = card && card.classList.contains("show");
+    if ((STATE.lookupEl || cardOpen) && !e.target.closest("#kiki-yomitan-card, .kiki-word, .kiki-cap-ai-btn, #kiki-settings-modal, #kiki-hud, .kiki-toast")) {
       closeLookup();
     }
   }, true);
@@ -3723,6 +4349,51 @@ window.KikiAudioEngine = KikiAudioEngine;
     }
     const line = document.createElement("div");
     line.className = "kiki-line";
+
+    // Left-side tactile rounded-square AI button
+    const aiBtn = document.createElement("button");
+    aiBtn.type = "button";
+    aiBtn.className = "kiki-cap-ai-btn";
+    aiBtn.title = "Ask AI Context Explanation";
+    aiBtn.innerHTML = '<span class="kiki-ai-icon">✦</span><span class="kiki-ai-text">AI</span>';
+    aiBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    aiBtn.addEventListener("touchstart", (e) => e.stopPropagation());
+    aiBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+
+      const card = ensureYomitanCard();
+      const cardOpen = card.classList.contains("show");
+
+      // If card is already open showing AI, clicking AI again toggles close and resumes playback
+      if (cardOpen && card.querySelector(".kiki-ai-body")) {
+        closeLookup();
+        return;
+      }
+
+      pauseVideoSync();
+      STATE.pausedForLookup = true;
+
+      // Reset pointer debounce to immediately allow tap on word
+      lastWordPointerEl = null;
+      lastWordPointerTime = 0;
+
+      const currentWord = STATE.lookupWord || (STATE.lookupEl?.textContent || "").trim();
+      const sentence = text || getSentenceContext();
+      const target = currentWord || sentence;
+
+      positionCardAboveSubtitles(card);
+      card.classList.add("show");
+
+      const cfg = getAiConfig();
+      if (!cfg.apiKey || !cfg.apiKey.trim()) {
+        showSettingsModal("ai");
+        toast("Please configure your AI API Key first.");
+        return;
+      }
+
+      explainWithAiInCard(card, target, sentence);
+    });
+    line.appendChild(aiBtn);
 
     const tokens = tokenizeLine(text);
     tokens.forEach((tok) => {
@@ -4401,5 +5072,5 @@ window.KikiAudioEngine = KikiAudioEngine;
     }[c]));
   }
 
-  console.log('[Kiki Immersion] v1.0.0 Loaded on:', location.href);
+  console.log('[Kiki Immersion] v1.1.0 Loaded on:', location.href);
 })();
