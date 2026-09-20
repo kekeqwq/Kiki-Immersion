@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - YouTube Adapter & Subtitle Pipeline
-// Version: 1.2.0
+// Version: 1.2.1
 // =============================================================
 
   // -------------------------------------------------------------
@@ -931,25 +931,33 @@
   function onNativeCaptionsMutated() {
     suppressNativeCaptions();
 
-    // If structured cues not yet loaded, check if video.textTracks has loaded genuine cues
-    if (!STATE.cues || !STATE.cues.length) {
-      const trackCues = extractCuesFromVideo();
-      if (trackCues && trackCues.length > 2) {
-        applyLoadedCues(trackCues, "video-track");
-        return;
-      }
+    // If structured cues already loaded, never run live mode!
+    if (STATE.cues && STATE.cues.length > 0) return;
 
-      // Fallback: render live caption text if available so user sees subtitles immediately
-      const liveText = getLiveCaptionText();
-      if (liveText && liveText !== lastObservedText) {
-        lastObservedText = liveText;
-        STATE.lastObservedText = liveText;
-        STATE.liveMode = true;
-        const box = document.getElementById("kiki-captions");
-        if (box && typeof window.renderTextToBox === "function") {
-          window.renderTextToBox(box, liveText);
-        }
+    // While actively loading/fetching tracks, DO NOT preempt!
+    if (STATE.loadingTracks || loadingTracks) return;
+
+    // Only allow live fallback if all structured tracks failed or user enabled it
+    if (!STATE.liveFallbackAllowed && !STATE.liveMode) return;
+
+    // If structured cues not yet loaded, check if video.textTracks has loaded genuine cues
+    const trackCues = extractCuesFromVideo();
+    if (trackCues && trackCues.length > 2) {
+      applyLoadedCues(trackCues, "video-track");
+      return;
+    }
+
+    // True Fallback: render live caption text if available
+    const liveText = getLiveCaptionText();
+    if (liveText && liveText !== lastObservedText) {
+      lastObservedText = liveText;
+      STATE.lastObservedText = liveText;
+      STATE.liveMode = true;
+      const box = document.getElementById("kiki-captions");
+      if (box && typeof window.renderTextToBox === "function") {
+        window.renderTextToBox(box, liveText);
       }
+      updateHud();
     }
   }
 
@@ -1068,24 +1076,48 @@
     return [];
   }
 
+  function detectVideoLanguage() {
+    try {
+      const mp = document.getElementById("movie_player") || playerEl();
+      if (mp && typeof mp.getPlayerResponse === "function") {
+        const pr = mp.getPlayerResponse();
+        const dl = pr?.microformat?.playerMicroformatRenderer?.defaultLanguage;
+        if (typeof dl === "string" && dl) return dl.toLowerCase();
+      }
+    } catch {}
+    try {
+      const dl = window.ytInitialPlayerResponse?.microformat?.playerMicroformatRenderer?.defaultLanguage;
+      if (typeof dl === "string" && dl) return dl.toLowerCase();
+    } catch {}
+    try {
+      const docLang = document.documentElement.lang;
+      if (docLang && typeof docLang === "string") return docLang.toLowerCase();
+    } catch {}
+    return "en";
+  }
+
+  function getTrackScore(t, videoLang = "en") {
+    if (!t) return 0;
+    const lang = (t.languageCode || "").toLowerCase();
+    const isOfficial = t.kind !== "asr";
+    const baseLang = videoLang.split("-")[0];
+    const isPrimary = lang === videoLang || lang.startsWith(baseLang);
+
+    // 1. Primary language official track (e.g. EN US/UK for English video, JA for Japanese video)
+    if (isPrimary && isOfficial) return 1000;
+    // 2. Auto-generated track of primary language
+    if (isPrimary && !isOfficial) return 800;
+    // 3. Other official tracks
+    if (isOfficial) return 500;
+    // 4. Other auto-generated tracks
+    return 200;
+  }
+
   function pickBestTrack(tracks) {
     if (!tracks || !tracks.length) return null;
-    const enOfficial = tracks.find(t => {
-      const code = (t.languageCode || "").toLowerCase();
-      return code.startsWith("en") && t.kind !== "asr";
-    });
-    if (enOfficial) return enOfficial;
-
-    const enAny = tracks.find(t => (t.languageCode || "").toLowerCase().startsWith("en"));
-    if (enAny) return enAny;
-
-    const jaOfficial = tracks.find(t => {
-      const code = (t.languageCode || "").toLowerCase();
-      return code.startsWith("ja") && t.kind !== "asr";
-    });
-    if (jaOfficial) return jaOfficial;
-
-    return tracks[0];
+    const vidLang = detectVideoLanguage();
+    const sorted = [...tracks].sort((a, b) => getTrackScore(b, vidLang) - getTrackScore(a, vidLang));
+    return sorted[0];
   }
 
   async function fetchExact(url, timeoutMs = 2500) {
@@ -1153,7 +1185,7 @@
     } catch {}
   }
 
-  function applyLoadedCues(cues, source) {
+  function applyLoadedCues(cues, source, track = null) {
     if (!cues || !cues.length) return;
     if (cues.length <= 2 && cues.some((c) => isDummyCueText(c.text))) {
       return;
@@ -1162,25 +1194,98 @@
     STATE.idx = -1;
     STATE.loadingTracks = false;
     loadingTracks = false;
+    STATE.liveMode = false;
+    STATE.liveFallbackAllowed = false;
+    STATE.lastObservedText = "";
+    lastObservedText = "";
+    if (track) {
+      STATE.activeTrack = track;
+    }
     renderCue(-1);
     lastFailedVideoId = "";
     suppressNativeCaptions();
-    updateHud(`✦ CC: ${cues.length}`);
-    toast(`Captions: ${cues.length} lines (${source})`);
+    updateHud();
+    const trackLabel = track?.name?.simpleText || source;
+    toast(`Captions: ${cues.length} lines (${trackLabel})`);
   }
 
-  async function loadForVideo() {
-    if (loadingTracks) return;
+  async function selectSubtitleTrack(track) {
+    if (!track) return;
+    STATE.activeTrack = track;
+    updateHud(`CC: ${track.name?.simpleText || track.languageCode} ▾`);
+    toast(`Switching to ${track.name?.simpleText || track.languageCode}...`);
+
+    // 1. First try fetching timedtext directly
+    if (track.baseUrl) {
+      let raw = await fetchExact(track.baseUrl, 2000);
+      let cues = parseAny(raw);
+      if (!cues || !cues.length) {
+        const jsonUrl = track.baseUrl.includes("fmt=")
+          ? track.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
+          : track.baseUrl + (track.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
+        raw = await fetchExact(jsonUrl, 2000);
+        cues = parseAny(raw);
+      }
+      if (cues && cues.length) {
+        applyLoadedCues(cues, track.kind === "asr" ? "auto" : "official", track);
+        return;
+      }
+    }
+
+    // 2. If timedtext download is blocked (e.g. PoToken), activate player track & engage live fallback
+    try {
+      const p = playerEl();
+      if (p && typeof p.setOption === "function") {
+        p.setOption("captions", "track", {
+          languageCode: track.languageCode,
+          vss_id: track.vssId || track.vss_id || ""
+        });
+      }
+    } catch {}
+    ensureCaptionsActive();
+    STATE.cues = [];
+    STATE.liveFallbackAllowed = true;
+    STATE.liveMode = true;
+    STATE.lastObservedText = "";
+    lastObservedText = "";
+    renderCue(-1);
+    updateHud();
+    toast(`Switched to ${track.name?.simpleText || track.languageCode} (Realtime)`);
+  }
+  window.selectSubtitleTrack = selectSubtitleTrack;
+
+  function switchToLiveSubtitles() {
+    STATE.cues = [];
+    STATE.liveFallbackAllowed = true;
+    STATE.liveMode = true;
+    STATE.lastObservedText = "";
+    lastObservedText = "";
+    ensureCaptionsActive();
+    renderCue(-1);
+    updateHud("CC: Live ▾");
+    toast("Switched to realtime subtitles");
+  }
+  window.switchToLiveSubtitles = switchToLiveSubtitles;
+
+  async function loadForVideo(force = false) {
+    if (loadingTracks && !force) return;
     const vid = currentVideoId();
     if (!vid) {
-      updateHud("✦ Kiki (Home)");
+      updateHud("Home ▾");
       return;
     }
 
     loadingTracks = true;
     STATE.loadingTracks = true;
+    STATE.liveFallbackAllowed = false;
+    if (force) {
+      STATE.cues = [];
+      STATE.liveMode = false;
+      STATE.lastObservedText = "";
+      lastObservedText = "";
+    }
     lastLoadAttemptTime = Date.now();
-    updateHud("✦ Loading CC...");
+    updateHud("CC: Loading... ▾");
 
     try {
       // 1. Wire sniffer cache
@@ -1233,27 +1338,19 @@
       }
 
       if (tracks && tracks.length) {
-        STATE.tracks = tracks;
-        const sorted = [...tracks].sort((a, b) => {
-          const aEn = (a.languageCode || "").toLowerCase().startsWith("en");
-          const bEn = (b.languageCode || "").toLowerCase().startsWith("en");
-          if (aEn && !bEn) return -1;
-          if (!aEn && bEn) return 1;
-          const aOfficial = a.kind !== "asr";
-          const bOfficial = b.kind !== "asr";
-          if (aOfficial && !bOfficial) return -1;
-          if (!aOfficial && bOfficial) return 1;
-          return 0;
-        });
+        const vidLang = detectVideoLanguage();
+        const sorted = [...tracks].sort((a, b) => getTrackScore(b, vidLang) - getTrackScore(a, vidLang));
+        STATE.tracks = sorted;
+        if (!STATE.activeTrack || !sorted.some(t => t.baseUrl === STATE.activeTrack?.baseUrl)) {
+          STATE.activeTrack = sorted[0];
+        }
 
-        // Limit to top 3 tracks to avoid long sequential delays
+        // Limit to top 3 prioritized tracks to avoid long sequential delays
         for (const pick of sorted.slice(0, 3)) {
           if (!pick || !pick.baseUrl) continue;
-          // Try baseUrl directly first
           let raw = await fetchExact(pick.baseUrl, 2000);
           let cues = parseAny(raw);
           if (!cues || !cues.length) {
-            // Then try with fmt=json3
             const jsonUrl = pick.baseUrl.includes("fmt=")
               ? pick.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
               : pick.baseUrl + (pick.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
@@ -1261,7 +1358,7 @@
             cues = parseAny(raw);
           }
           if (cues && cues.length) {
-            applyLoadedCues(cues, pick.kind === "asr" ? "auto" : "official");
+            applyLoadedCues(cues, pick.kind === "asr" ? "auto" : "official", pick);
             return;
           }
         }
@@ -1293,13 +1390,32 @@
         return;
       }
 
+      // 7. True Fallback: timedtext download blocked or empty -> engage live caption stream
+      STATE.liveFallbackAllowed = true;
       lastFailedVideoId = vid;
-      updateHud("✦ CC: None (Tap to Search)");
+      const liveText = getLiveCaptionText();
+      if (liveText) {
+        lastObservedText = liveText;
+        STATE.lastObservedText = liveText;
+        STATE.liveMode = true;
+        const box = document.getElementById("kiki-captions");
+        if (box && typeof window.renderTextToBox === "function") {
+          window.renderTextToBox(box, liveText);
+        }
+        updateHud("CC: Live ▾");
+        if (!liveToastShown) {
+          liveToastShown = true;
+          toast("Captions: Realtime stream fallback");
+        }
+      } else {
+        updateHud("CC: None ▾");
+      }
     } finally {
       loadingTracks = false;
       STATE.loadingTracks = false;
     }
   }
+  window.reloadSubtitlesForVideo = () => loadForVideo(true);
 
   function dismissMiniplayer() {
     try {
@@ -1457,7 +1573,7 @@
         const vState = v ? (v.paused ? "Paused" : "Play") : "NoVid";
         const hudState = hudEl ? (hudEl.offsetWidth > 0 ? `${hudEl.offsetWidth}x${hudEl.offsetHeight}` : "0px") : "NULL";
         const trkCount = v && v.textTracks ? v.textTracks.length : 0;
-        const kikiVer = window.__kiki_engine_version || localStorage.getItem("kiki_cache_version") || "1.2.0";
+        const kikiVer = window.__kiki_engine_version || localStorage.getItem("kiki_cache_version") || "1.2.1";
         toast(`✦ Kiki v${kikiVer} [HUD:${hudState}|${vState}|TT:${trkCount}]`);
       }, 700);
       setTimeout(() => {
@@ -1476,4 +1592,4 @@
 
 
 
-  console.log('[Kiki Immersion] v1.2.0 Modular Engine Loaded on:', location.href);
+  console.log('[Kiki Immersion] v1.2.1 Modular Engine Loaded on:', location.href);

@@ -2,27 +2,19 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Frosted Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.0-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.0-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.1-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.0-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
 ## 📢 Release Overview
 
-**v1.2.0 (The Modular & Universal Engine Milestone)**:
-- **Full Modular Architecture**: Decoupled the monolithic codebase into 5 dedicated modules:
-  - `core.js`: Core state, styling, storage, and utility helpers.
-  - `yomitan.js`: Offline IndexedDB Yomitan dictionary engine, deinflector, and audio engine.
-  - `ai.js`: OpenAI streaming client, MarginNote 4 style exploration pills, and multi-turn chat.
-  - `ui.js`: HUD bar, Yomitan card UI, settings modal, about/hot-update modal, and subtitles overlay.
-  - `youtube.js`: YouTube player hooks, timedtext track scraper, fullscreen gestures, and SPA observer.
-- **Permanent Lightweight Loader (`loader.user.js` v1.0.0)**:
-  - Starts instantly with zero cold-start delay by executing from local storage cache.
-  - Automatic first-run bootstrap: downloads modules in parallel directly from GitHub raw.
-- **In-App One-Click Hot Update**:
-  - Top HUD bar features a dedicated `ℹ️ About` button.
-  - Interactive "关于/热更" tab displays the status of all 5 modules and cache timestamp.
-  - One-click `⚡ 检查并重新从 GitHub 拉取缓存 (一键热更新)` updates the modules in-place without needing to manually replace scripts in your extension.
-- **Universal Engine Unification**: Officially retired the browser-specific naming limitation in favor of **Kiki Immersion**, paving the way for seamless multi-browser compatibility (Safari, iPadOS, Chrome, Edge).
+**v1.2.1 (Streamlined HUD, Track Dropdown & True Subtitle Fallback)**:
+- **Streamlined HUD Bar**: Refined to 5 essential, high-utility controls: `⚙ Settings`, `ℹ️ About`, `💬 Sub: On/Off`, `CC Status (with Dropdown)`, and `🔄 Reload`.
+- **Elongated Subtitle Track Status**: Displays the active track name and loaded line count (e.g., `CC: English · 142 ▾`, `CC: English (auto) · 98 ▾`, `CC: Live ▾`).
+- **Interactive Track Dropdown Menu**: Clicking the CC status button opens a dropdown listing all available official and auto-generated subtitle tracks, allowing instant manual track switching.
+- **Strict Subtitle Priority**: Prioritizes official native audio language tracks (e.g. US/UK English for EN videos, Japanese for JA videos), followed by auto-generated captions, with realtime word-by-word subtitles as true fallback.
+- **True Fallback Protection**: Fixed live subtitles from preempting timedtext while tracks are being fetched.
+- **Centered Toast Notifications**: Re-anchored feedback toasts to the exact center of the screen so they are never obscured by top bars or controls.
 
 ---
 
@@ -30,17 +22,17 @@
 
 Choose either installation method based on your device and browser:
 
-### 方式一：远程直链安装 (推荐 macOS / 桌面浏览器)
-适用于支持远程 URL 订阅的扩展（如 macOS Safari Userscripts、Chrome/Edge Tampermonkey、Violentmonkey）：
+### Method 1: Remote URL Installation (Recommended for macOS & Desktop Browsers)
+For extensions that support remote URL subscriptions (e.g., macOS Safari Userscripts, Chrome/Edge Tampermonkey, Violentmonkey):
 
-👉 **[点击安装 loader.user.js](https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/loader.user.js)**
+👉 **[Install loader.user.js](https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/loader.user.js)**
 
-*如果扩展未自动拦截打开，请复制上方直链并在扩展管理面板中选择「从 URL 安装/添加」。*
+*If your extension does not automatically intercept the link, copy the URL and select "Install from URL" in your extension dashboard.*
 
 ---
 
-### 方式二：代码复制粘贴安装 (针对 iPadOS Userscripts 扩展)
-由于 iPadOS 的 Userscripts 扩展目前不支援直接通过 remote 链接拉取脚本，请**直接复制下方代码**，在 iPadOS Userscripts 扩展中点击「新建脚本」并粘贴保存即可：
+### Method 2: Copy-Paste Installation (For iPadOS Userscripts Extension)
+Since iPadOS Userscripts does not support direct remote URL script installation, copy the code below, create a new script in Userscripts, and paste it:
 
 ```javascript
 // ==UserScript==

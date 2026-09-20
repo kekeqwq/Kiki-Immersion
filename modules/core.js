@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.2.0
+// Version: 1.2.1
 // =============================================================
 
   // -------------------------------------------------------------
@@ -38,13 +38,14 @@
   }
 
 
-  window.__kiki_engine_version = "1.2.0";
+  window.__kiki_engine_version = "1.2.1";
 
   const STATE = window.STATE = {
     enabled: true,
     subsVisible: localStorage.getItem("kiki_subs_visible") !== "0",
     cues: [],
     tracks: [],
+    activeTrack: null,
     idx: -1,
     pausedForLookup: false,
     lookupEl: null,
@@ -54,8 +55,9 @@
     hudVisible: false,
     loadingTracks: false,
     liveMode: false,
+    liveFallbackAllowed: false,
     lastObservedText: "",
-    engineVersion: "1.2.0"
+    engineVersion: "1.2.1"
   };
 
   // -------------------------------------------------------------
@@ -412,17 +414,30 @@
       50% { opacity: 1; }
     }
 
-    /* On-Screen Feedback Toast (Frosted Glassmorphism) */
+    /* On-Screen Feedback Toast (Centered Glassmorphism) */
     #kiki-toast {
-      position: fixed !important; top: 12% !important; left: 50% !important; transform: translateX(-50%) !important;
-      pointer-events: none !important; font-size: 14px !important; font-weight: 600 !important; padding: 0.5em 1.25em !important;
-      background: rgba(18, 18, 22, 0.75) !important; color: #FFFFFF !important;
-      backdrop-filter: blur(16px) saturate(160%) !important;
-      -webkit-backdrop-filter: blur(16px) saturate(160%) !important;
-      border: 1.5px solid rgba(255, 255, 255, 0.28) !important;
-      border-radius: 14px !important; opacity: 0; transition: opacity 0.2s linear !important; z-index: 2147483646 !important;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65) !important;
-      user-select: none !important; -webkit-user-select: none !important;
+      position: fixed !important;
+      top: 50% !important;
+      left: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      pointer-events: none !important;
+      font-size: 14px !important;
+      font-weight: 600 !important;
+      padding: 0.65em 1.45em !important;
+      background: rgba(18, 18, 22, 0.88) !important;
+      color: #FFFFFF !important;
+      backdrop-filter: blur(20px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.35) !important;
+      border-radius: 16px !important;
+      opacity: 0;
+      transition: opacity 0.18s ease-out !important;
+      z-index: 2147483647 !important;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8) !important;
+      user-select: none !important;
+      -webkit-user-select: none !important;
+      max-width: min(85vw, 500px) !important;
+      text-align: center !important;
     }
     #kiki-toast.show { opacity: 1 !important; }
 
@@ -468,6 +483,86 @@
     #kiki-hud .kiki-hud-btn:active {
       background: rgba(255, 255, 255, 0.45) !important;
       transform: scale(0.93) !important;
+    }
+    #kiki-hud .kiki-hud-cc {
+      min-width: 140px !important;
+      max-width: 250px !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+      text-align: center !important;
+    }
+
+    /* Subtitle Track Selection Dropdown Menu */
+    #kiki-track-dropdown {
+      position: fixed !important; z-index: 2147483647 !important;
+      background: rgba(20, 20, 26, 0.95) !important;
+      backdrop-filter: blur(24px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.3) !important;
+      border-radius: 16px !important;
+      padding: 6px !important;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85) !important;
+      min-width: 240px !important;
+      max-width: 340px !important;
+      max-height: 380px !important;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 4px !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+      user-select: none !important;
+      -webkit-user-select: none !important;
+    }
+    .kiki-dropdown-header {
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.5px !important;
+      color: #94A3B8 !important;
+      padding: 6px 10px 4px !important;
+    }
+    .kiki-dropdown-item {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      padding: 8px 12px !important;
+      border-radius: 10px !important;
+      font-size: 12.5px !important;
+      font-weight: 500 !important;
+      color: #E2E8F0 !important;
+      cursor: pointer !important;
+      background: transparent !important;
+      border: none !important;
+      text-align: left !important;
+      transition: background 0.12s ease !important;
+      gap: 8px !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+    .kiki-dropdown-item:hover, .kiki-dropdown-item:active {
+      background: rgba(255, 255, 255, 0.14) !important;
+      color: #FFFFFF !important;
+    }
+    .kiki-dropdown-item.active {
+      background: rgba(37, 99, 235, 0.35) !important;
+      color: #93C5FD !important;
+      font-weight: 700 !important;
+      border: 1px solid rgba(96, 165, 250, 0.4) !important;
+    }
+    .kiki-dropdown-tag {
+      font-size: 10.5px !important;
+      padding: 1.5px 6px !important;
+      border-radius: 4px !important;
+      background: rgba(255, 255, 255, 0.12) !important;
+      color: #CBD5E1 !important;
+      flex-shrink: 0 !important;
+    }
+    .kiki-dropdown-sep {
+      height: 1px !important;
+      background: rgba(255, 255, 255, 0.12) !important;
+      margin: 4px 2px !important;
     }
 
     #kiki-hub-iframe { display: none !important; width: 0 !important; height: 0 !important; }

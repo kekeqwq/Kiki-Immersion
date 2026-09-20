@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.2.0
+// Version: 1.2.1
 // =============================================================
 
   function playVideoSync() {
@@ -178,14 +178,11 @@
       hud.style.cssText = "position: fixed !important; top: 64px !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 2147483647 !important; display: none !important; align-items: center !important; gap: 8px !important; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important; font-size: 13px !important; font-weight: 600 !important; background: rgba(20, 20, 24, 0.92) !important; backdrop-filter: blur(20px) saturate(180%) !important; -webkit-backdrop-filter: blur(20px) saturate(180%) !important; color: #FFFFFF !important; padding: 7px 15px !important; border-radius: 22px !important; border: 1.5px solid rgba(255, 255, 255, 0.4) !important; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.85) !important; pointer-events: auto !important; cursor: grab !important; visibility: hidden !important; opacity: 0 !important; transition: opacity 0.2s ease, visibility 0.2s ease !important; user-select: none !important; -webkit-user-select: none !important; touch-action: none !important;";
       setHtml(hud, `
         <div class="kiki-hud-dot" style="width: 10px !important; height: 10px !important; border-radius: 50% !important; background: #10B981 !important; flex-shrink: 0 !important; box-shadow: 0 0 10px #10B981 !important;"></div>
-        <button type="button" class="kiki-hud-btn kiki-hud-title" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 700 !important; white-space: nowrap !important;" title="Tap for diagnostics">✦ Kiki</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-settings" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="Open Settings (Dictionary & AI)">⚙ Settings</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-about" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="About Kiki Immersion & Hot-Update">ℹ️ About</button>
         <button type="button" class="kiki-hud-btn kiki-hud-sub" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="Toggle Subtitles Visibility">💬 Sub: On</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-cc" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;">CC: Searching...</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-dict" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;">📖 Dict: 0</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-ai" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="AI API Configuration">🤖 AI: Off</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-fs" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;">⛶ Fullscreen</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-about" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="About & Hot-Update">ℹ️ About</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-ctrl" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;">⚙ Controls</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-cc" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 12px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important; min-width: 140px !important; max-width: 250px !important; text-overflow: ellipsis !important; overflow: hidden !important;" title="Click to select subtitle track">CC: Searching... ▾</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-reload" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="Reload Subtitles for Current Video">🔄 Reload</button>
       `);
       targetHost.appendChild(hud);
       makeDraggable(hud);
@@ -200,6 +197,14 @@
         }
       });
 
+      bindHudButton(hud.querySelector(".kiki-hud-settings"), () => {
+        showSettingsModal("dict");
+      });
+
+      bindHudButton(hud.querySelector(".kiki-hud-about"), () => {
+        showSettingsModal("about");
+      });
+
       bindHudButton(hud.querySelector(".kiki-hud-sub"), () => {
         STATE.subsVisible = !(STATE.subsVisible !== false);
         localStorage.setItem("kiki_subs_visible", STATE.subsVisible ? "1" : "0");
@@ -208,55 +213,146 @@
           if (!STATE.subsVisible) {
             box.classList.add("kiki-hidden");
             closeLookup();
-            toast("✦ Subtitles hidden");
+            toast("Subtitles hidden");
           } else {
             box.classList.remove("kiki-hidden");
             if (STATE.idx >= 0) renderCue(STATE.idx);
-            toast("✦ Subtitles enabled");
+            toast("Subtitles enabled");
           }
         }
         updateHud();
       });
 
-      bindHudButton(hud.querySelector(".kiki-hud-fs"), () => {
-        toggleWebpageFs();
+      bindHudButton(hud.querySelector(".kiki-hud-cc"), (e) => {
+        const btn = hud.querySelector(".kiki-hud-cc");
+        toggleTrackDropdown(btn);
       });
 
-      bindHudButton(hud.querySelector(".kiki-hud-about"), () => {
-        showSettingsModal("about");
-      });
-
-      bindHudButton(hud.querySelector(".kiki-hud-ctrl"), () => {
-        toggleNativeChrome();
-      });
-
-      bindHudButton(hud.querySelector(".kiki-hud-dict"), () => {
-        showSettingsModal("dict");
-      });
-
-      bindHudButton(hud.querySelector(".kiki-hud-ai"), () => {
-        showSettingsModal("ai");
-      });
-
-      bindHudButton(hud.querySelector(".kiki-hud-cc"), () => {
-        toast("Activating Captions...");
-        ensureCaptionsActive();
-        loadForVideo();
-      });
-
-      bindHudButton(hud.querySelector(".kiki-hud-title"), () => {
-        const cueCount = STATE.cues ? STATE.cues.length : 0;
-        const v = videoEl();
-        const status = v ? (v.paused ? "Paused" : "Playing") : "No Video";
-        const live = lastObservedText ? "YES" : "NO";
-        const trackCount = v && v.textTracks ? v.textTracks.length : 0;
-        const domCount = queryCaptionElements(".ytp-caption-segment, .caption-visual-line").length;
-        const kikiVer = window.__kiki_engine_version || localStorage.getItem("kiki_cache_version") || "1.2.0";
-        toast(`✦ Kiki v${kikiVer} [${status}] | CC=${cueCount} | Live=${live} | DOM=${domCount} | Trk=${trackCount}`);
+      bindHudButton(hud.querySelector(".kiki-hud-reload"), () => {
+        toast("🔄 Reloading captions...");
+        if (typeof window.reloadSubtitlesForVideo === "function") {
+          window.reloadSubtitlesForVideo();
+        } else if (typeof loadForVideo === "function") {
+          loadForVideo(true);
+        }
       });
     }
 
     return hud;
+  }
+
+  function closeTrackDropdown() {
+    const d = document.getElementById("kiki-track-dropdown");
+    if (d) d.remove();
+  }
+
+  function toggleTrackDropdown(anchorBtn) {
+    const existing = document.getElementById("kiki-track-dropdown");
+    if (existing) {
+      existing.remove();
+      return;
+    }
+    const rect = anchorBtn ? anchorBtn.getBoundingClientRect() : null;
+    const dropdown = document.createElement("div");
+    dropdown.id = "kiki-track-dropdown";
+
+    if (rect) {
+      const top = Math.min(window.innerHeight - 280, rect.bottom + 8);
+      const left = Math.max(10, Math.min(window.innerWidth - 260, rect.left + (rect.width / 2) - 120));
+      dropdown.style.setProperty("top", `${Math.round(top)}px`, "important");
+      dropdown.style.setProperty("left", `${Math.round(left)}px`, "important");
+    } else {
+      dropdown.style.setProperty("top", "110px", "important");
+      dropdown.style.setProperty("left", "50%", "important");
+      dropdown.style.setProperty("transform", "translateX(-50%)", "important");
+    }
+
+    const tracks = STATE.tracks || [];
+    let itemsHtml = `<div class="kiki-dropdown-header">Available Tracks (${tracks.length})</div>`;
+
+    if (!tracks.length) {
+      itemsHtml += `
+        <button type="button" class="kiki-dropdown-item" data-action="rescan">
+          <span>🔍 No tracks discovered yet (Tap to scan)</span>
+        </button>
+      `;
+    } else {
+      tracks.forEach((t, idx) => {
+        const lang = (t.languageCode || "").toUpperCase();
+        const rawName = t.name?.simpleText || t.name || lang || "Track " + (idx + 1);
+        const isAsr = t.kind === "asr";
+        const tag = isAsr ? "Auto" : "Official";
+        const isActive = STATE.activeTrack
+          ? (STATE.activeTrack.baseUrl === t.baseUrl || (STATE.activeTrack.languageCode === t.languageCode && STATE.activeTrack.kind === t.kind))
+          : (!STATE.liveMode && idx === 0 && STATE.cues?.length > 0);
+        const check = isActive ? "✓ " : "";
+        itemsHtml += `
+          <button type="button" class="kiki-dropdown-item ${isActive ? 'active' : ''}" data-action="select-track" data-index="${idx}">
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${check}${escapeHtml(rawName)}</span>
+            <span class="kiki-dropdown-tag">${tag}</span>
+          </button>
+        `;
+      });
+    }
+
+    itemsHtml += `
+      <div class="kiki-dropdown-sep"></div>
+      <button type="button" class="kiki-dropdown-item ${STATE.liveMode ? 'active' : ''}" data-action="live-fallback">
+        <span>${STATE.liveMode ? '✓ ' : ''}⚡ Realtime Subtitles (Fallback)</span>
+        <span class="kiki-dropdown-tag">Live</span>
+      </button>
+      <button type="button" class="kiki-dropdown-item" data-action="reload-cc">
+        <span>🔄 Reload All Subtitles</span>
+      </button>
+    `;
+
+    setHtml(dropdown, itemsHtml);
+    (document.body || document.documentElement).appendChild(dropdown);
+
+    dropdown.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const btn = e.target.closest(".kiki-dropdown-item");
+      if (!btn) return;
+      const action = btn.dataset.action;
+      if (action === "select-track") {
+        const idx = parseInt(btn.dataset.index, 10);
+        const trk = tracks[idx];
+        if (trk && typeof window.selectSubtitleTrack === "function") {
+          window.selectSubtitleTrack(trk);
+        }
+      } else if (action === "live-fallback") {
+        if (typeof window.switchToLiveSubtitles === "function") {
+          window.switchToLiveSubtitles();
+        } else {
+          STATE.liveMode = true;
+          STATE.liveFallbackAllowed = true;
+          STATE.cues = [];
+          renderCue(-1);
+          updateHud("CC: Live ▾");
+          toast("Switched to Live Subtitles");
+        }
+      } else if (action === "reload-cc" || action === "rescan") {
+        toast("🔄 Reloading captions...");
+        if (typeof window.reloadSubtitlesForVideo === "function") {
+          window.reloadSubtitlesForVideo();
+        } else if (typeof loadForVideo === "function") {
+          loadForVideo(true);
+        }
+      }
+      closeTrackDropdown();
+    });
+
+    const outsideClick = (e) => {
+      if (!dropdown.contains(e.target) && (!anchorBtn || !anchorBtn.contains(e.target))) {
+        closeTrackDropdown();
+        document.removeEventListener("click", outsideClick);
+        document.removeEventListener("touchstart", outsideClick);
+      }
+    };
+    setTimeout(() => {
+      document.addEventListener("click", outsideClick);
+      document.addEventListener("touchstart", outsideClick, { passive: true });
+    }, 50);
   }
 
   function updateHud(statusText) {
@@ -264,10 +360,6 @@
     if (!hud) return;
     const subBtn = hud.querySelector(".kiki-hud-sub");
     const ccBtn = hud.querySelector(".kiki-hud-cc");
-    const fsBtn = hud.querySelector(".kiki-hud-fs");
-    const ctrlBtn = hud.querySelector(".kiki-hud-ctrl");
-    const dictBtn = hud.querySelector(".kiki-hud-dict");
-    const aiBtn = hud.querySelector(".kiki-hud-ai");
 
     if (subBtn) {
       const on = STATE.subsVisible !== false;
@@ -285,48 +377,26 @@
     }
 
     if (ccBtn) {
-      let targetCc = "CC: Searching...";
+      let targetCc = "CC: Searching... ▾";
       if (statusText) {
-        targetCc = statusText;
+        targetCc = statusText.includes("▾") ? statusText : statusText + " ▾";
       } else if (!currentVideoId()) {
-        targetCc = "Home";
+        targetCc = "Home ▾";
       } else if (STATE.cues && STATE.cues.length) {
-        targetCc = `CC: ${STATE.cues.length}`;
+        const rawName = STATE.activeTrack?.name?.simpleText || STATE.activeTrack?.languageCode?.toUpperCase() || "Track";
+        const shortName = rawName.length > 14 ? rawName.slice(0, 12) + "…" : rawName;
+        targetCc = `CC: ${shortName} · ${STATE.cues.length} ▾`;
       } else if (STATE.liveMode || STATE.lastObservedText || (typeof lastObservedText !== "undefined" && lastObservedText)) {
-        targetCc = "CC: Live";
+        const trkName = STATE.activeTrack?.name?.simpleText || "";
+        targetCc = trkName ? `CC: Live (${trkName.slice(0, 10)}) ▾` : "CC: Live ▾";
       } else if (STATE.loadingTracks) {
-        targetCc = "Loading CC...";
+        targetCc = "CC: Loading... ▾";
       } else {
-        targetCc = "CC: None (Tap to Search)";
+        targetCc = "CC: None ▾";
       }
       if (ccBtn.textContent !== targetCc) ccBtn.textContent = targetCc;
-    }
-
-    if (fsBtn) {
-      const targetFs = STATE.fs ? "✕ Exit FS" : "⛶ Fullscreen";
-      if (fsBtn.textContent !== targetFs) fsBtn.textContent = targetFs;
-    }
-
-    if (ctrlBtn) {
-      const showChrome = document.documentElement.classList.contains("kiki-show-chrome");
-      const targetCtrl = showChrome ? "✕ Hide Bar" : "⚙ Controls";
-      if (ctrlBtn.textContent !== targetCtrl) ctrlBtn.textContent = targetCtrl;
-    }
-
-    if (dictBtn) {
-      const targetDict = cachedDictCount > 0 ? `📖 Dict: ${cachedDictCount}` : "📖 Import Dict";
-      if (dictBtn.textContent !== targetDict) dictBtn.textContent = targetDict;
-    }
-
-    if (aiBtn) {
-      const cfg = getAiConfig();
-      const hasKey = !!(cfg.apiKey && cfg.apiKey.trim());
-      const targetAi = hasKey ? "🤖 AI: On" : "🤖 AI: Off";
-      if (aiBtn.textContent !== targetAi) aiBtn.textContent = targetAi;
-      if (aiBtn.dataset.active !== (hasKey ? "1" : "0")) {
-        aiBtn.dataset.active = hasKey ? "1" : "0";
-        aiBtn.style.setProperty("background", hasKey ? "rgba(99, 102, 241, 0.35)" : "rgba(255, 255, 255, 0.2)", "important");
-        aiBtn.style.setProperty("border-color", hasKey ? "rgba(165, 180, 252, 0.5)" : "rgba(255, 255, 255, 0.3)", "important");
+      if (ccBtn.getAttribute("title") !== "Click to select subtitle track") {
+        ccBtn.setAttribute("title", "Click to select subtitle track");
       }
     }
   }
@@ -854,7 +924,7 @@
                 const t = await r.text();
                 localStorage.setItem("kiki_mod_" + m, t);
               }));
-              localStorage.setItem("kiki_cache_version", "1.2.0");
+              localStorage.setItem("kiki_cache_version", "1.2.1");
               localStorage.setItem("kiki_cache_time", new Date().toLocaleString());
               toast("✅ Core modules updated, reloading...");
               setTimeout(() => location.reload(), 800);
@@ -915,7 +985,7 @@
         `;
             } else if (activeTab === "about") {
         const cacheTime = localStorage.getItem("kiki_cache_time") || "Initial / Local";
-        const engineVer = localStorage.getItem("kiki_cache_version") || "1.2.0";
+        const engineVer = localStorage.getItem("kiki_cache_version") || "1.2.1";
         const loaderVer = localStorage.getItem("kiki_loader_version") || (window.__kiki_loader_version || "1.0.0");
         const modulesList = ["core", "yomitan", "ai", "ui", "youtube"];
         const modStatus = modulesList.map(m => {
@@ -1109,7 +1179,7 @@
                 const t = await r.text();
                 localStorage.setItem("kiki_mod_" + m, t);
               }));
-              localStorage.setItem("kiki_cache_version", "1.2.0");
+              localStorage.setItem("kiki_cache_version", "1.2.1");
               localStorage.setItem("kiki_cache_time", new Date().toLocaleString());
               toast("✅ Core modules updated, reloading...");
               setTimeout(() => location.reload(), 800);

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.2.0
+// @version      1.2.1
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, and touch/mouse gestures.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -21,7 +21,7 @@
 
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.2.0
+// Version: 1.2.1
 // =============================================================
 
   // -------------------------------------------------------------
@@ -59,13 +59,14 @@
   }
 
 
-  window.__kiki_engine_version = "1.2.0";
+  window.__kiki_engine_version = "1.2.1";
 
   const STATE = window.STATE = {
     enabled: true,
     subsVisible: localStorage.getItem("kiki_subs_visible") !== "0",
     cues: [],
     tracks: [],
+    activeTrack: null,
     idx: -1,
     pausedForLookup: false,
     lookupEl: null,
@@ -75,8 +76,9 @@
     hudVisible: false,
     loadingTracks: false,
     liveMode: false,
+    liveFallbackAllowed: false,
     lastObservedText: "",
-    engineVersion: "1.2.0"
+    engineVersion: "1.2.1"
   };
 
   // -------------------------------------------------------------
@@ -433,17 +435,30 @@
       50% { opacity: 1; }
     }
 
-    /* On-Screen Feedback Toast (Frosted Glassmorphism) */
+    /* On-Screen Feedback Toast (Centered Glassmorphism) */
     #kiki-toast {
-      position: fixed !important; top: 12% !important; left: 50% !important; transform: translateX(-50%) !important;
-      pointer-events: none !important; font-size: 14px !important; font-weight: 600 !important; padding: 0.5em 1.25em !important;
-      background: rgba(18, 18, 22, 0.75) !important; color: #FFFFFF !important;
-      backdrop-filter: blur(16px) saturate(160%) !important;
-      -webkit-backdrop-filter: blur(16px) saturate(160%) !important;
-      border: 1.5px solid rgba(255, 255, 255, 0.28) !important;
-      border-radius: 14px !important; opacity: 0; transition: opacity 0.2s linear !important; z-index: 2147483646 !important;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65) !important;
-      user-select: none !important; -webkit-user-select: none !important;
+      position: fixed !important;
+      top: 50% !important;
+      left: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      pointer-events: none !important;
+      font-size: 14px !important;
+      font-weight: 600 !important;
+      padding: 0.65em 1.45em !important;
+      background: rgba(18, 18, 22, 0.88) !important;
+      color: #FFFFFF !important;
+      backdrop-filter: blur(20px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.35) !important;
+      border-radius: 16px !important;
+      opacity: 0;
+      transition: opacity 0.18s ease-out !important;
+      z-index: 2147483647 !important;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8) !important;
+      user-select: none !important;
+      -webkit-user-select: none !important;
+      max-width: min(85vw, 500px) !important;
+      text-align: center !important;
     }
     #kiki-toast.show { opacity: 1 !important; }
 
@@ -489,6 +504,86 @@
     #kiki-hud .kiki-hud-btn:active {
       background: rgba(255, 255, 255, 0.45) !important;
       transform: scale(0.93) !important;
+    }
+    #kiki-hud .kiki-hud-cc {
+      min-width: 140px !important;
+      max-width: 250px !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+      text-align: center !important;
+    }
+
+    /* Subtitle Track Selection Dropdown Menu */
+    #kiki-track-dropdown {
+      position: fixed !important; z-index: 2147483647 !important;
+      background: rgba(20, 20, 26, 0.95) !important;
+      backdrop-filter: blur(24px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.3) !important;
+      border-radius: 16px !important;
+      padding: 6px !important;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85) !important;
+      min-width: 240px !important;
+      max-width: 340px !important;
+      max-height: 380px !important;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 4px !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+      user-select: none !important;
+      -webkit-user-select: none !important;
+    }
+    .kiki-dropdown-header {
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.5px !important;
+      color: #94A3B8 !important;
+      padding: 6px 10px 4px !important;
+    }
+    .kiki-dropdown-item {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      padding: 8px 12px !important;
+      border-radius: 10px !important;
+      font-size: 12.5px !important;
+      font-weight: 500 !important;
+      color: #E2E8F0 !important;
+      cursor: pointer !important;
+      background: transparent !important;
+      border: none !important;
+      text-align: left !important;
+      transition: background 0.12s ease !important;
+      gap: 8px !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+    .kiki-dropdown-item:hover, .kiki-dropdown-item:active {
+      background: rgba(255, 255, 255, 0.14) !important;
+      color: #FFFFFF !important;
+    }
+    .kiki-dropdown-item.active {
+      background: rgba(37, 99, 235, 0.35) !important;
+      color: #93C5FD !important;
+      font-weight: 700 !important;
+      border: 1px solid rgba(96, 165, 250, 0.4) !important;
+    }
+    .kiki-dropdown-tag {
+      font-size: 10.5px !important;
+      padding: 1.5px 6px !important;
+      border-radius: 4px !important;
+      background: rgba(255, 255, 255, 0.12) !important;
+      color: #CBD5E1 !important;
+      flex-shrink: 0 !important;
+    }
+    .kiki-dropdown-sep {
+      height: 1px !important;
+      background: rgba(255, 255, 255, 0.12) !important;
+      margin: 4px 2px !important;
     }
 
     #kiki-hub-iframe { display: none !important; width: 0 !important; height: 0 !important; }
@@ -795,7 +890,7 @@ window.KikiStructuredContent = KikiStructuredContent;
 
 // =============================================================
 // Kiki Immersion - Yomitan Offline Dictionary & Audio Engine
-// Version: 1.2.0
+// Version: 1.2.1
 // =============================================================
 
   // =============================================================
@@ -2640,7 +2735,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - AI Contextual Engine & Multi-Turn Chat
-// Version: 1.2.0
+// Version: 1.2.1
 // =============================================================
 
   async function pingAiConnection({ base, key, model }) {
@@ -3172,7 +3267,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.2.0
+// Version: 1.2.1
 // =============================================================
 
   function playVideoSync() {
@@ -3350,14 +3445,11 @@ window.KikiAudioEngine = KikiAudioEngine;
       hud.style.cssText = "position: fixed !important; top: 64px !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 2147483647 !important; display: none !important; align-items: center !important; gap: 8px !important; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important; font-size: 13px !important; font-weight: 600 !important; background: rgba(20, 20, 24, 0.92) !important; backdrop-filter: blur(20px) saturate(180%) !important; -webkit-backdrop-filter: blur(20px) saturate(180%) !important; color: #FFFFFF !important; padding: 7px 15px !important; border-radius: 22px !important; border: 1.5px solid rgba(255, 255, 255, 0.4) !important; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.85) !important; pointer-events: auto !important; cursor: grab !important; visibility: hidden !important; opacity: 0 !important; transition: opacity 0.2s ease, visibility 0.2s ease !important; user-select: none !important; -webkit-user-select: none !important; touch-action: none !important;";
       setHtml(hud, `
         <div class="kiki-hud-dot" style="width: 10px !important; height: 10px !important; border-radius: 50% !important; background: #10B981 !important; flex-shrink: 0 !important; box-shadow: 0 0 10px #10B981 !important;"></div>
-        <button type="button" class="kiki-hud-btn kiki-hud-title" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 700 !important; white-space: nowrap !important;" title="Tap for diagnostics">✦ Kiki</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-settings" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="Open Settings (Dictionary & AI)">⚙ Settings</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-about" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="About Kiki Immersion & Hot-Update">ℹ️ About</button>
         <button type="button" class="kiki-hud-btn kiki-hud-sub" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="Toggle Subtitles Visibility">💬 Sub: On</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-cc" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;">CC: Searching...</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-dict" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;">📖 Dict: 0</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-ai" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="AI API Configuration">🤖 AI: Off</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-fs" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;">⛶ Fullscreen</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-about" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="About & Hot-Update">ℹ️ About</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-ctrl" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;">⚙ Controls</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-cc" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 12px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important; min-width: 140px !important; max-width: 250px !important; text-overflow: ellipsis !important; overflow: hidden !important;" title="Click to select subtitle track">CC: Searching... ▾</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-reload" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="Reload Subtitles for Current Video">🔄 Reload</button>
       `);
       targetHost.appendChild(hud);
       makeDraggable(hud);
@@ -3372,6 +3464,14 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
       });
 
+      bindHudButton(hud.querySelector(".kiki-hud-settings"), () => {
+        showSettingsModal("dict");
+      });
+
+      bindHudButton(hud.querySelector(".kiki-hud-about"), () => {
+        showSettingsModal("about");
+      });
+
       bindHudButton(hud.querySelector(".kiki-hud-sub"), () => {
         STATE.subsVisible = !(STATE.subsVisible !== false);
         localStorage.setItem("kiki_subs_visible", STATE.subsVisible ? "1" : "0");
@@ -3380,55 +3480,146 @@ window.KikiAudioEngine = KikiAudioEngine;
           if (!STATE.subsVisible) {
             box.classList.add("kiki-hidden");
             closeLookup();
-            toast("✦ Subtitles hidden");
+            toast("Subtitles hidden");
           } else {
             box.classList.remove("kiki-hidden");
             if (STATE.idx >= 0) renderCue(STATE.idx);
-            toast("✦ Subtitles enabled");
+            toast("Subtitles enabled");
           }
         }
         updateHud();
       });
 
-      bindHudButton(hud.querySelector(".kiki-hud-fs"), () => {
-        toggleWebpageFs();
+      bindHudButton(hud.querySelector(".kiki-hud-cc"), (e) => {
+        const btn = hud.querySelector(".kiki-hud-cc");
+        toggleTrackDropdown(btn);
       });
 
-      bindHudButton(hud.querySelector(".kiki-hud-about"), () => {
-        showSettingsModal("about");
-      });
-
-      bindHudButton(hud.querySelector(".kiki-hud-ctrl"), () => {
-        toggleNativeChrome();
-      });
-
-      bindHudButton(hud.querySelector(".kiki-hud-dict"), () => {
-        showSettingsModal("dict");
-      });
-
-      bindHudButton(hud.querySelector(".kiki-hud-ai"), () => {
-        showSettingsModal("ai");
-      });
-
-      bindHudButton(hud.querySelector(".kiki-hud-cc"), () => {
-        toast("Activating Captions...");
-        ensureCaptionsActive();
-        loadForVideo();
-      });
-
-      bindHudButton(hud.querySelector(".kiki-hud-title"), () => {
-        const cueCount = STATE.cues ? STATE.cues.length : 0;
-        const v = videoEl();
-        const status = v ? (v.paused ? "Paused" : "Playing") : "No Video";
-        const live = lastObservedText ? "YES" : "NO";
-        const trackCount = v && v.textTracks ? v.textTracks.length : 0;
-        const domCount = queryCaptionElements(".ytp-caption-segment, .caption-visual-line").length;
-        const kikiVer = window.__kiki_engine_version || localStorage.getItem("kiki_cache_version") || "1.2.0";
-        toast(`✦ Kiki v${kikiVer} [${status}] | CC=${cueCount} | Live=${live} | DOM=${domCount} | Trk=${trackCount}`);
+      bindHudButton(hud.querySelector(".kiki-hud-reload"), () => {
+        toast("🔄 Reloading captions...");
+        if (typeof window.reloadSubtitlesForVideo === "function") {
+          window.reloadSubtitlesForVideo();
+        } else if (typeof loadForVideo === "function") {
+          loadForVideo(true);
+        }
       });
     }
 
     return hud;
+  }
+
+  function closeTrackDropdown() {
+    const d = document.getElementById("kiki-track-dropdown");
+    if (d) d.remove();
+  }
+
+  function toggleTrackDropdown(anchorBtn) {
+    const existing = document.getElementById("kiki-track-dropdown");
+    if (existing) {
+      existing.remove();
+      return;
+    }
+    const rect = anchorBtn ? anchorBtn.getBoundingClientRect() : null;
+    const dropdown = document.createElement("div");
+    dropdown.id = "kiki-track-dropdown";
+
+    if (rect) {
+      const top = Math.min(window.innerHeight - 280, rect.bottom + 8);
+      const left = Math.max(10, Math.min(window.innerWidth - 260, rect.left + (rect.width / 2) - 120));
+      dropdown.style.setProperty("top", `${Math.round(top)}px`, "important");
+      dropdown.style.setProperty("left", `${Math.round(left)}px`, "important");
+    } else {
+      dropdown.style.setProperty("top", "110px", "important");
+      dropdown.style.setProperty("left", "50%", "important");
+      dropdown.style.setProperty("transform", "translateX(-50%)", "important");
+    }
+
+    const tracks = STATE.tracks || [];
+    let itemsHtml = `<div class="kiki-dropdown-header">Available Tracks (${tracks.length})</div>`;
+
+    if (!tracks.length) {
+      itemsHtml += `
+        <button type="button" class="kiki-dropdown-item" data-action="rescan">
+          <span>🔍 No tracks discovered yet (Tap to scan)</span>
+        </button>
+      `;
+    } else {
+      tracks.forEach((t, idx) => {
+        const lang = (t.languageCode || "").toUpperCase();
+        const rawName = t.name?.simpleText || t.name || lang || "Track " + (idx + 1);
+        const isAsr = t.kind === "asr";
+        const tag = isAsr ? "Auto" : "Official";
+        const isActive = STATE.activeTrack
+          ? (STATE.activeTrack.baseUrl === t.baseUrl || (STATE.activeTrack.languageCode === t.languageCode && STATE.activeTrack.kind === t.kind))
+          : (!STATE.liveMode && idx === 0 && STATE.cues?.length > 0);
+        const check = isActive ? "✓ " : "";
+        itemsHtml += `
+          <button type="button" class="kiki-dropdown-item ${isActive ? 'active' : ''}" data-action="select-track" data-index="${idx}">
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${check}${escapeHtml(rawName)}</span>
+            <span class="kiki-dropdown-tag">${tag}</span>
+          </button>
+        `;
+      });
+    }
+
+    itemsHtml += `
+      <div class="kiki-dropdown-sep"></div>
+      <button type="button" class="kiki-dropdown-item ${STATE.liveMode ? 'active' : ''}" data-action="live-fallback">
+        <span>${STATE.liveMode ? '✓ ' : ''}⚡ Realtime Subtitles (Fallback)</span>
+        <span class="kiki-dropdown-tag">Live</span>
+      </button>
+      <button type="button" class="kiki-dropdown-item" data-action="reload-cc">
+        <span>🔄 Reload All Subtitles</span>
+      </button>
+    `;
+
+    setHtml(dropdown, itemsHtml);
+    (document.body || document.documentElement).appendChild(dropdown);
+
+    dropdown.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const btn = e.target.closest(".kiki-dropdown-item");
+      if (!btn) return;
+      const action = btn.dataset.action;
+      if (action === "select-track") {
+        const idx = parseInt(btn.dataset.index, 10);
+        const trk = tracks[idx];
+        if (trk && typeof window.selectSubtitleTrack === "function") {
+          window.selectSubtitleTrack(trk);
+        }
+      } else if (action === "live-fallback") {
+        if (typeof window.switchToLiveSubtitles === "function") {
+          window.switchToLiveSubtitles();
+        } else {
+          STATE.liveMode = true;
+          STATE.liveFallbackAllowed = true;
+          STATE.cues = [];
+          renderCue(-1);
+          updateHud("CC: Live ▾");
+          toast("Switched to Live Subtitles");
+        }
+      } else if (action === "reload-cc" || action === "rescan") {
+        toast("🔄 Reloading captions...");
+        if (typeof window.reloadSubtitlesForVideo === "function") {
+          window.reloadSubtitlesForVideo();
+        } else if (typeof loadForVideo === "function") {
+          loadForVideo(true);
+        }
+      }
+      closeTrackDropdown();
+    });
+
+    const outsideClick = (e) => {
+      if (!dropdown.contains(e.target) && (!anchorBtn || !anchorBtn.contains(e.target))) {
+        closeTrackDropdown();
+        document.removeEventListener("click", outsideClick);
+        document.removeEventListener("touchstart", outsideClick);
+      }
+    };
+    setTimeout(() => {
+      document.addEventListener("click", outsideClick);
+      document.addEventListener("touchstart", outsideClick, { passive: true });
+    }, 50);
   }
 
   function updateHud(statusText) {
@@ -3436,10 +3627,6 @@ window.KikiAudioEngine = KikiAudioEngine;
     if (!hud) return;
     const subBtn = hud.querySelector(".kiki-hud-sub");
     const ccBtn = hud.querySelector(".kiki-hud-cc");
-    const fsBtn = hud.querySelector(".kiki-hud-fs");
-    const ctrlBtn = hud.querySelector(".kiki-hud-ctrl");
-    const dictBtn = hud.querySelector(".kiki-hud-dict");
-    const aiBtn = hud.querySelector(".kiki-hud-ai");
 
     if (subBtn) {
       const on = STATE.subsVisible !== false;
@@ -3457,48 +3644,26 @@ window.KikiAudioEngine = KikiAudioEngine;
     }
 
     if (ccBtn) {
-      let targetCc = "CC: Searching...";
+      let targetCc = "CC: Searching... ▾";
       if (statusText) {
-        targetCc = statusText;
+        targetCc = statusText.includes("▾") ? statusText : statusText + " ▾";
       } else if (!currentVideoId()) {
-        targetCc = "Home";
+        targetCc = "Home ▾";
       } else if (STATE.cues && STATE.cues.length) {
-        targetCc = `CC: ${STATE.cues.length}`;
+        const rawName = STATE.activeTrack?.name?.simpleText || STATE.activeTrack?.languageCode?.toUpperCase() || "Track";
+        const shortName = rawName.length > 14 ? rawName.slice(0, 12) + "…" : rawName;
+        targetCc = `CC: ${shortName} · ${STATE.cues.length} ▾`;
       } else if (STATE.liveMode || STATE.lastObservedText || (typeof lastObservedText !== "undefined" && lastObservedText)) {
-        targetCc = "CC: Live";
+        const trkName = STATE.activeTrack?.name?.simpleText || "";
+        targetCc = trkName ? `CC: Live (${trkName.slice(0, 10)}) ▾` : "CC: Live ▾";
       } else if (STATE.loadingTracks) {
-        targetCc = "Loading CC...";
+        targetCc = "CC: Loading... ▾";
       } else {
-        targetCc = "CC: None (Tap to Search)";
+        targetCc = "CC: None ▾";
       }
       if (ccBtn.textContent !== targetCc) ccBtn.textContent = targetCc;
-    }
-
-    if (fsBtn) {
-      const targetFs = STATE.fs ? "✕ Exit FS" : "⛶ Fullscreen";
-      if (fsBtn.textContent !== targetFs) fsBtn.textContent = targetFs;
-    }
-
-    if (ctrlBtn) {
-      const showChrome = document.documentElement.classList.contains("kiki-show-chrome");
-      const targetCtrl = showChrome ? "✕ Hide Bar" : "⚙ Controls";
-      if (ctrlBtn.textContent !== targetCtrl) ctrlBtn.textContent = targetCtrl;
-    }
-
-    if (dictBtn) {
-      const targetDict = cachedDictCount > 0 ? `📖 Dict: ${cachedDictCount}` : "📖 Import Dict";
-      if (dictBtn.textContent !== targetDict) dictBtn.textContent = targetDict;
-    }
-
-    if (aiBtn) {
-      const cfg = getAiConfig();
-      const hasKey = !!(cfg.apiKey && cfg.apiKey.trim());
-      const targetAi = hasKey ? "🤖 AI: On" : "🤖 AI: Off";
-      if (aiBtn.textContent !== targetAi) aiBtn.textContent = targetAi;
-      if (aiBtn.dataset.active !== (hasKey ? "1" : "0")) {
-        aiBtn.dataset.active = hasKey ? "1" : "0";
-        aiBtn.style.setProperty("background", hasKey ? "rgba(99, 102, 241, 0.35)" : "rgba(255, 255, 255, 0.2)", "important");
-        aiBtn.style.setProperty("border-color", hasKey ? "rgba(165, 180, 252, 0.5)" : "rgba(255, 255, 255, 0.3)", "important");
+      if (ccBtn.getAttribute("title") !== "Click to select subtitle track") {
+        ccBtn.setAttribute("title", "Click to select subtitle track");
       }
     }
   }
@@ -4026,7 +4191,7 @@ window.KikiAudioEngine = KikiAudioEngine;
                 const t = await r.text();
                 localStorage.setItem("kiki_mod_" + m, t);
               }));
-              localStorage.setItem("kiki_cache_version", "1.2.0");
+              localStorage.setItem("kiki_cache_version", "1.2.1");
               localStorage.setItem("kiki_cache_time", new Date().toLocaleString());
               toast("✅ Core modules updated, reloading...");
               setTimeout(() => location.reload(), 800);
@@ -4087,7 +4252,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         `;
             } else if (activeTab === "about") {
         const cacheTime = localStorage.getItem("kiki_cache_time") || "Initial / Local";
-        const engineVer = localStorage.getItem("kiki_cache_version") || "1.2.0";
+        const engineVer = localStorage.getItem("kiki_cache_version") || "1.2.1";
         const loaderVer = localStorage.getItem("kiki_loader_version") || (window.__kiki_loader_version || "1.0.0");
         const modulesList = ["core", "yomitan", "ai", "ui", "youtube"];
         const modStatus = modulesList.map(m => {
@@ -4281,7 +4446,7 @@ window.KikiAudioEngine = KikiAudioEngine;
                 const t = await r.text();
                 localStorage.setItem("kiki_mod_" + m, t);
               }));
-              localStorage.setItem("kiki_cache_version", "1.2.0");
+              localStorage.setItem("kiki_cache_version", "1.2.1");
               localStorage.setItem("kiki_cache_time", new Date().toLocaleString());
               toast("✅ Core modules updated, reloading...");
               setTimeout(() => location.reload(), 800);
@@ -4666,7 +4831,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - YouTube Adapter & Subtitle Pipeline
-// Version: 1.2.0
+// Version: 1.2.1
 // =============================================================
 
   // -------------------------------------------------------------
@@ -5597,25 +5762,33 @@ window.KikiAudioEngine = KikiAudioEngine;
   function onNativeCaptionsMutated() {
     suppressNativeCaptions();
 
-    // If structured cues not yet loaded, check if video.textTracks has loaded genuine cues
-    if (!STATE.cues || !STATE.cues.length) {
-      const trackCues = extractCuesFromVideo();
-      if (trackCues && trackCues.length > 2) {
-        applyLoadedCues(trackCues, "video-track");
-        return;
-      }
+    // If structured cues already loaded, never run live mode!
+    if (STATE.cues && STATE.cues.length > 0) return;
 
-      // Fallback: render live caption text if available so user sees subtitles immediately
-      const liveText = getLiveCaptionText();
-      if (liveText && liveText !== lastObservedText) {
-        lastObservedText = liveText;
-        STATE.lastObservedText = liveText;
-        STATE.liveMode = true;
-        const box = document.getElementById("kiki-captions");
-        if (box && typeof window.renderTextToBox === "function") {
-          window.renderTextToBox(box, liveText);
-        }
+    // While actively loading/fetching tracks, DO NOT preempt!
+    if (STATE.loadingTracks || loadingTracks) return;
+
+    // Only allow live fallback if all structured tracks failed or user enabled it
+    if (!STATE.liveFallbackAllowed && !STATE.liveMode) return;
+
+    // If structured cues not yet loaded, check if video.textTracks has loaded genuine cues
+    const trackCues = extractCuesFromVideo();
+    if (trackCues && trackCues.length > 2) {
+      applyLoadedCues(trackCues, "video-track");
+      return;
+    }
+
+    // True Fallback: render live caption text if available
+    const liveText = getLiveCaptionText();
+    if (liveText && liveText !== lastObservedText) {
+      lastObservedText = liveText;
+      STATE.lastObservedText = liveText;
+      STATE.liveMode = true;
+      const box = document.getElementById("kiki-captions");
+      if (box && typeof window.renderTextToBox === "function") {
+        window.renderTextToBox(box, liveText);
       }
+      updateHud();
     }
   }
 
@@ -5734,24 +5907,48 @@ window.KikiAudioEngine = KikiAudioEngine;
     return [];
   }
 
+  function detectVideoLanguage() {
+    try {
+      const mp = document.getElementById("movie_player") || playerEl();
+      if (mp && typeof mp.getPlayerResponse === "function") {
+        const pr = mp.getPlayerResponse();
+        const dl = pr?.microformat?.playerMicroformatRenderer?.defaultLanguage;
+        if (typeof dl === "string" && dl) return dl.toLowerCase();
+      }
+    } catch {}
+    try {
+      const dl = window.ytInitialPlayerResponse?.microformat?.playerMicroformatRenderer?.defaultLanguage;
+      if (typeof dl === "string" && dl) return dl.toLowerCase();
+    } catch {}
+    try {
+      const docLang = document.documentElement.lang;
+      if (docLang && typeof docLang === "string") return docLang.toLowerCase();
+    } catch {}
+    return "en";
+  }
+
+  function getTrackScore(t, videoLang = "en") {
+    if (!t) return 0;
+    const lang = (t.languageCode || "").toLowerCase();
+    const isOfficial = t.kind !== "asr";
+    const baseLang = videoLang.split("-")[0];
+    const isPrimary = lang === videoLang || lang.startsWith(baseLang);
+
+    // 1. Primary language official track (e.g. EN US/UK for English video, JA for Japanese video)
+    if (isPrimary && isOfficial) return 1000;
+    // 2. Auto-generated track of primary language
+    if (isPrimary && !isOfficial) return 800;
+    // 3. Other official tracks
+    if (isOfficial) return 500;
+    // 4. Other auto-generated tracks
+    return 200;
+  }
+
   function pickBestTrack(tracks) {
     if (!tracks || !tracks.length) return null;
-    const enOfficial = tracks.find(t => {
-      const code = (t.languageCode || "").toLowerCase();
-      return code.startsWith("en") && t.kind !== "asr";
-    });
-    if (enOfficial) return enOfficial;
-
-    const enAny = tracks.find(t => (t.languageCode || "").toLowerCase().startsWith("en"));
-    if (enAny) return enAny;
-
-    const jaOfficial = tracks.find(t => {
-      const code = (t.languageCode || "").toLowerCase();
-      return code.startsWith("ja") && t.kind !== "asr";
-    });
-    if (jaOfficial) return jaOfficial;
-
-    return tracks[0];
+    const vidLang = detectVideoLanguage();
+    const sorted = [...tracks].sort((a, b) => getTrackScore(b, vidLang) - getTrackScore(a, vidLang));
+    return sorted[0];
   }
 
   async function fetchExact(url, timeoutMs = 2500) {
@@ -5819,7 +6016,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     } catch {}
   }
 
-  function applyLoadedCues(cues, source) {
+  function applyLoadedCues(cues, source, track = null) {
     if (!cues || !cues.length) return;
     if (cues.length <= 2 && cues.some((c) => isDummyCueText(c.text))) {
       return;
@@ -5828,25 +6025,98 @@ window.KikiAudioEngine = KikiAudioEngine;
     STATE.idx = -1;
     STATE.loadingTracks = false;
     loadingTracks = false;
+    STATE.liveMode = false;
+    STATE.liveFallbackAllowed = false;
+    STATE.lastObservedText = "";
+    lastObservedText = "";
+    if (track) {
+      STATE.activeTrack = track;
+    }
     renderCue(-1);
     lastFailedVideoId = "";
     suppressNativeCaptions();
-    updateHud(`✦ CC: ${cues.length}`);
-    toast(`Captions: ${cues.length} lines (${source})`);
+    updateHud();
+    const trackLabel = track?.name?.simpleText || source;
+    toast(`Captions: ${cues.length} lines (${trackLabel})`);
   }
 
-  async function loadForVideo() {
-    if (loadingTracks) return;
+  async function selectSubtitleTrack(track) {
+    if (!track) return;
+    STATE.activeTrack = track;
+    updateHud(`CC: ${track.name?.simpleText || track.languageCode} ▾`);
+    toast(`Switching to ${track.name?.simpleText || track.languageCode}...`);
+
+    // 1. First try fetching timedtext directly
+    if (track.baseUrl) {
+      let raw = await fetchExact(track.baseUrl, 2000);
+      let cues = parseAny(raw);
+      if (!cues || !cues.length) {
+        const jsonUrl = track.baseUrl.includes("fmt=")
+          ? track.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
+          : track.baseUrl + (track.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
+        raw = await fetchExact(jsonUrl, 2000);
+        cues = parseAny(raw);
+      }
+      if (cues && cues.length) {
+        applyLoadedCues(cues, track.kind === "asr" ? "auto" : "official", track);
+        return;
+      }
+    }
+
+    // 2. If timedtext download is blocked (e.g. PoToken), activate player track & engage live fallback
+    try {
+      const p = playerEl();
+      if (p && typeof p.setOption === "function") {
+        p.setOption("captions", "track", {
+          languageCode: track.languageCode,
+          vss_id: track.vssId || track.vss_id || ""
+        });
+      }
+    } catch {}
+    ensureCaptionsActive();
+    STATE.cues = [];
+    STATE.liveFallbackAllowed = true;
+    STATE.liveMode = true;
+    STATE.lastObservedText = "";
+    lastObservedText = "";
+    renderCue(-1);
+    updateHud();
+    toast(`Switched to ${track.name?.simpleText || track.languageCode} (Realtime)`);
+  }
+  window.selectSubtitleTrack = selectSubtitleTrack;
+
+  function switchToLiveSubtitles() {
+    STATE.cues = [];
+    STATE.liveFallbackAllowed = true;
+    STATE.liveMode = true;
+    STATE.lastObservedText = "";
+    lastObservedText = "";
+    ensureCaptionsActive();
+    renderCue(-1);
+    updateHud("CC: Live ▾");
+    toast("Switched to realtime subtitles");
+  }
+  window.switchToLiveSubtitles = switchToLiveSubtitles;
+
+  async function loadForVideo(force = false) {
+    if (loadingTracks && !force) return;
     const vid = currentVideoId();
     if (!vid) {
-      updateHud("✦ Kiki (Home)");
+      updateHud("Home ▾");
       return;
     }
 
     loadingTracks = true;
     STATE.loadingTracks = true;
+    STATE.liveFallbackAllowed = false;
+    if (force) {
+      STATE.cues = [];
+      STATE.liveMode = false;
+      STATE.lastObservedText = "";
+      lastObservedText = "";
+    }
     lastLoadAttemptTime = Date.now();
-    updateHud("✦ Loading CC...");
+    updateHud("CC: Loading... ▾");
 
     try {
       // 1. Wire sniffer cache
@@ -5899,27 +6169,19 @@ window.KikiAudioEngine = KikiAudioEngine;
       }
 
       if (tracks && tracks.length) {
-        STATE.tracks = tracks;
-        const sorted = [...tracks].sort((a, b) => {
-          const aEn = (a.languageCode || "").toLowerCase().startsWith("en");
-          const bEn = (b.languageCode || "").toLowerCase().startsWith("en");
-          if (aEn && !bEn) return -1;
-          if (!aEn && bEn) return 1;
-          const aOfficial = a.kind !== "asr";
-          const bOfficial = b.kind !== "asr";
-          if (aOfficial && !bOfficial) return -1;
-          if (!aOfficial && bOfficial) return 1;
-          return 0;
-        });
+        const vidLang = detectVideoLanguage();
+        const sorted = [...tracks].sort((a, b) => getTrackScore(b, vidLang) - getTrackScore(a, vidLang));
+        STATE.tracks = sorted;
+        if (!STATE.activeTrack || !sorted.some(t => t.baseUrl === STATE.activeTrack?.baseUrl)) {
+          STATE.activeTrack = sorted[0];
+        }
 
-        // Limit to top 3 tracks to avoid long sequential delays
+        // Limit to top 3 prioritized tracks to avoid long sequential delays
         for (const pick of sorted.slice(0, 3)) {
           if (!pick || !pick.baseUrl) continue;
-          // Try baseUrl directly first
           let raw = await fetchExact(pick.baseUrl, 2000);
           let cues = parseAny(raw);
           if (!cues || !cues.length) {
-            // Then try with fmt=json3
             const jsonUrl = pick.baseUrl.includes("fmt=")
               ? pick.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
               : pick.baseUrl + (pick.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
@@ -5927,7 +6189,7 @@ window.KikiAudioEngine = KikiAudioEngine;
             cues = parseAny(raw);
           }
           if (cues && cues.length) {
-            applyLoadedCues(cues, pick.kind === "asr" ? "auto" : "official");
+            applyLoadedCues(cues, pick.kind === "asr" ? "auto" : "official", pick);
             return;
           }
         }
@@ -5959,13 +6221,32 @@ window.KikiAudioEngine = KikiAudioEngine;
         return;
       }
 
+      // 7. True Fallback: timedtext download blocked or empty -> engage live caption stream
+      STATE.liveFallbackAllowed = true;
       lastFailedVideoId = vid;
-      updateHud("✦ CC: None (Tap to Search)");
+      const liveText = getLiveCaptionText();
+      if (liveText) {
+        lastObservedText = liveText;
+        STATE.lastObservedText = liveText;
+        STATE.liveMode = true;
+        const box = document.getElementById("kiki-captions");
+        if (box && typeof window.renderTextToBox === "function") {
+          window.renderTextToBox(box, liveText);
+        }
+        updateHud("CC: Live ▾");
+        if (!liveToastShown) {
+          liveToastShown = true;
+          toast("Captions: Realtime stream fallback");
+        }
+      } else {
+        updateHud("CC: None ▾");
+      }
     } finally {
       loadingTracks = false;
       STATE.loadingTracks = false;
     }
   }
+  window.reloadSubtitlesForVideo = () => loadForVideo(true);
 
   function dismissMiniplayer() {
     try {
@@ -6123,7 +6404,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         const vState = v ? (v.paused ? "Paused" : "Play") : "NoVid";
         const hudState = hudEl ? (hudEl.offsetWidth > 0 ? `${hudEl.offsetWidth}x${hudEl.offsetHeight}` : "0px") : "NULL";
         const trkCount = v && v.textTracks ? v.textTracks.length : 0;
-        const kikiVer = window.__kiki_engine_version || localStorage.getItem("kiki_cache_version") || "1.2.0";
+        const kikiVer = window.__kiki_engine_version || localStorage.getItem("kiki_cache_version") || "1.2.1";
         toast(`✦ Kiki v${kikiVer} [HUD:${hudState}|${vState}|TT:${trkCount}]`);
       }, 700);
       setTimeout(() => {
@@ -6142,7 +6423,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 
 
-  console.log('[Kiki Immersion] v1.2.0 Modular Engine Loaded on:', location.href);
+  console.log('[Kiki Immersion] v1.2.1 Modular Engine Loaded on:', location.href);
 
 
 // >>> END MODULE: youtube <<<
