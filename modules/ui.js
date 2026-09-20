@@ -1026,7 +1026,7 @@
             } else if (activeTab === "about") {
         const cacheTime = localStorage.getItem("kiki_cache_time") || "Initial / Local";
         const engineVer = localStorage.getItem("kiki_cache_version") || "1.2.2";
-        const loaderVer = localStorage.getItem("kiki_loader_version") || (window.__kiki_loader_version || "1.0.0");
+        const loaderVer = localStorage.getItem("kiki_loader_version") || (window.__kiki_loader_version || "1.0.1");
         const modulesList = ["core", "yomitan", "ai", "ui", "youtube"];
         const modStatus = modulesList.map(m => {
           const has = !!localStorage.getItem("kiki_mod_" + m);

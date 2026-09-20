@@ -25,26 +25,11 @@
 // =============================================================
 
   // -------------------------------------------------------------
-  // 1. Force Desktop YouTube & Early Native Lockout
+  // 1. Force Desktop YouTube & Platform Guard
   // -------------------------------------------------------------
   try {
     document.cookie = "PREF=f6=40000000&f5=30000; domain=.youtube.com; path=/; max-age=31536000; SameSite=Lax";
   } catch (e) {}
-
-  if (location.hostname === 'm.youtube.com') {
-    const tried = sessionStorage.getItem('kiki_bounced_to_desktop');
-    if (!tried) {
-      sessionStorage.setItem('kiki_bounced_to_desktop', '1');
-      const targetUrl = new URL(location.href);
-      targetUrl.hostname = 'www.youtube.com';
-      targetUrl.searchParams.set('app', 'desktop');
-      targetUrl.searchParams.set('persist_app', '1');
-      location.replace(targetUrl.toString());
-      return;
-    }
-  } else {
-    try { sessionStorage.removeItem('kiki_bounced_to_desktop'); } catch (e) {}
-  }
 
   try {
     Object.defineProperty(navigator, 'platform', { get: () => "MacIntel" });
@@ -4293,7 +4278,7 @@ window.KikiAudioEngine = KikiAudioEngine;
             } else if (activeTab === "about") {
         const cacheTime = localStorage.getItem("kiki_cache_time") || "Initial / Local";
         const engineVer = localStorage.getItem("kiki_cache_version") || "1.2.2";
-        const loaderVer = localStorage.getItem("kiki_loader_version") || (window.__kiki_loader_version || "1.0.0");
+        const loaderVer = localStorage.getItem("kiki_loader_version") || (window.__kiki_loader_version || "1.0.1");
         const modulesList = ["core", "yomitan", "ai", "ui", "youtube"];
         const modStatus = modulesList.map(m => {
           const has = !!localStorage.getItem("kiki_mod_" + m);

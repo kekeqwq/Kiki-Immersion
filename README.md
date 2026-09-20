@@ -2,11 +2,15 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Frosted Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.2-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.0-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.2-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.1-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
 ## 📢 Release Overview
+
+**Loader v1.0.1 (iPadOS Desktop Redirection Fix)**:
+- **Immediate Desktop Enforcement**: Enforces `PREF` desktop cookies and redirects `m.youtube.com` to `www.youtube.com` right at `document-start` before fetching modules, preventing iPadOS Safari from getting trapped on the mobile web interface during fresh installation.
+- **Root-level Redirection**: Moved redirection logic directly into the controllable local loader script rather than delayed remote modules.
 
 **v1.2.2 (HUD Auto-Hide, Interactive Dismiss & Vector Settings Icon)**:
 - **HUD Auto-Hide & Persistence Fix**: Fixed a bug where background caption updates repeatedly unhid the top bar; now smoothly auto-hides after 6 seconds of inactivity (or 3.5s after pointer leaves).
@@ -43,7 +47,7 @@ Since iPadOS Userscripts does not support direct remote URL script installation,
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.0.0
+// @version      1.0.1
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine & dynamic hot-reload.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -58,13 +62,26 @@ Since iPadOS Userscripts does not support direct remote URL script installation,
 (() => {
   "use strict";
 
-  const KIKI_LOADER_VERSION = "1.0.0";
+  const KIKI_LOADER_VERSION = "1.0.1";
   const MODULES = ["core", "yomitan", "ai", "ui", "youtube"];
   const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/modules/";
 
-  // 1. Force Desktop YouTube Cookie early
+  // 1. Force Desktop YouTube: Redirect immediately on m.youtube.com before loading modules
   try {
     document.cookie = "PREF=f6=40000000&f5=30000; domain=.youtube.com; path=/; max-age=31536000; SameSite=Lax";
+  } catch (e) {}
+
+  if (location.hostname === "m.youtube.com") {
+    const targetUrl = new URL(location.href);
+    targetUrl.hostname = "www.youtube.com";
+    targetUrl.searchParams.set("app", "desktop");
+    targetUrl.searchParams.set("persist_app", "1");
+    location.replace(targetUrl.toString());
+    return;
+  }
+
+  try {
+    Object.defineProperty(navigator, "platform", { get: () => "MacIntel" });
   } catch (e) {}
 
   function getCachedModule(name) {

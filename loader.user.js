@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.0.0
+// @version      1.0.1
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine & dynamic hot-reload.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -16,18 +16,31 @@
 (() => {
   "use strict";
 
-  const KIKI_LOADER_VERSION = "1.0.0";
+  const KIKI_LOADER_VERSION = "1.0.1";
   const MODULES = ["core", "yomitan", "ai", "ui", "youtube"];
   const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/modules/";
+
+  // 1. Force Desktop YouTube: Redirect immediately on m.youtube.com before loading modules
+  try {
+    document.cookie = "PREF=f6=40000000&f5=30000; domain=.youtube.com; path=/; max-age=31536000; SameSite=Lax";
+  } catch (e) {}
+
+  if (location.hostname === "m.youtube.com") {
+    const targetUrl = new URL(location.href);
+    targetUrl.hostname = "www.youtube.com";
+    targetUrl.searchParams.set("app", "desktop");
+    targetUrl.searchParams.set("persist_app", "1");
+    location.replace(targetUrl.toString());
+    return;
+  }
+
+  try {
+    Object.defineProperty(navigator, "platform", { get: () => "MacIntel" });
+  } catch (e) {}
 
   try {
     window.__kiki_loader_version = KIKI_LOADER_VERSION;
     localStorage.setItem("kiki_loader_version", KIKI_LOADER_VERSION);
-  } catch (e) {}
-
-  // 1. Force Desktop YouTube Cookie early
-  try {
-    document.cookie = "PREF=f6=40000000&f5=30000; domain=.youtube.com; path=/; max-age=31536000; SameSite=Lax";
   } catch (e) {}
 
   function getCachedModule(name) {
