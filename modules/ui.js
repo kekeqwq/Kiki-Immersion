@@ -1101,7 +1101,7 @@
               const list = ["core", "yomitan", "ai", "ui", "youtube"];
               const base = "https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/modules/";
               await Promise.all(list.map(async (m) => {
-                const r = await fetch(`${base}${m}.js?_t=${Date.now()}`);
+                const r = await fetch(`${base}${m}.js?_t=${Date.now()}`, { cache: "no-store" });
                 if (!r.ok) throw new Error(`HTTP ${r.status} on ${m}.js`);
                 const t = await r.text();
                 localStorage.setItem("kiki_mod_" + m, t);

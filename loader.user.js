@@ -79,7 +79,7 @@
 
   async function fetchModule(name) {
     const url = `${GITHUB_RAW_BASE}${name}.js?_t=${Date.now()}`;
-    const resp = await fetch(url);
+    const resp = await fetch(url, { cache: "no-store" });
     if (!resp.ok) throw new Error(`HTTP ${resp.status} on ${name}.js`);
     return await resp.text();
   }
