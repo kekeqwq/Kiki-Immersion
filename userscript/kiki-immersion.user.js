@@ -6525,7 +6525,6 @@ window.KikiAudioEngine = KikiAudioEngine;
           STATE.activeTrack = sorted[0];
         }
         bestTrack = STATE.activeTrack;
-      }
 
         // Try top prioritized tracks with direct baseUrl and json3
         for (const pick of sorted.slice(0, 3)) {
