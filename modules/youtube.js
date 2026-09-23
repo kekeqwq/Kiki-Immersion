@@ -811,7 +811,7 @@
     for (let i = 0; i < v.textTracks.length; i++) {
       const track = v.textTracks[i];
       if (track.mode === "disabled") {
-        try { track.mode = "showing"; } catch {}
+        try { track.mode = "hidden"; } catch {}
       }
       if (track.cues && track.cues.length > 0) {
         const cues = [];
@@ -826,7 +826,7 @@
             });
           }
         }
-        if (cues.length > 2) return cues;
+        if (cues.length > 0) return cues;
       }
     }
     return [];
@@ -1298,14 +1298,16 @@
 
     // 1. First try fetching timedtext directly (with PoToken if known)
     if (track.baseUrl) {
-      let raw = await fetchExact(track.baseUrl, 2000);
+      let raw = await fetchExact(track.baseUrl, 2500);
       let cues = parseAny(raw);
       if (!cues || !cues.length) {
-        const jsonUrl = track.baseUrl.includes("fmt=")
-          ? track.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
-          : track.baseUrl + (track.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
-        raw = await fetchExact(jsonUrl, 2000);
-        cues = parseAny(raw);
+        if (!track.baseUrl.includes("&sig=") && !track.baseUrl.includes("?sig=")) {
+          const jsonUrl = track.baseUrl.includes("fmt=")
+            ? track.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
+            : track.baseUrl + (track.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
+          raw = await fetchExact(jsonUrl, 2500);
+          cues = parseAny(raw);
+        }
       }
       if (cues && cues.length) {
         applyLoadedCues(cues, track.kind === "asr" ? "auto" : "official", track);
@@ -1340,7 +1342,7 @@
         }
       }
       const trackCues = extractCuesFromVideo();
-      if (trackCues && trackCues.length > 2) {
+      if (trackCues && trackCues.length > 0) {
         applyLoadedCues(trackCues, "video-track", track);
         return;
       }
@@ -1468,43 +1470,54 @@
         }
         bestTrack = STATE.activeTrack;
 
+        // 5. Early activation: trigger YouTube player captions module & XHR right now!
+        ensureCaptionsActive(bestTrack);
+
         // Try top prioritized tracks with direct baseUrl and json3
         for (const pick of sorted.slice(0, 3)) {
           if (!pick || !pick.baseUrl) continue;
-          let raw = await fetchExact(pick.baseUrl, 2000);
+          let raw = await fetchExact(pick.baseUrl, 2500);
           let cues = parseAny(raw);
           if (!cues || !cues.length) {
-            const jsonUrl = pick.baseUrl.includes("fmt=")
-              ? pick.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
-              : pick.baseUrl + (pick.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
-            raw = await fetchExact(jsonUrl, 2000);
-            cues = parseAny(raw);
+            if (!pick.baseUrl.includes("&sig=") && !pick.baseUrl.includes("?sig=")) {
+              const jsonUrl = pick.baseUrl.includes("fmt=")
+                ? pick.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
+                : pick.baseUrl + (pick.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
+              raw = await fetchExact(jsonUrl, 2500);
+              cues = parseAny(raw);
+            }
           }
           if (cues && cues.length) {
             applyLoadedCues(cues, pick.kind === "asr" ? "auto" : "official", pick);
             return;
           }
         }
+      } else {
+        ensureCaptionsActive(null);
       }
 
-      // 6. Direct fetch failed: activate player captions module to generate player XHR & PoToken
-      ensureCaptionsActive(bestTrack);
-
-      // 7. Check if capturedLastUrl from resource timing / sniffer can be fetched directly
+      // 6. Check if capturedLastUrl from resource timing / sniffer can be fetched directly
       const curLastUrl = capturedLastUrl || STATE.capturedLastUrl;
       if (curLastUrl && curLastUrl.includes(MARK)) {
-        const directJson = curLastUrl.includes("fmt=")
-          ? curLastUrl.replace(/fmt=[^&]+/, "fmt=json3")
-          : curLastUrl + (curLastUrl.includes("?") ? "&" : "?") + "fmt=json3";
-        const raw = await fetchExact(directJson, 2000);
-        const cues = parseAny(raw);
+        // Try original URL first (preserves &sig=)
+        let raw = await fetchExact(curLastUrl, 3000);
+        let cues = parseAny(raw);
+        if (!cues || !cues.length) {
+          if (!curLastUrl.includes("&sig=") && !curLastUrl.includes("?sig=")) {
+            const directJson = curLastUrl.includes("fmt=")
+              ? curLastUrl.replace(/fmt=[^&]+/, "fmt=json3")
+              : curLastUrl + (curLastUrl.includes("?") ? "&" : "?") + "fmt=json3";
+            raw = await fetchExact(directJson, 2500);
+            cues = parseAny(raw);
+          }
+        }
         if (cues && cues.length) {
           applyLoadedCues(cues, "wire-url", bestTrack || STATE.activeTrack);
           return;
         }
       }
 
-      // 8. Grace period: wait for Player XHR / Wire Sniffer / textTracks (up to 3500ms)
+      // 7. Grace period: wait for Player XHR / Wire Sniffer / textTracks (up to 3500ms)
       const waitStart = Date.now();
       while (Date.now() - waitStart < 3500) {
         await sleep(150);
@@ -1519,24 +1532,30 @@
           }
         }
 
-        // Check if resource timing found a new PoToken / URL during grace period
+        // Check if resource timing found a working timedtext URL during playback
         if (typeof checkResourceTimingForTimedtext === "function") {
           const foundUrl = checkResourceTimingForTimedtext();
-          if (foundUrl && (lastPoToken || STATE.lastPoToken) && bestTrack?.baseUrl) {
-            const retryJson = bestTrack.baseUrl.includes("fmt=")
-              ? bestTrack.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
-              : bestTrack.baseUrl + (bestTrack.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
-            const rawRetry = await fetchExact(retryJson, 1500);
-            const cuesRetry = parseAny(rawRetry);
+          if (foundUrl) {
+            let rawRetry = await fetchExact(foundUrl, 2500);
+            let cuesRetry = parseAny(rawRetry);
+            if (!cuesRetry || !cuesRetry.length) {
+              if (!foundUrl.includes("&sig=")) {
+                const retryJson = foundUrl.includes("fmt=")
+                  ? foundUrl.replace(/fmt=[^&]+/, "fmt=json3")
+                  : foundUrl + (foundUrl.includes("?") ? "&" : "?") + "fmt=json3";
+                rawRetry = await fetchExact(retryJson, 2000);
+                cuesRetry = parseAny(rawRetry);
+              }
+            }
             if (cuesRetry && cuesRetry.length) {
-              applyLoadedCues(cuesRetry, "pot-sniffer", bestTrack);
+              applyLoadedCues(cuesRetry, "resource-timing", bestTrack || STATE.activeTrack);
               return;
             }
           }
         }
 
         const trackCues = extractCuesFromVideo();
-        if (trackCues && trackCues.length > 2) {
+        if (trackCues && trackCues.length > 0) {
           applyLoadedCues(trackCues, "video-track", bestTrack || STATE.activeTrack);
           return;
         }
@@ -1546,7 +1565,7 @@
         }
       }
 
-      // 9. Fallback candidate API calls (with PoToken)
+      // 8. Fallback candidate API calls (with PoToken)
       const directCandidates = [
         `https://www.youtube.com/api/timedtext?v=${vid}&lang=en&fmt=json3`,
         `https://www.youtube.com/api/timedtext?v=${vid}&lang=en&kind=asr&fmt=json3`,
@@ -1555,7 +1574,7 @@
       ];
       for (const cand of directCandidates) {
         try {
-          const raw = await fetchExact(cand, 1200);
+          const raw = await fetchExact(cand, 1500);
           const cues = parseAny(raw);
           if (cues && cues.length) {
             applyLoadedCues(cues, "direct", bestTrack);
@@ -1564,7 +1583,7 @@
         } catch {}
       }
 
-      // 10. Re-check wire sniffer and textTracks one last time
+      // 9. Re-check wire sniffer and textTracks one last time
       const finalBody = capturedBody || STATE.capturedBody;
       if (finalBody && finalBody.trim().length > 20) {
         const cues = parseAny(finalBody);
@@ -1574,7 +1593,7 @@
         }
       }
       const finalCues = extractCuesFromVideo();
-      if (finalCues && finalCues.length > 2) {
+      if (finalCues && finalCues.length > 0) {
         applyLoadedCues(finalCues, "video-track", bestTrack);
         return;
       }

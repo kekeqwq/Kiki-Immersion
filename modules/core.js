@@ -9,8 +9,9 @@
     localStorage.setItem("kiki_cache_version", "1.2.5");
   } catch (e) {}
 
+  let savedPot = "";
   try {
-    sessionStorage.removeItem("kiki_pot");
+    savedPot = sessionStorage.getItem("kiki_pot") || "";
   } catch {}
 
   const STATE = window.STATE = {
@@ -30,7 +31,7 @@
     liveMode: false,
     liveFallbackAllowed: false,
     lastObservedText: "",
-    lastPoToken: "",
+    lastPoToken: savedPot,
     capturedLastUrl: "",
     capturedBody: "",
     capturedVideoId: "",
@@ -47,8 +48,9 @@
     try {
       const u = new URL(url, location.href);
       const pot = u.searchParams.get("pot");
-      if (pot) {
+      if (pot && pot.length > 10) {
         STATE.lastPoToken = pot;
+        try { sessionStorage.setItem("kiki_pot", pot); } catch {}
       }
     } catch {}
     let urlVid = "";
@@ -97,7 +99,7 @@
       let reqUrl = "";
       try {
         const req = args[0];
-        reqUrl = typeof req === "string" ? req : (req?.url || req?.href || "");
+        reqUrl = typeof req === "string" ? req : (req?.url || req?.href || (req && typeof req.toString === "function" ? req.toString() : ""));
         noteTimedtextUrl(reqUrl);
       } catch {}
 
@@ -110,7 +112,16 @@
                 if (text && text.trim().length > 20) {
                   handleCapturedWire(text, reqUrl);
                 }
-              }).catch(() => {});
+              }).catch(() => {
+                try {
+                  res.clone().arrayBuffer().then((buf) => {
+                    if (buf && buf.byteLength > 20) {
+                      const text = new TextDecoder("utf-8").decode(buf);
+                      if (text && text.trim().length > 20) handleCapturedWire(text, reqUrl);
+                    }
+                  }).catch(() => {});
+                } catch {}
+              });
             } catch {}
           }).catch(() => {});
         }
@@ -134,13 +145,36 @@
     try {
       const reqUrl = this.__kiki_url;
       if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
-        this.addEventListener("load", function () {
+        let captured = false;
+        const processResponse = () => {
+          if (captured) return;
           try {
             if (this.status && (this.status < 200 || this.status >= 400)) return;
             let body = "";
             try {
               if (this.responseType === "" || this.responseType === "text") {
                 body = this.responseText || "";
+              } else if (this.responseType === "arraybuffer" && this.response) {
+                try {
+                  body = new TextDecoder("utf-8").decode(this.response);
+                } catch (e1) {
+                  try {
+                    const bytes = new Uint8Array(this.response);
+                    let s = "";
+                    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+                    body = decodeURIComponent(escape(s));
+                  } catch (e2) {}
+                }
+              } else if (this.responseType === "blob" && this.response instanceof Blob) {
+                try {
+                  this.response.text().then(t => {
+                    if (t && t.trim().length > 20) {
+                      captured = true;
+                      handleCapturedWire(t, reqUrl);
+                    }
+                  }).catch(() => {});
+                } catch {}
+                return;
               } else if (this.responseType === "json") {
                 body = typeof this.response === "string" ? this.response : JSON.stringify(this.response || "");
               } else if (this.responseType === "document" && this.responseXML) {
@@ -148,10 +182,16 @@
               }
             } catch {}
             if (body && body.trim().length > 20) {
+              captured = true;
               handleCapturedWire(body, reqUrl);
             }
           } catch {}
-        }, { once: true });
+        };
+
+        this.addEventListener("load", processResponse, { once: true });
+        this.addEventListener("readystatechange", () => {
+          if (this.readyState === 4) processResponse();
+        });
       }
     } catch {}
     return origSend.apply(this, args);
