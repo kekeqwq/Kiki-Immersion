@@ -2,16 +2,26 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Frosted Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.4-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.1-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.5-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.1-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
 ## 📢 Release Overview
 
-**v1.2.4 (Chrome Tampermonkey Trusted Types & Fullscreen Aspect Ratio Fix)**:
-- **Full Chromium & Tampermonkey Compatibility**: Resolved `Trusted Types` enforcement errors on YouTube by implementing self-healing policy resolution (`default` policy creation, collision-free candidate names, and DOM script injection fallback).
-- **Exact iPadOS Web Fullscreen Geometry**: Replaced `100vh` with dynamic viewport units (`100dvh` / `100%`) and `object-fit: contain` on `.html5-main-video` to eliminate letterbox cropping and preserve full video aspect ratio across all screen sizes and orientations.
-- **Smart Caption Rendered-Box Anchoring**: Subtitle placement now accurately tracks the actual rendered video frame (`getVideoRenderedRect`), anchoring perfectly above the picture content even in letterboxed or pillarboxed modes.
+**v1.2.5 (iPadOS Subtitle Stability, Keyboard Shortcuts & Popup Dismiss Playback)**:
+- **Major iPadOS Subtitle Stability & PoToken Caching**:
+  - Implemented session-level `PoToken` persistence (`sessionStorage.getItem("kiki_pot")`), eliminating cold-start 403 / empty timedtext responses on iPadOS.
+  - Hoisted early network sniffer (`fetch` / `XHR` / `PerformanceObserver`) to the root of the core engine, guaranteeing zero missed timedtext payloads.
+  - Added synchronous `performance.getEntriesByType("resource")` inspection to instantly capture player timedtext URLs and PoTokens.
+  - Prioritized direct `fmt=json3` fetching with early native CC activation, preventing iPadOS from unnecessarily dropping into `CC: Live` mode.
+  - Added seamless self-healing to continuously upgrade live streams to structured subtitle lines as soon as wire tokens or text tracks arrive.
+- **Streamlined Status Bar (HUD)**:
+  - Removed redundant `ℹ️ About` button from the top HUD bar, keeping the interface minimalist and distraction-free (About / Hot-Reload remains fully accessible inside the Settings modal).
+- **Keyboard Shortcuts Navigation**:
+  - Added `A` (previous subtitle line / rewind) and `D` (next subtitle line / advance).
+  - Added `Space` to toggle play/pause smoothly without scrolling the page.
+- **Smart Popup Dismissal with Instant Playback**:
+  - Clicking or tapping outside an active Yomitan lookup card or AI context explanation window now cleanly closes the popup and immediately resumes video playback, without triggering the player's single-tap pause gesture.
 
 **Loader v1.0.1 (iPadOS Desktop Redirection Fix)**:
 - **Immediate Desktop Enforcement**: Enforces `PREF` desktop cookies and redirects `m.youtube.com` to `www.youtube.com` right at `document-start` before fetching modules, preventing iPadOS Safari from getting trapped on the mobile web interface during fresh installation.
@@ -171,7 +181,7 @@ Since iPadOS Userscripts does not support direct remote URL script installation,
     } catch (e) {}
   }
 
-  const EXPECTED_CACHE_VERSION = "1.2.4";
+  const EXPECTED_CACHE_VERSION = "1.2.5";
 
   function hasAllCachedModules() {
     if (localStorage.getItem("kiki_cache_version") !== EXPECTED_CACHE_VERSION) return false;

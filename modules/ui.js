@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.2.4
+// Version: 1.2.5
 // =============================================================
 
   function playVideoSync() {
@@ -191,7 +191,6 @@
           <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="opacity: 0.95; flex-shrink: 0; vertical-align: -1.5px;"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
           <span>Settings</span>
         </button>
-        <button type="button" class="kiki-hud-btn kiki-hud-about" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="About Kiki Immersion & Hot-Update">ℹ️ About</button>
         <button type="button" class="kiki-hud-btn kiki-hud-sub" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="Toggle Subtitles Visibility">💬 Sub: On</button>
         <button type="button" class="kiki-hud-btn kiki-hud-cc" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 12px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important; min-width: 140px !important; max-width: 250px !important; text-overflow: ellipsis !important; overflow: hidden !important;" title="Click to select subtitle track">CC: Searching... ▾</button>
         <button type="button" class="kiki-hud-btn kiki-hud-reload" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="Reload Subtitles for Current Video">🔄 Reload</button>
@@ -236,10 +235,6 @@
 
       bindHudButton(hud.querySelector(".kiki-hud-settings"), () => {
         showSettingsModal("dict");
-      });
-
-      bindHudButton(hud.querySelector(".kiki-hud-about"), () => {
-        showSettingsModal("about");
       });
 
       bindHudButton(hud.querySelector(".kiki-hud-sub"), () => {
@@ -431,6 +426,10 @@
         targetCc = trkName ? `CC: Live (${trkName.slice(0, 10)}) ▾` : "CC: Live ▾";
       } else if (STATE.loadingTracks) {
         targetCc = "CC: Loading... ▾";
+      } else if (STATE.tracks && STATE.tracks.length > 0) {
+        const rawName = STATE.activeTrack?.name?.simpleText || STATE.activeTrack?.languageCode?.toUpperCase() || "Track";
+        const shortName = rawName.length > 14 ? rawName.slice(0, 12) + "…" : rawName;
+        targetCc = `CC: ${shortName} ▾`;
       } else {
         targetCc = "CC: None ▾";
       }
@@ -886,7 +885,7 @@
     });
   }
 
-  function closeLookup() {
+  function closeLookup(resume = true) {
     abortActiveAi();
     STATE.lookupEl = null;
     STATE.lookupWord = "";
@@ -895,8 +894,8 @@
     const card = $("#kiki-yomitan-card");
     if (card) card.classList.remove("show");
 
-    if (STATE.pausedForLookup) {
-      STATE.pausedForLookup = false;
+    STATE.pausedForLookup = false;
+    if (resume) {
       playVideoSync();
     }
   }
@@ -905,7 +904,7 @@
     const card = $("#kiki-yomitan-card");
     const cardOpen = card && card.classList.contains("show");
     if ((STATE.lookupEl || cardOpen) && !e.target.closest("#kiki-yomitan-card, .kiki-word, .kiki-cap-ai-btn, #kiki-settings-modal, #kiki-hud, .kiki-toast")) {
-      closeLookup();
+      closeLookup(true);
     }
     const modal = document.getElementById("kiki-settings-modal");
     if (modal && modal.style.display !== "none" && !e.target.closest("#kiki-settings-modal, #kiki-hud")) {

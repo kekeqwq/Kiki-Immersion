@@ -4,19 +4,7 @@ import re
 with open("modules/ui.js") as f:
     ui_code = f.read()
 
-# Add About button in HUD if not already present
-if 'class="kiki-hud-btn kiki-hud-about"' not in ui_code:
-    hud_ctrl_pattern = '<button type="button" class="kiki-hud-btn kiki-hud-ctrl"'
-    about_btn_html = '<button type="button" class="kiki-hud-btn kiki-hud-about" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="About & Hot-Update">ℹ️ About</button>\n        '
-    ui_code = ui_code.replace(hud_ctrl_pattern, about_btn_html + hud_ctrl_pattern)
-
-    bind_ctrl_pattern = 'bindHudButton(hud.querySelector(".kiki-hud-ctrl"), () => {'
-    bind_about_code = """bindHudButton(hud.querySelector(".kiki-hud-about"), () => {
-        showSettingsModal("about");
-      });
-
-      """
-    ui_code = ui_code.replace(bind_ctrl_pattern, bind_about_code + bind_ctrl_pattern)
+# (About button in HUD removed in v1.2.5; About is accessed via Settings modal)
 
 # Add About tab rendering in showSettingsModal
 about_tab_html = """      } else if (activeTab === "about") {

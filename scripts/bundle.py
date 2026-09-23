@@ -5,7 +5,7 @@ MODULE_ORDER = ['core', 'yomitan', 'ai', 'ui', 'youtube']
 header = """// ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.2.4
+// @version      1.2.5
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, and touch/mouse gestures.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -68,4 +68,8 @@ os.makedirs("dist", exist_ok=True)
 with open("dist/kiki-immersion.user.js", "w") as f:
     f.write(bundle_code)
 
-print(f"Bundled successfully into dist/kiki-immersion.user.js ({len(bundle_code)} bytes)")
+os.makedirs("userscript", exist_ok=True)
+with open("userscript/kiki-immersion.user.js", "w") as f:
+    f.write(bundle_code)
+
+print(f"Bundled successfully into dist & userscript ({len(bundle_code)} bytes)")

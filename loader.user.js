@@ -120,7 +120,7 @@
     } catch (e) {}
   }
 
-  const EXPECTED_CACHE_VERSION = "1.2.4";
+  const EXPECTED_CACHE_VERSION = "1.2.5";
 
   function hasAllCachedModules() {
     if (localStorage.getItem("kiki_cache_version") !== EXPECTED_CACHE_VERSION) return false;

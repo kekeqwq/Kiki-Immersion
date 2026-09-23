@@ -1,14 +1,14 @@
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.2.4
+// Version: 1.2.5
 // =============================================================
 
+  window.__kiki_engine_version = "1.2.5";
 
-
-
-
-
-  window.__kiki_engine_version = "1.2.4";
+  let cachedPoToken = "";
+  try {
+    cachedPoToken = sessionStorage.getItem("kiki_pot") || "";
+  } catch {}
 
   const STATE = window.STATE = {
     enabled: true,
@@ -27,8 +27,146 @@
     liveMode: false,
     liveFallbackAllowed: false,
     lastObservedText: "",
-    engineVersion: "1.2.4"
+    lastPoToken: cachedPoToken,
+    capturedLastUrl: "",
+    capturedBody: "",
+    capturedVideoId: "",
+    engineVersion: "1.2.5"
   };
+
+  // -------------------------------------------------------------
+  // Early TimedText Wire Sniffer & PoToken Session Cache
+  // -------------------------------------------------------------
+  const TIMEDTEXT_MARK = "/api/timedtext";
+
+  function noteTimedtextUrl(url) {
+    if (typeof url !== "string" || !url.includes(TIMEDTEXT_MARK)) return;
+    try {
+      const u = new URL(url, location.href);
+      const pot = u.searchParams.get("pot");
+      if (pot) {
+        STATE.lastPoToken = pot;
+        try { sessionStorage.setItem("kiki_pot", pot); } catch {}
+      }
+    } catch {}
+    let urlVid = "";
+    try { urlVid = new URL(url, location.href).searchParams.get("v") || ""; } catch {}
+    const cid = urlVid || (typeof currentVideoId === "function" ? currentVideoId() : STATE.videoId);
+    if (STATE.capturedVideoId && cid && STATE.capturedVideoId !== cid) {
+      STATE.capturedLastUrl = "";
+      STATE.capturedBody = "";
+    }
+    STATE.capturedVideoId = cid;
+    STATE.capturedLastUrl = url;
+  }
+  window.noteTimedtextUrl = noteTimedtextUrl;
+
+  function checkResourceTimingForTimedtext() {
+    try {
+      if (typeof performance === "undefined" || typeof performance.getEntriesByType !== "function") return "";
+      const entries = performance.getEntriesByType("resource");
+      for (let i = entries.length - 1; i >= 0; i--) {
+        const name = entries[i].name;
+        if (typeof name === "string" && name.includes(TIMEDTEXT_MARK)) {
+          noteTimedtextUrl(name);
+          return name;
+        }
+      }
+    } catch {}
+    return "";
+  }
+  window.checkResourceTimingForTimedtext = checkResourceTimingForTimedtext;
+
+  function handleCapturedWire(body, url) {
+    if (!body || body.trim().length < 20) return;
+    noteTimedtextUrl(url);
+    STATE.capturedBody = body;
+    STATE.capturedLastUrl = url;
+    if (typeof window.__kiki_onCapturedWireBody === "function") {
+      try { window.__kiki_onCapturedWireBody(body, url); } catch {}
+    }
+  }
+
+  // Hook fetch early
+  const origFetch = window.fetch;
+  window.origFetch = origFetch;
+  window.fetch = function (...args) {
+    let reqUrl = "";
+    try {
+      const req = args[0];
+      reqUrl = typeof req === "string" ? req : (req?.url || req?.href || "");
+      noteTimedtextUrl(reqUrl);
+    } catch {}
+
+    const promise = origFetch.apply(this, args);
+    try {
+      if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
+        promise.then((res) => {
+          try {
+            res.clone().text().then((text) => {
+              if (text && text.trim().length > 20) {
+                handleCapturedWire(text, reqUrl);
+              }
+            }).catch(() => {});
+          } catch {}
+        }).catch(() => {});
+      }
+    } catch {}
+    return promise;
+  };
+
+  // Hook XMLHttpRequest early
+  const origOpen = XMLHttpRequest.prototype.open;
+  const origSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+    this.__kiki_url = typeof url === "string" ? url : (url?.href || String(url || ""));
+    noteTimedtextUrl(this.__kiki_url);
+    return origOpen.call(this, method, url, ...rest);
+  };
+  XMLHttpRequest.prototype.send = function (...args) {
+    this.addEventListener("load", function () {
+      try {
+        const reqUrl = this.__kiki_url;
+        if (typeof reqUrl !== "string" || !reqUrl.includes(TIMEDTEXT_MARK)) return;
+        if (this.status && (this.status < 200 || this.status >= 400)) return;
+        let body = "";
+        try {
+          if (this.responseType === "" || this.responseType === "text") {
+            body = this.responseText || "";
+          } else if (this.responseType === "json") {
+            body = typeof this.response === "string" ? this.response : JSON.stringify(this.response || "");
+          } else if (this.responseType === "document" && this.responseXML) {
+            body = new XMLSerializer().serializeToString(this.responseXML);
+          } else if (this.responseType === "arraybuffer" && this.response) {
+            body = new TextDecoder("utf-8").decode(this.response);
+          } else if (this.responseType === "blob" && this.response) {
+            this.response.text().then((t) => {
+              if (t && t.trim().length > 20) {
+                handleCapturedWire(t, reqUrl);
+              }
+            }).catch(() => {});
+            return;
+          }
+        } catch {}
+        if (body && body.trim().length > 20) {
+          handleCapturedWire(body, reqUrl);
+        }
+      } catch {}
+    });
+    return origSend.apply(this, args);
+  };
+
+  // Early PerformanceObserver
+  try {
+    const obs = new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) {
+        if (typeof e.name === "string" && e.name.includes(TIMEDTEXT_MARK)) {
+          noteTimedtextUrl(e.name);
+        }
+      }
+    });
+    obs.observe({ type: "resource", buffered: true });
+  } catch {}
 
   // -------------------------------------------------------------
   // Trusted Types Policy & Safe HTML Setter

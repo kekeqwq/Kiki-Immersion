@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.2.4
+// @version      1.2.5
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, and touch/mouse gestures.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -49,15 +49,15 @@
 
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.2.4
+// Version: 1.2.5
 // =============================================================
 
+  window.__kiki_engine_version = "1.2.5";
 
-
-
-
-
-  window.__kiki_engine_version = "1.2.4";
+  let cachedPoToken = "";
+  try {
+    cachedPoToken = sessionStorage.getItem("kiki_pot") || "";
+  } catch {}
 
   const STATE = window.STATE = {
     enabled: true,
@@ -76,9 +76,146 @@
     liveMode: false,
     liveFallbackAllowed: false,
     lastObservedText: "",
-    lastPoToken: "",
-    engineVersion: "1.2.4"
+    lastPoToken: cachedPoToken,
+    capturedLastUrl: "",
+    capturedBody: "",
+    capturedVideoId: "",
+    engineVersion: "1.2.5"
   };
+
+  // -------------------------------------------------------------
+  // Early TimedText Wire Sniffer & PoToken Session Cache
+  // -------------------------------------------------------------
+  const TIMEDTEXT_MARK = "/api/timedtext";
+
+  function noteTimedtextUrl(url) {
+    if (typeof url !== "string" || !url.includes(TIMEDTEXT_MARK)) return;
+    try {
+      const u = new URL(url, location.href);
+      const pot = u.searchParams.get("pot");
+      if (pot) {
+        STATE.lastPoToken = pot;
+        try { sessionStorage.setItem("kiki_pot", pot); } catch {}
+      }
+    } catch {}
+    let urlVid = "";
+    try { urlVid = new URL(url, location.href).searchParams.get("v") || ""; } catch {}
+    const cid = urlVid || (typeof currentVideoId === "function" ? currentVideoId() : STATE.videoId);
+    if (STATE.capturedVideoId && cid && STATE.capturedVideoId !== cid) {
+      STATE.capturedLastUrl = "";
+      STATE.capturedBody = "";
+    }
+    STATE.capturedVideoId = cid;
+    STATE.capturedLastUrl = url;
+  }
+  window.noteTimedtextUrl = noteTimedtextUrl;
+
+  function checkResourceTimingForTimedtext() {
+    try {
+      if (typeof performance === "undefined" || typeof performance.getEntriesByType !== "function") return "";
+      const entries = performance.getEntriesByType("resource");
+      for (let i = entries.length - 1; i >= 0; i--) {
+        const name = entries[i].name;
+        if (typeof name === "string" && name.includes(TIMEDTEXT_MARK)) {
+          noteTimedtextUrl(name);
+          return name;
+        }
+      }
+    } catch {}
+    return "";
+  }
+  window.checkResourceTimingForTimedtext = checkResourceTimingForTimedtext;
+
+  function handleCapturedWire(body, url) {
+    if (!body || body.trim().length < 20) return;
+    noteTimedtextUrl(url);
+    STATE.capturedBody = body;
+    STATE.capturedLastUrl = url;
+    if (typeof window.__kiki_onCapturedWireBody === "function") {
+      try { window.__kiki_onCapturedWireBody(body, url); } catch {}
+    }
+  }
+
+  // Hook fetch early
+  const origFetch = window.fetch;
+  window.origFetch = origFetch;
+  window.fetch = function (...args) {
+    let reqUrl = "";
+    try {
+      const req = args[0];
+      reqUrl = typeof req === "string" ? req : (req?.url || req?.href || "");
+      noteTimedtextUrl(reqUrl);
+    } catch {}
+
+    const promise = origFetch.apply(this, args);
+    try {
+      if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
+        promise.then((res) => {
+          try {
+            res.clone().text().then((text) => {
+              if (text && text.trim().length > 20) {
+                handleCapturedWire(text, reqUrl);
+              }
+            }).catch(() => {});
+          } catch {}
+        }).catch(() => {});
+      }
+    } catch {}
+    return promise;
+  };
+
+  // Hook XMLHttpRequest early
+  const origOpen = XMLHttpRequest.prototype.open;
+  const origSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+    this.__kiki_url = typeof url === "string" ? url : (url?.href || String(url || ""));
+    noteTimedtextUrl(this.__kiki_url);
+    return origOpen.call(this, method, url, ...rest);
+  };
+  XMLHttpRequest.prototype.send = function (...args) {
+    this.addEventListener("load", function () {
+      try {
+        const reqUrl = this.__kiki_url;
+        if (typeof reqUrl !== "string" || !reqUrl.includes(TIMEDTEXT_MARK)) return;
+        if (this.status && (this.status < 200 || this.status >= 400)) return;
+        let body = "";
+        try {
+          if (this.responseType === "" || this.responseType === "text") {
+            body = this.responseText || "";
+          } else if (this.responseType === "json") {
+            body = typeof this.response === "string" ? this.response : JSON.stringify(this.response || "");
+          } else if (this.responseType === "document" && this.responseXML) {
+            body = new XMLSerializer().serializeToString(this.responseXML);
+          } else if (this.responseType === "arraybuffer" && this.response) {
+            body = new TextDecoder("utf-8").decode(this.response);
+          } else if (this.responseType === "blob" && this.response) {
+            this.response.text().then((t) => {
+              if (t && t.trim().length > 20) {
+                handleCapturedWire(t, reqUrl);
+              }
+            }).catch(() => {});
+            return;
+          }
+        } catch {}
+        if (body && body.trim().length > 20) {
+          handleCapturedWire(body, reqUrl);
+        }
+      } catch {}
+    });
+    return origSend.apply(this, args);
+  };
+
+  // Early PerformanceObserver
+  try {
+    const obs = new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) {
+        if (typeof e.name === "string" && e.name.includes(TIMEDTEXT_MARK)) {
+          noteTimedtextUrl(e.name);
+        }
+      }
+    });
+    obs.observe({ type: "resource", buffered: true });
+  } catch {}
 
   // -------------------------------------------------------------
   // Trusted Types Policy & Safe HTML Setter
@@ -3321,7 +3458,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.2.4
+// Version: 1.2.5
 // =============================================================
 
   function playVideoSync() {
@@ -3512,7 +3649,6 @@ window.KikiAudioEngine = KikiAudioEngine;
           <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="opacity: 0.95; flex-shrink: 0; vertical-align: -1.5px;"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
           <span>Settings</span>
         </button>
-        <button type="button" class="kiki-hud-btn kiki-hud-about" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="About Kiki Immersion & Hot-Update">ℹ️ About</button>
         <button type="button" class="kiki-hud-btn kiki-hud-sub" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="Toggle Subtitles Visibility">💬 Sub: On</button>
         <button type="button" class="kiki-hud-btn kiki-hud-cc" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 12px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important; min-width: 140px !important; max-width: 250px !important; text-overflow: ellipsis !important; overflow: hidden !important;" title="Click to select subtitle track">CC: Searching... ▾</button>
         <button type="button" class="kiki-hud-btn kiki-hud-reload" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="Reload Subtitles for Current Video">🔄 Reload</button>
@@ -3557,10 +3693,6 @@ window.KikiAudioEngine = KikiAudioEngine;
 
       bindHudButton(hud.querySelector(".kiki-hud-settings"), () => {
         showSettingsModal("dict");
-      });
-
-      bindHudButton(hud.querySelector(".kiki-hud-about"), () => {
-        showSettingsModal("about");
       });
 
       bindHudButton(hud.querySelector(".kiki-hud-sub"), () => {
@@ -4211,7 +4343,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     });
   }
 
-  function closeLookup() {
+  function closeLookup(resume = true) {
     abortActiveAi();
     STATE.lookupEl = null;
     STATE.lookupWord = "";
@@ -4220,8 +4352,8 @@ window.KikiAudioEngine = KikiAudioEngine;
     const card = $("#kiki-yomitan-card");
     if (card) card.classList.remove("show");
 
-    if (STATE.pausedForLookup) {
-      STATE.pausedForLookup = false;
+    STATE.pausedForLookup = false;
+    if (resume) {
       playVideoSync();
     }
   }
@@ -4230,7 +4362,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     const card = $("#kiki-yomitan-card");
     const cardOpen = card && card.classList.contains("show");
     if ((STATE.lookupEl || cardOpen) && !e.target.closest("#kiki-yomitan-card, .kiki-word, .kiki-cap-ai-btn, #kiki-settings-modal, #kiki-hud, .kiki-toast")) {
-      closeLookup();
+      closeLookup(true);
     }
     const modal = document.getElementById("kiki-settings-modal");
     if (modal && modal.style.display !== "none" && !e.target.closest("#kiki-settings-modal, #kiki-hud")) {
@@ -4961,17 +5093,17 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - YouTube Adapter & Subtitle Pipeline
-// Version: 1.2.4
+// Version: 1.2.5
 // =============================================================
 
   // -------------------------------------------------------------
   // 2. High-Fidelity TimedText Wire Sniffer
   // -------------------------------------------------------------
   const MARK = "/api/timedtext";
-  let capturedBody = "";
-  let capturedLastUrl = "";
-  let capturedVideoId = "";
-  let lastPoToken = "";
+  let capturedBody = STATE?.capturedBody || "";
+  let capturedLastUrl = STATE?.capturedLastUrl || "";
+  let capturedVideoId = STATE?.capturedVideoId || "";
+  let lastPoToken = STATE?.lastPoToken || "";
   let selfFetching = 0;
 
   function currentVideoId() {
@@ -4987,6 +5119,9 @@ window.KikiAudioEngine = KikiAudioEngine;
   }
 
   function noteTimedtextUrl(url) {
+    if (typeof window.noteTimedtextUrl === "function") {
+      window.noteTimedtextUrl(url);
+    }
     if (typeof url !== "string" || !url.includes(MARK)) return;
     try {
       const u = new URL(url, location.href);
@@ -4994,6 +5129,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       if (pot) {
         lastPoToken = pot;
         if (typeof STATE !== "undefined") STATE.lastPoToken = pot;
+        try { sessionStorage.setItem("kiki_pot", pot); } catch {}
       }
     } catch {}
     let urlVid = "";
@@ -5002,9 +5138,17 @@ window.KikiAudioEngine = KikiAudioEngine;
     if (capturedVideoId && cid && capturedVideoId !== cid) {
       capturedLastUrl = "";
       capturedBody = "";
+      if (typeof STATE !== "undefined") {
+        STATE.capturedLastUrl = "";
+        STATE.capturedBody = "";
+      }
     }
     capturedVideoId = cid;
     capturedLastUrl = url;
+    if (typeof STATE !== "undefined") {
+      STATE.capturedVideoId = cid;
+      STATE.capturedLastUrl = url;
+    }
   }
 
   function onCapturedWireBody(body, url) {
@@ -5015,6 +5159,11 @@ window.KikiAudioEngine = KikiAudioEngine;
     capturedVideoId = urlVid || currentVideoId();
     capturedBody = body;
     capturedLastUrl = url;
+    if (typeof STATE !== "undefined") {
+      STATE.capturedBody = body;
+      STATE.capturedLastUrl = url;
+      STATE.capturedVideoId = capturedVideoId;
+    }
 
     const curVid = currentVideoId();
     if (!capturedVideoId || capturedVideoId === curVid) {
@@ -5035,83 +5184,14 @@ window.KikiAudioEngine = KikiAudioEngine;
       }
     }
   }
+  window.__kiki_onCapturedWireBody = onCapturedWireBody;
 
-  const origFetch = window.fetch;
-  window.fetch = function (...args) {
-    let reqUrl = "";
-    try {
-      const req = args[0];
-      reqUrl = typeof req === "string" ? req : (req?.url || req?.href || "");
-      noteTimedtextUrl(reqUrl);
-    } catch {}
+  if (STATE?.capturedBody && STATE.capturedBody.trim().length > 20) {
+    setTimeout(() => {
+      onCapturedWireBody(STATE.capturedBody, STATE.capturedLastUrl || "");
+    }, 60);
+  }
 
-    const promise = origFetch.apply(this, args);
-    try {
-      if (typeof reqUrl === "string" && reqUrl.includes(MARK)) {
-        promise.then((res) => {
-          try {
-            res.clone().text().then((text) => {
-              if (text && text.trim().length > 20) {
-                onCapturedWireBody(text, reqUrl);
-              }
-            }).catch(() => {});
-          } catch {}
-        }).catch(() => {});
-      }
-    } catch {}
-    return promise;
-  };
-
-  const origOpen = XMLHttpRequest.prototype.open;
-  const origSend = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.open = function (method, url, ...rest) {
-    this.__kiki_url = typeof url === "string" ? url : (url?.href || String(url || ""));
-    noteTimedtextUrl(this.__kiki_url);
-    return origOpen.call(this, method, url, ...rest);
-  };
-  XMLHttpRequest.prototype.send = function (...args) {
-    this.addEventListener("load", function () {
-      try {
-        const reqUrl = this.__kiki_url;
-        if (typeof reqUrl !== "string" || !reqUrl.includes(MARK)) return;
-        if (this.status && this.status !== 200) return;
-        let body = "";
-        try {
-          if (this.responseType === "" || this.responseType === "text") {
-            body = this.responseText || "";
-          } else if (this.responseType === "json") {
-            body = typeof this.response === "string" ? this.response : JSON.stringify(this.response || "");
-          } else if (this.responseType === "document" && this.responseXML) {
-            body = new XMLSerializer().serializeToString(this.responseXML);
-          } else if (this.responseType === "arraybuffer" && this.response) {
-            body = new TextDecoder("utf-8").decode(this.response);
-          } else if (this.responseType === "blob" && this.response) {
-            this.response.text().then((t) => {
-              if (t && t.trim().length > 20) {
-                onCapturedWireBody(t, reqUrl);
-              }
-            }).catch(() => {});
-            return;
-          }
-        } catch {}
-        if (body && body.trim().length > 20) {
-          onCapturedWireBody(body, reqUrl);
-        }
-      } catch {}
-    });
-    return origSend.apply(this, args);
-  };
-
-  try {
-    const obs = new PerformanceObserver((list) => {
-      for (const e of list.getEntries()) {
-        if (typeof e.name === "string" && e.name.includes(MARK)) {
-          noteTimedtextUrl(e.name);
-        }
-      }
-    });
-    obs.observe({ type: "resource", buffered: true });
-  } catch {}
 
   function getInnertubeKey() {
     try {
@@ -5301,6 +5381,17 @@ window.KikiAudioEngine = KikiAudioEngine;
   let lastTapY = 0;
   let singleTapTimer = null;
 
+  function isLookupOrCardOpen() {
+    const card = document.getElementById("kiki-yomitan-card");
+    return Boolean(
+      (card && card.classList.contains("show")) ||
+      STATE.lookupEl ||
+      STATE.pausedForLookup
+    );
+  }
+
+  let lastLookupDismissTime = 0;
+
   function onNativeGuard(e) {
     if (!STATE.enabled) return;
     try { ensureHud(); ensureRoot(); } catch {}
@@ -5312,6 +5403,22 @@ window.KikiAudioEngine = KikiAudioEngine;
         e.target.closest("#kiki-yomitan-card") ||
         e.target.closest("#kiki-hud") ||
         e.target.closest("#kiki-toast")) {
+      return;
+    }
+
+    // Dismiss open Yomitan / AI card without triggering pause gesture
+    if (isLookupOrCardOpen()) {
+      if (e.cancelable) e.preventDefault();
+      e.stopImmediatePropagation();
+      lastLookupDismissTime = Date.now();
+      if (singleTapTimer) {
+        clearTimeout(singleTapTimer);
+        singleTapTimer = null;
+      }
+      singleTapActionFired = false;
+      if (typeof closeLookup === "function") {
+        closeLookup(true);
+      }
       return;
     }
 
@@ -5380,8 +5487,13 @@ window.KikiAudioEngine = KikiAudioEngine;
   let singleTapActionFired = false;
   function handleTap(p, cx, cy, inputType = "touch") {
     lastTapInputType = inputType;
-    if (STATE.lookupEl) {
-      closeLookup();
+    if (isLookupOrCardOpen() || (Date.now() - lastLookupDismissTime < 450)) {
+      if (isLookupOrCardOpen() && typeof closeLookup === "function") {
+        closeLookup(true);
+      }
+      clearTimeout(singleTapTimer);
+      singleTapTimer = null;
+      singleTapActionFired = false;
       return;
     }
 
@@ -5929,15 +6041,22 @@ window.KikiAudioEngine = KikiAudioEngine;
     });
   }
 
+  let lastSelfHealFetchTime = 0;
   function onNativeCaptionsMutated() {
     suppressNativeCaptions();
+
+    if (typeof checkResourceTimingForTimedtext === "function") {
+      checkResourceTimingForTimedtext();
+    }
 
     // Self-healing: check wire sniffer even if we already have cues or are in liveMode
     // This allows late-arriving PoToken XHR responses to upgrade us from live→structured
     const curVid = currentVideoId();
-    if (capturedBody && capturedBody.trim().length > 20) {
-      if (!capturedVideoId || capturedVideoId === curVid) {
-        const cues = parseAny(capturedBody);
+    const curBody = capturedBody || STATE.capturedBody;
+    const curVidCaptured = capturedVideoId || STATE.capturedVideoId;
+    if (curBody && curBody.trim().length > 20) {
+      if (!curVidCaptured || curVidCaptured === curVid) {
+        const cues = parseAny(curBody);
         if (cues && cues.length) {
           // If we're in liveMode OR have no cues, accept the wire sniffer data
           if (STATE.liveMode || !STATE.cues || !STATE.cues.length) {
@@ -5953,9 +6072,24 @@ window.KikiAudioEngine = KikiAudioEngine;
 
     // Check if video.textTracks has loaded genuine cues
     const trackCues = extractCuesFromVideo();
-    if (trackCues && trackCues.length > 2) {
+    if (trackCues && trackCues.length > 0) {
       applyLoadedCues(trackCues, "video-track", STATE.activeTrack);
       return;
+    }
+
+    // Self-heal: Try upgrading with captured PoToken if available
+    const pot = lastPoToken || STATE.lastPoToken;
+    if (pot && STATE.activeTrack?.baseUrl && Date.now() - lastSelfHealFetchTime > 3500 && !loadingTracks) {
+      lastSelfHealFetchTime = Date.now();
+      const jsonUrl = STATE.activeTrack.baseUrl.includes("fmt=")
+        ? STATE.activeTrack.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
+        : STATE.activeTrack.baseUrl + (STATE.activeTrack.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
+      fetchExact(jsonUrl, 2500).then((raw) => {
+        const cues = parseAny(raw);
+        if (cues && cues.length) {
+          applyLoadedCues(cues, "pot-upgrade", STATE.activeTrack);
+        }
+      }).catch(() => {});
     }
 
     // While actively loading/fetching tracks, DO NOT preempt into live mode!
@@ -6148,8 +6282,9 @@ window.KikiAudioEngine = KikiAudioEngine;
         .replace(/\\u0026/g, "&")
         .replace(/\\\//g, "/");
 
-      if (lastPoToken && !cleanUrl.includes("&pot=") && !cleanUrl.includes("?pot=")) {
-        cleanUrl += (cleanUrl.includes("?") ? "&" : "?") + `potc=1&pot=${encodeURIComponent(lastPoToken)}`;
+      const token = lastPoToken || STATE?.lastPoToken;
+      if (token && !cleanUrl.includes("&pot=") && !cleanUrl.includes("?pot=")) {
+        cleanUrl += (cleanUrl.includes("?") ? "&" : "?") + `potc=1&pot=${encodeURIComponent(token)}`;
       }
 
       const ctrl = new AbortController();
@@ -6180,6 +6315,10 @@ window.KikiAudioEngine = KikiAudioEngine;
     try {
       el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
     } catch {}
+    try {
+      el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerType: "touch" }));
+      el.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, cancelable: true, pointerType: "touch" }));
+    } catch {}
   }
 
   function ensureCaptionsActive(targetTrack = null) {
@@ -6198,6 +6337,7 @@ window.KikiAudioEngine = KikiAudioEngine;
               trackOption.vss_id = targetTrack.vssId || targetTrack.vss_id;
             }
             p.setOption("captions", "track", trackOption);
+            p.setOption("captions", "reload", true);
           } catch {}
         }
         if (typeof p.toggleSubtitlesOn === "function") {
@@ -6213,6 +6353,9 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
       });
     } catch {}
+    if (typeof checkResourceTimingForTimedtext === "function") {
+      checkResourceTimingForTimedtext();
+    }
   }
 
   function applyLoadedCues(cues, source, track = null) {
@@ -6352,9 +6495,16 @@ window.KikiAudioEngine = KikiAudioEngine;
     updateHud("CC: Loading... ▾");
 
     try {
-      // 1. Wire sniffer cache
-      if (capturedBody && (capturedVideoId === vid || !capturedVideoId) && capturedBody.trim().length > 20) {
-        const cues = parseAny(capturedBody);
+      // 0. Synchronous inspection of resource timing for any timedtext URL
+      if (typeof checkResourceTimingForTimedtext === "function") {
+        checkResourceTimingForTimedtext();
+      }
+
+      // 1. Wire sniffer cache / early captured body
+      const cBody = capturedBody || STATE.capturedBody;
+      const cVid = capturedVideoId || STATE.capturedVideoId;
+      if (cBody && (cVid === vid || !cVid) && cBody.trim().length > 20) {
+        const cues = parseAny(cBody);
         if (cues && cues.length) {
           applyLoadedCues(cues, "wire-cache", STATE.activeTrack);
           return;
@@ -6365,7 +6515,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       let tracks = getAllCaptionTracks(vid);
       if (!tracks || !tracks.length) {
         for (let i = 0; i < 4; i++) {
-          await sleep(200);
+          await sleep(150);
           tracks = getAllCaptionTracks(vid);
           if (tracks && tracks.length) break;
         }
@@ -6385,7 +6535,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       if (!tracks || !tracks.length) {
         try {
           const ctrl = new AbortController();
-          const tid = setTimeout(() => ctrl.abort(), 2500);
+          const tid = setTimeout(() => ctrl.abort(), 2000);
           const res = await origFetch.call(window, `https://www.youtube.com/watch?v=${vid}`, {
             credentials: "omit",
             signal: ctrl.signal
@@ -6410,44 +6560,82 @@ window.KikiAudioEngine = KikiAudioEngine;
           STATE.activeTrack = sorted[0];
         }
         bestTrack = STATE.activeTrack;
+      }
 
-        // Limit to top 3 prioritized tracks to avoid long sequential delays
-        for (const pick of sorted.slice(0, 3)) {
-          if (!pick || !pick.baseUrl) continue;
-          let raw = await fetchExact(pick.baseUrl, 2000);
-          let cues = parseAny(raw);
-          if (!cues || !cues.length) {
-            const jsonUrl = pick.baseUrl.includes("fmt=")
-              ? pick.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
-              : pick.baseUrl + (pick.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
-            raw = await fetchExact(jsonUrl, 2000);
-            cues = parseAny(raw);
-          }
-          if (cues && cues.length) {
-            applyLoadedCues(cues, pick.kind === "asr" ? "auto" : "official", pick);
-            return;
-          }
+      // 5. Early activation: trigger YouTube player module & XHR right now!
+      ensureCaptionsActive(bestTrack);
+
+      // 6. Direct timedtext fetch for bestTrack (prioritizing fmt=json3 and using PoToken)
+      if (bestTrack && bestTrack.baseUrl) {
+        const jsonUrl = bestTrack.baseUrl.includes("fmt=")
+          ? bestTrack.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
+          : bestTrack.baseUrl + (bestTrack.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
+        let raw = await fetchExact(jsonUrl, 2500);
+        let cues = parseAny(raw);
+        if (cues && cues.length) {
+          applyLoadedCues(cues, bestTrack.kind === "asr" ? "auto" : "official", bestTrack);
+          return;
+        }
+
+        // If json3 failed, try srv3 (Format 3 XML)
+        const srvUrl = bestTrack.baseUrl.includes("fmt=")
+          ? bestTrack.baseUrl.replace(/fmt=[^&]+/, "fmt=srv3")
+          : bestTrack.baseUrl + (bestTrack.baseUrl.includes("?") ? "&" : "?") + "fmt=srv3";
+        raw = await fetchExact(srvUrl, 1500);
+        cues = parseAny(raw);
+        if (cues && cues.length) {
+          applyLoadedCues(cues, bestTrack.kind === "asr" ? "auto" : "official", bestTrack);
+          return;
         }
       }
 
-      // 5. Activate Native Module with prioritized track to trigger player XHR with PoToken
-      ensureCaptionsActive(bestTrack);
+      // 7. Check if capturedLastUrl from resource timing / sniffer can be fetched directly
+      const curLastUrl = capturedLastUrl || STATE.capturedLastUrl;
+      if (curLastUrl && curLastUrl.includes(MARK)) {
+        const directJson = curLastUrl.includes("fmt=")
+          ? curLastUrl.replace(/fmt=[^&]+/, "fmt=json3")
+          : curLastUrl + (curLastUrl.includes("?") ? "&" : "?") + "fmt=json3";
+        const raw = await fetchExact(directJson, 2000);
+        const cues = parseAny(raw);
+        if (cues && cues.length) {
+          applyLoadedCues(cues, "wire-url", bestTrack || STATE.activeTrack);
+          return;
+        }
+      }
 
-      // 6. Grace period: wait for Player XHR / Wire Sniffer / textTracks (up to 3500ms)
+      // 8. Grace period: wait for Player XHR / Wire Sniffer / textTracks (up to 3500ms)
       const waitStart = Date.now();
       while (Date.now() - waitStart < 3500) {
         await sleep(150);
 
-        if (capturedBody && (capturedVideoId === vid || !capturedVideoId) && capturedBody.trim().length > 20) {
-          const cues = parseAny(capturedBody);
+        const currentBody = capturedBody || STATE.capturedBody;
+        const currentVid = capturedVideoId || STATE.capturedVideoId;
+        if (currentBody && (currentVid === vid || !currentVid) && currentBody.trim().length > 20) {
+          const cues = parseAny(currentBody);
           if (cues && cues.length) {
             applyLoadedCues(cues, "wire-sniffer", bestTrack || STATE.activeTrack);
             return;
           }
         }
 
+        // Check if resource timing found a new PoToken / URL during grace period
+        if (typeof checkResourceTimingForTimedtext === "function") {
+          const foundUrl = checkResourceTimingForTimedtext();
+          if (foundUrl && (lastPoToken || STATE.lastPoToken) && bestTrack?.baseUrl) {
+            const retryJson = bestTrack.baseUrl.includes("fmt=")
+              ? bestTrack.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
+              : bestTrack.baseUrl + (bestTrack.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
+            const rawRetry = await fetchExact(retryJson, 1500);
+            const cuesRetry = parseAny(rawRetry);
+            if (cuesRetry && cuesRetry.length) {
+              applyLoadedCues(cuesRetry, "pot-sniffer", bestTrack);
+              return;
+            }
+          }
+        }
+
         const trackCues = extractCuesFromVideo();
-        if (trackCues && trackCues.length > 2) {
+        if (trackCues && trackCues.length > 0) {
           applyLoadedCues(trackCues, "video-track", bestTrack || STATE.activeTrack);
           return;
         }
@@ -6457,7 +6645,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
       }
 
-      // 7. Direct timedtext API calls (with PoToken if available)
+      // 9. Fallback candidate API calls (with PoToken)
       const directCandidates = [
         `https://www.youtube.com/api/timedtext?v=${vid}&lang=en&fmt=json3`,
         `https://www.youtube.com/api/timedtext?v=${vid}&lang=en&kind=asr&fmt=json3`,
@@ -6466,7 +6654,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       ];
       for (const cand of directCandidates) {
         try {
-          const raw = await fetchExact(cand, 1500);
+          const raw = await fetchExact(cand, 1200);
           const cues = parseAny(raw);
           if (cues && cues.length) {
             applyLoadedCues(cues, "direct", bestTrack);
@@ -6475,21 +6663,22 @@ window.KikiAudioEngine = KikiAudioEngine;
         } catch {}
       }
 
-      // 8. Re-check wire sniffer and textTracks one more time (player XHR may have arrived during step 7)
-      if (capturedBody && (capturedVideoId === vid || !capturedVideoId) && capturedBody.trim().length > 20) {
-        const cues = parseAny(capturedBody);
+      // 10. Re-check wire sniffer and textTracks one last time
+      const finalBody = capturedBody || STATE.capturedBody;
+      if (finalBody && finalBody.trim().length > 20) {
+        const cues = parseAny(finalBody);
         if (cues && cues.length) {
           applyLoadedCues(cues, "wire-sniffer-late", bestTrack || STATE.activeTrack);
           return;
         }
       }
       const finalCues = extractCuesFromVideo();
-      if (finalCues && finalCues.length > 2) {
+      if (finalCues && finalCues.length > 0) {
         applyLoadedCues(finalCues, "video-track", bestTrack);
         return;
       }
 
-      // 9. True Fallback: Only engage live mode if live text is actively present on screen!
+      // 11. True Fallback: Only engage live mode if live text is actively present on screen!
       if (tracks && tracks.length) {
         const liveText = getLiveCaptionText();
         const trkLabel = bestTrack?.name?.simpleText || bestTrack?.languageCode || "Track";
@@ -6643,17 +6832,22 @@ window.KikiAudioEngine = KikiAudioEngine;
   window.addEventListener("keydown", (e) => {
     if (!STATE.enabled) return;
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) return;
-    if (e.key === "[" || e.key === "ArrowLeft") {
+    const k = e.key;
+    if (k === "[" || k === "ArrowLeft" || k === "a" || k === "A") {
       e.preventDefault();
       e.stopPropagation();
       seekCue(-1);
       toast("← previous line");
-    } else if (e.key === "]" || e.key === "ArrowRight") {
+    } else if (k === "]" || k === "ArrowRight" || k === "d" || k === "D") {
       e.preventDefault();
       e.stopPropagation();
       seekCue(1);
       toast("next line →");
-    } else if (e.altKey && (e.key === "f" || e.key === "F")) {
+    } else if (e.code === "Space" || k === " ") {
+      e.preventDefault();
+      e.stopPropagation();
+      togglePause();
+    } else if (e.altKey && (k === "f" || k === "F")) {
       e.preventDefault();
       toggleWebpageFs();
     }
@@ -6694,7 +6888,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         const vState = v ? (v.paused ? "Paused" : "Play") : "NoVid";
         const hudState = hudEl ? (hudEl.offsetWidth > 0 ? `${hudEl.offsetWidth}x${hudEl.offsetHeight}` : "0px") : "NULL";
         const trkCount = v && v.textTracks ? v.textTracks.length : 0;
-        const kikiVer = window.__kiki_engine_version || localStorage.getItem("kiki_cache_version") || "1.2.2";
+        const kikiVer = window.__kiki_engine_version || localStorage.getItem("kiki_cache_version") || "1.2.5";
         toast(`✦ Kiki v${kikiVer} [HUD:${hudState}|${vState}|TT:${trkCount}]`);
       }, 700);
       setTimeout(() => {
@@ -6713,7 +6907,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 
 
-  console.log('[Kiki Immersion] v1.2.4 Modular Engine Loaded on:', location.href);
+  console.log('[Kiki Immersion] v1.2.5 Modular Engine Loaded on:', location.href);
 
 
 // >>> END MODULE: youtube <<<
