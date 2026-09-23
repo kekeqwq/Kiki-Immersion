@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.0.2
+// @version      1.0.3
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine & dynamic hot-reload.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -18,7 +18,7 @@
 (() => {
   "use strict";
 
-  const KIKI_LOADER_VERSION = "1.0.2";
+  const KIKI_LOADER_VERSION = "1.0.3";
   const MODULES = ["core", "yomitan", "ai", "ui", "youtube"];
   const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/modules/";
 
@@ -220,10 +220,19 @@
       const results = await Promise.all(MODULES.map(m => fetchModule(m)));
 
       // Pre-validate module syntax before committing to localStorage
+      const p = getPolicy();
       for (let i = 0; i < MODULES.length; i++) {
+        let src = results[i];
+        if (p && typeof p.createScript === "function") {
+          try { src = p.createScript(src); } catch (e) {}
+        }
         try {
-          new Function(results[i]);
+          new Function(src);
         } catch (syntaxErr) {
+          if (syntaxErr.message && (syntaxErr.message.includes("Trusted") || syntaxErr.name === "EvalError")) {
+            // Trusted Types policy restricts new Function, safe to continue
+            break;
+          }
           throw new Error(`Syntax error in ${MODULES[i]}.js: ${syntaxErr.message}`);
         }
       }
