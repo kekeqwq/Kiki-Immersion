@@ -11,6 +11,8 @@
 // @run-at       document-start
 // @grant        none
 // @inject-into  page
+// @updateURL    https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/dist/kiki-immersion.user.js
+// @downloadURL  https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/dist/kiki-immersion.user.js
 // ==/UserScript==
 
 (() => {
