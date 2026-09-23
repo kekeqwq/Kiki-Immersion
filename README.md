@@ -2,11 +2,28 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Frosted Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.6-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.3-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.7-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.4-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
 ## 📢 Release Overview
+
+**v1.2.7 (Zero-Lag Subtitle Engine, Fixed Live/Structured Desync & Instant Fallback)**:
+- **Eliminated Subtitle Disappearance / Freeze**:
+  - Fixed a critical race condition where live-accumulated cues collided with structured subtitle playback loops, causing captions to wipe or lock up after 5 lines.
+  - Strictly separated pre-loaded structured subtitle cues (`STATE.cues`) from live scraped cues (`STATE.liveCues`), ensuring live mode never wipes the display.
+  - Removed premature returns in native caption mutation handlers, guaranteeing continuous, uninterrupted real-time caption scraping.
+- **Immediate Zero-Wait Subtitle Display**:
+  - Subtitles display instantaneously upon video playback start using zero-delay DOM scraping while background loaders and wire sniffers resolve complete tracks.
+  - Automatically and seamlessly upgrades to structured tracks (displaying line count e.g. `CC: Japanese · 142 ▾`) as soon as YouTube's player timedtext request is intercepted.
+- **Universal Keyboard Navigation**:
+  - `A` / `D` seeking now operates seamlessly across both structured tracks and real-time live caption history.
+  - `Space` smoothly toggles play/pause with synchronized state.
+- **Accurate HUD Indicators**:
+  - Fixed HUD state indicators so they accurately distinguish between real-time scraping (`CC: Live (Track) ▾`) and loaded tracks (`CC: Track · Lines ▾`).
+
+**Loader v1.0.4 (Cache Invalidation & Engine Sync)**:
+- **Instant Cache Upgrade**: Bumped `EXPECTED_CACHE_VERSION` to `1.2.7` to automatically flush legacy cached modules in `localStorage` and ensure immediate pickup of Engine v1.2.7.
 
 **v1.2.5 (iPadOS Subtitle Stability, Keyboard Shortcuts & Popup Dismiss Playback)**:
 - **Major iPadOS Subtitle Stability & PoToken Caching**:

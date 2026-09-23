@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - YouTube Adapter & Subtitle Pipeline
-// Version: 1.2.5
+// Version: 1.2.7
 // =============================================================
 
   // -------------------------------------------------------------
@@ -567,19 +567,41 @@
   function seekCue(dir) {
     const v = videoEl();
     if (!v) return;
-    if (STATE.cues && STATE.cues.length) {
+    const cuesToUse = (!STATE.liveMode && STATE.cues && STATE.cues.length)
+      ? STATE.cues
+      : (STATE.liveCues && STATE.liveCues.length ? STATE.liveCues : null);
+    if (cuesToUse && cuesToUse.length) {
       const curMs = v.currentTime * 1000;
-      let i = STATE.idx;
+      let target = -1;
       if (dir < 0) {
-        i = Math.max(0, (i < 0 ? findIndex(curMs) : i) - 1);
+        for (let k = cuesToUse.length - 1; k >= 0; k--) {
+          if (cuesToUse[k].start < curMs - 400) {
+            target = k;
+            break;
+          }
+        }
+        if (target === -1) target = 0;
       } else {
-        i = Math.min(STATE.cues.length - 1, (i < 0 ? findIndex(curMs) : i) + 1);
+        for (let k = 0; k < cuesToUse.length; k++) {
+          if (cuesToUse[k].start > curMs + 200) {
+            target = k;
+            break;
+          }
+        }
+        if (target === -1) target = cuesToUse.length - 1;
       }
-      const cue = STATE.cues[i];
+      const cue = cuesToUse[target];
       if (cue) {
-        v.currentTime = cue.start / 1000 + 0.01;
-        STATE.idx = i;
-        renderCue(i);
+        v.currentTime = Math.max(0, cue.start / 1000 + 0.01);
+        STATE.idx = target;
+        if (!STATE.liveMode) {
+          renderCue(target);
+        } else {
+          const box = document.getElementById("kiki-captions");
+          if (box && typeof window.renderTextToBox === "function") {
+            window.renderTextToBox(box, cue.text);
+          }
+        }
         return;
       }
     }
@@ -812,7 +834,7 @@
       const track = v.textTracks[i];
       if (track.kind === "chapters" || track.kind === "metadata") continue;
       if (track.mode === "disabled") {
-        try { track.mode = "hidden"; } catch {}
+        try { track.mode = "showing"; } catch {}
       }
       if (track.cues && track.cues.length > 0) {
         const cues = [];
@@ -957,16 +979,14 @@
       checkResourceTimingForTimedtext();
     }
 
-    // Self-healing: check wire sniffer even if we already have cues or are in liveMode
-    // This allows late-arriving PoToken XHR responses to upgrade us from live→structured
+    // 1. Check wire sniffer cache even in liveMode to upgrade live -> structured
     const curVid = currentVideoId();
-    const curBody = capturedBody || STATE.capturedBody;
+    const curBody = capturedBody || STATE.capturedBody || window.__kiki_capturedBody;
     const curVidCaptured = capturedVideoId || STATE.capturedVideoId;
     if (curBody && curBody.trim().length > 20) {
       if (!curVidCaptured || curVidCaptured === curVid) {
         const cues = parseAny(curBody);
         if (cues && cues.length >= 5) {
-          // If we're in liveMode OR have no cues, accept the wire sniffer data
           if (STATE.liveMode || !STATE.cues || STATE.cues.length < 5) {
             applyLoadedCues(cues, "wire-sniffer", STATE.activeTrack);
             return;
@@ -975,18 +995,18 @@
       }
     }
 
-    // If structured cues already loaded, never run live mode!
-    if (STATE.cues && STATE.cues.length >= 5) return;
+    // 2. If structured cues already loaded and active, never run live mode!
+    if (!STATE.liveMode && STATE.cues && STATE.cues.length >= 5) return;
 
-    // Check if video.textTracks has loaded genuine cues
+    // 3. Check if video.textTracks has loaded genuine cues
     const trackCues = extractCuesFromVideo();
     if (trackCues && trackCues.length >= 5) {
       applyLoadedCues(trackCues, "video-track", STATE.activeTrack);
       return;
     }
 
-    // Self-heal: Try upgrading with captured PoToken if available
-    const pot = lastPoToken || STATE.lastPoToken;
+    // 4. Self-heal: Try upgrading with captured PoToken if available
+    const pot = lastPoToken || STATE.lastPoToken || window.__kiki_lastPoToken;
     if (pot && STATE.activeTrack?.baseUrl && Date.now() - lastSelfHealFetchTime > 3500 && !loadingTracks) {
       lastSelfHealFetchTime = Date.now();
       const rawUrl = STATE.activeTrack.baseUrl;
@@ -1001,10 +1021,7 @@
       }).catch(() => {});
     }
 
-    // If genuine structured cues (>= 5 lines) already loaded and active, we don't need live DOM rendering
-    if (STATE.cues && STATE.cues.length >= 5 && !STATE.liveMode) return;
-
-    // Check if resource timing captured a working player URL
+    // 5. Check if resource timing captured a working player URL
     if (typeof checkResourceTimingForTimedtext === "function") {
       const foundUrl = checkResourceTimingForTimedtext();
       if (foundUrl && (!lastSelfHealFetchTime || Date.now() - lastSelfHealFetchTime > 3000)) {
@@ -1018,32 +1035,31 @@
       }
     }
 
-    // Render live caption text immediately without any blocking
+    // 6. Render live caption text immediately without any blocking
     const liveText = getLiveCaptionText();
     if (liveText && liveText !== lastObservedText) {
       lastObservedText = liveText;
       STATE.lastObservedText = liveText;
       STATE.liveMode = true;
 
-      // Accumulate into STATE.cues so keyboard navigation (A / D) works even in live mode!
+      // Accumulate into STATE.liveCues (separate from STATE.cues)
       try {
         const v = videoEl();
         const nowMs = Math.round((v ? v.currentTime : 0) * 1000);
-        if (!Array.isArray(STATE.cues)) STATE.cues = [];
-        if (STATE.cues.length > 0) {
-          const prev = STATE.cues[STATE.cues.length - 1];
+        if (!Array.isArray(STATE.liveCues)) STATE.liveCues = [];
+        if (STATE.liveCues.length > 0) {
+          const prev = STATE.liveCues[STATE.liveCues.length - 1];
           if (prev && (prev.end > nowMs || nowMs - prev.start < 8000)) {
             prev.end = Math.max(nowMs, prev.start + 500);
           }
         }
-        const lastCue = STATE.cues[STATE.cues.length - 1];
+        const lastCue = STATE.liveCues[STATE.liveCues.length - 1];
         if (!lastCue || lastCue.text !== liveText) {
-          STATE.cues.push({
+          STATE.liveCues.push({
             start: nowMs,
             end: nowMs + 4000,
             text: liveText
           });
-          STATE.idx = STATE.cues.length - 1;
         }
       } catch {}
 
@@ -1279,8 +1295,9 @@
         }
         if (typeof p.setOption === "function") {
           try {
+            const lang = targetTrack?.languageCode || detectVideoLanguage() || "ja";
             const trackOption = {
-              languageCode: targetTrack?.languageCode || "en"
+              languageCode: lang
             };
             if (targetTrack?.vssId || targetTrack?.vss_id) {
               trackOption.vss_id = targetTrack.vssId || targetTrack.vss_id;
@@ -1312,6 +1329,7 @@
       return;
     }
     STATE.cues = cues;
+    STATE.liveCues = [];
     STATE.idx = -1;
     STATE.loadingTracks = false;
     loadingTracks = false;
@@ -1341,7 +1359,7 @@
     if (track.baseUrl) {
       let raw = await fetchExact(track.baseUrl, 2500);
       let cues = parseAny(raw);
-      if (!cues || !cues.length) {
+      if (!cues || cues.length < 5) {
         if (!track.baseUrl.includes("&sig=") && !track.baseUrl.includes("?sig=")) {
           const jsonUrl = track.baseUrl.includes("fmt=")
             ? track.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
@@ -1350,13 +1368,13 @@
           cues = parseAny(raw);
         }
       }
-      if (cues && cues.length) {
+      if (cues && cues.length >= 5) {
         applyLoadedCues(cues, track.kind === "asr" ? "auto" : "official", track);
         return;
       }
     }
 
-    // 2. Instruct player to switch to this track (which generates PoToken & sends XHR)
+    // 2. Instruct player to switch to this track
     try {
       const p = playerEl();
       if (p && typeof p.setOption === "function") {
@@ -1371,54 +1389,46 @@
     } catch {}
     ensureCaptionsActive(track);
 
-    // 3. Wait up to 3000ms for player XHR / wire sniffer
-    const t0 = Date.now();
-    while (Date.now() - t0 < 3000) {
-      await sleep(150);
-      if (capturedBody && capturedBody.trim().length > 20) {
-        const cues = parseAny(capturedBody);
-        if (cues && cues.length) {
-          applyLoadedCues(cues, "wire-sniffer", track);
-          return;
-        }
-      }
-      const trackCues = extractCuesFromVideo();
-      if (trackCues && trackCues.length > 0) {
-        applyLoadedCues(trackCues, "video-track", track);
-        return;
-      }
-      if (STATE.cues && STATE.cues.length > 0) {
+    // 3. Wait up to 1500ms for player network response to be intercepted
+    for (let i = 0; i < 8; i++) {
+      await sleep(180);
+      if (STATE.cues && STATE.cues.length >= 5 && !STATE.liveMode) {
         return;
       }
     }
 
-    // 4. Fallback: only engage liveMode if live text is actively observed
+    // 4. Fallback: activate live mode for this track
+    STATE.liveFallbackAllowed = true;
+    STATE.liveMode = true;
     const liveText = getLiveCaptionText();
     if (liveText) {
-      STATE.liveFallbackAllowed = true;
-      STATE.liveMode = true;
+      lastObservedText = liveText;
       STATE.lastObservedText = liveText;
-      renderCue(-1);
-      updateHud(`CC: Live (${trackLabel}) ▾`);
-      toast(`Switched to ${trackLabel} (Realtime)`);
-    } else {
-      STATE.liveFallbackAllowed = false;
-      STATE.liveMode = false;
-      renderCue(-1);
-      updateHud(`CC: ${trackLabel} ▾`);
-      toast(`Switched to ${trackLabel}`);
+      const box = document.getElementById("kiki-captions");
+      if (box && typeof window.renderTextToBox === "function") {
+        window.renderTextToBox(box, liveText);
+      }
     }
+    updateHud(`CC: Live (${trackLabel}) ▾`);
+    toast(`Switched to ${trackLabel} (Realtime)`);
   }
   window.selectSubtitleTrack = selectSubtitleTrack;
 
   function switchToLiveSubtitles() {
     STATE.cues = [];
+    STATE.liveCues = [];
     STATE.liveFallbackAllowed = true;
     STATE.liveMode = true;
     STATE.lastObservedText = "";
     lastObservedText = "";
     ensureCaptionsActive();
-    renderCue(-1);
+    const liveText = getLiveCaptionText();
+    if (liveText) {
+      const box = document.getElementById("kiki-captions");
+      if (box && typeof window.renderTextToBox === "function") {
+        window.renderTextToBox(box, liveText);
+      }
+    }
     updateHud("CC: Live ▾");
     toast("Switched to realtime subtitles");
   }
@@ -1434,10 +1444,11 @@
 
     loadingTracks = true;
     STATE.loadingTracks = true;
-    STATE.liveFallbackAllowed = false;
+    STATE.liveFallbackAllowed = true;
     if (force) {
       STATE.cues = [];
-      STATE.liveMode = false;
+      STATE.liveCues = [];
+      STATE.liveMode = true;
       STATE.lastObservedText = "";
       lastObservedText = "";
     }
@@ -1518,7 +1529,7 @@
         if (bestTrack && bestTrack.baseUrl) {
           let raw = await fetchExact(bestTrack.baseUrl, 1200);
           let cues = parseAny(raw);
-          if (!cues || !cues.length) {
+          if (!cues || cues.length < 5) {
             if (!isUrlSigned(bestTrack.baseUrl)) {
               const jsonUrl = bestTrack.baseUrl.includes("fmt=")
                 ? bestTrack.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
@@ -1526,6 +1537,11 @@
               raw = await fetchExact(jsonUrl, 1200);
               cues = parseAny(raw);
             }
+          }
+          if ((!cues || cues.length < 5) && !isUrlSigned(bestTrack.baseUrl)) {
+            const cleanUrl = bestTrack.baseUrl.replace(/[?&]exp=xpe/, "").replace(/\?&/, "?");
+            raw = await fetchExact(cleanUrl, 1200);
+            cues = parseAny(raw);
           }
           if (cues && cues.length >= 5) {
             applyLoadedCues(cues, bestTrack.kind === "asr" ? "auto" : "official", bestTrack);
@@ -1556,21 +1572,18 @@
 
       // 8. Always enable live captioning fallback immediately — zero freeze, zero waiting!
       STATE.liveFallbackAllowed = true;
+      STATE.liveMode = true;
       const liveText = getLiveCaptionText();
       const trkLabel = bestTrack?.name?.simpleText || bestTrack?.languageCode || "Track";
       if (liveText) {
         lastObservedText = liveText;
         STATE.lastObservedText = liveText;
-        STATE.liveMode = true;
         const box = document.getElementById("kiki-captions");
         if (box && typeof window.renderTextToBox === "function") {
           window.renderTextToBox(box, liveText);
         }
-        updateHud(`CC: Live (${trkLabel}) ▾`);
-      } else {
-        STATE.liveMode = false;
-        updateHud(`CC: ${trkLabel} ▾`);
       }
+      updateHud(`CC: Live (${trkLabel}) ▾`);
 
       // 9. Background self-heal: asynchronously try direct candidates without blocking UI
       setTimeout(() => {
@@ -1633,13 +1646,14 @@
 
     STATE.videoId = id;
     STATE.cues = [];
+    STATE.liveCues = [];
     STATE.idx = -1;
     lastObservedText = "";
     STATE.lastObservedText = "";
     liveToastShown = false;
     lastFailedVideoId = "";
     lastLoadAttemptTime = 0;
-    STATE.liveMode = false;
+    STATE.liveMode = true;
     renderCue(-1);
     closeLookup();
 
@@ -1659,7 +1673,6 @@
       ensureRoot();
       ensureCaptionObserver();
       bindVideoTrackListeners();
-      onNativeCaptionsMutated();
       updateHud();
       updateCaptionPosition();
       if (!STATE.enabled) return;
@@ -1673,22 +1686,22 @@
       const v = videoEl();
       if (!v) return;
 
-      if (!STATE.cues.length && STATE.videoId) {
+      if ((!STATE.cues || !STATE.cues.length) && STATE.videoId) {
         const isPlaying = v && !v.paused && (v.currentTime > 0 || v.readyState >= 1);
-        const retryTimeout = isPlaying ? 2500 : 8000;
+        const retryTimeout = isPlaying ? 3500 : 8000;
         if (!loadingTracks && !STATE.loadingTracks && Date.now() - lastLoadAttemptTime > retryTimeout) {
           loadForVideo();
         }
       }
 
-      // Self-heal: if stuck in liveMode, periodically retry structured cues
-      if (STATE.liveMode && !STATE.cues.length && STATE.videoId) {
+      // Self-heal: if in liveMode and without structured cues, periodically retry structured cues
+      if (STATE.liveMode && (!STATE.cues || !STATE.cues.length) && STATE.videoId) {
         if (!loadingTracks && !STATE.loadingTracks && Date.now() - lastLoadAttemptTime > 8000) {
           loadForVideo(true);
         }
       }
 
-      if (!STATE.cues.length && STATE.videoId) {
+      if ((!STATE.cues || !STATE.cues.length) && STATE.videoId) {
         const btn = document.querySelector(".ytp-subtitles-button");
         const alreadyOn = btn && btn.getAttribute("aria-pressed") === "true";
         if (!alreadyOn && Date.now() - lastCaptionActivationTime > 2200) {
@@ -1697,13 +1710,19 @@
         }
       }
 
-      if (STATE.cues.length) {
+      if (!STATE.liveMode && STATE.cues && STATE.cues.length >= 5) {
         suppressNativeCaptions();
         const curMs = v.currentTime * 1000;
         const i = findIndex(curMs);
         if (i !== STATE.idx) {
           STATE.idx = i;
           renderCue(i);
+        }
+      } else {
+        suppressNativeCaptions();
+        const liveText = getLiveCaptionText();
+        if (liveText && liveText !== lastObservedText) {
+          onNativeCaptionsMutated();
         }
       }
     } catch (err) {
