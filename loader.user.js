@@ -218,6 +218,16 @@
     try {
       let detectedVersion = EXPECTED_CACHE_VERSION;
       const results = await Promise.all(MODULES.map(m => fetchModule(m)));
+
+      // Pre-validate module syntax before committing to localStorage
+      for (let i = 0; i < MODULES.length; i++) {
+        try {
+          new Function(results[i]);
+        } catch (syntaxErr) {
+          throw new Error(`Syntax error in ${MODULES[i]}.js: ${syntaxErr.message}`);
+        }
+      }
+
       results.forEach((code, idx) => {
         setCachedModule(MODULES[idx], code);
         if (MODULES[idx] === "core") {
