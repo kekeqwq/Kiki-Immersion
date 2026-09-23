@@ -91,72 +91,71 @@
     }
   }
 
-  // Hook fetch early
-  const origFetch = window.fetch;
-  window.origFetch = origFetch;
-  window.fetch = function (...args) {
-    let reqUrl = "";
-    try {
-      const req = args[0];
-      reqUrl = typeof req === "string" ? req : (req?.url || req?.href || "");
-      noteTimedtextUrl(reqUrl);
-    } catch {}
-
-    const promise = origFetch.apply(this, args);
-    try {
-      if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
-        promise.then((res) => {
-          try {
-            res.clone().text().then((text) => {
-              if (text && text.trim().length > 20) {
-                handleCapturedWire(text, reqUrl);
-              }
-            }).catch(() => {});
-          } catch {}
-        }).catch(() => {});
-      }
-    } catch {}
-    return promise;
-  };
-
-  // Hook XMLHttpRequest early
-  const origOpen = XMLHttpRequest.prototype.open;
-  const origSend = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.open = function (method, url, ...rest) {
-    this.__kiki_url = typeof url === "string" ? url : (url?.href || String(url || ""));
-    noteTimedtextUrl(this.__kiki_url);
-    return origOpen.call(this, method, url, ...rest);
-  };
-  XMLHttpRequest.prototype.send = function (...args) {
-    this.addEventListener("load", function () {
+  // Hook fetch early (strictly preserving window context to prevent Illegal invocation)
+  const origFetch = (window.fetch ? window.fetch.bind(window) : null);
+  window.origFetch = origFetch || window.fetch;
+  if (origFetch) {
+    window.fetch = function (...args) {
+      let reqUrl = "";
       try {
-        const reqUrl = this.__kiki_url;
-        if (typeof reqUrl !== "string" || !reqUrl.includes(TIMEDTEXT_MARK)) return;
-        if (this.status && (this.status < 200 || this.status >= 400)) return;
-        let body = "";
-        try {
-          if (this.responseType === "" || this.responseType === "text") {
-            body = this.responseText || "";
-          } else if (this.responseType === "json") {
-            body = typeof this.response === "string" ? this.response : JSON.stringify(this.response || "");
-          } else if (this.responseType === "document" && this.responseXML) {
-            body = new XMLSerializer().serializeToString(this.responseXML);
-          } else if (this.responseType === "arraybuffer" && this.response) {
-            body = new TextDecoder("utf-8").decode(this.response);
-          } else if (this.responseType === "blob" && this.response) {
-            this.response.text().then((t) => {
-              if (t && t.trim().length > 20) {
-                handleCapturedWire(t, reqUrl);
-              }
-            }).catch(() => {});
-            return;
-          }
-        } catch {}
-        if (body && body.trim().length > 20) {
-          handleCapturedWire(body, reqUrl);
+        const req = args[0];
+        reqUrl = typeof req === "string" ? req : (req?.url || req?.href || "");
+        noteTimedtextUrl(reqUrl);
+      } catch {}
+
+      const promise = origFetch.apply(window, args);
+      try {
+        if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
+          promise.then((res) => {
+            try {
+              res.clone().text().then((text) => {
+                if (text && text.trim().length > 20) {
+                  handleCapturedWire(text, reqUrl);
+                }
+              }).catch(() => {});
+            } catch {}
+          }).catch(() => {});
         }
       } catch {}
-    });
+      return promise;
+    };
+  }
+
+  // Hook XMLHttpRequest early (strictly for timedtext capture, zero overhead on media buffers)
+  const origOpen = XMLHttpRequest.prototype.open;
+  const origSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (...args) {
+    try {
+      const url = args[1];
+      this.__kiki_url = typeof url === "string" ? url : (url?.href || String(url || ""));
+      noteTimedtextUrl(this.__kiki_url);
+    } catch {}
+    return origOpen.apply(this, args);
+  };
+  XMLHttpRequest.prototype.send = function (...args) {
+    try {
+      const reqUrl = this.__kiki_url;
+      if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
+        this.addEventListener("load", function () {
+          try {
+            if (this.status && (this.status < 200 || this.status >= 400)) return;
+            let body = "";
+            try {
+              if (this.responseType === "" || this.responseType === "text") {
+                body = this.responseText || "";
+              } else if (this.responseType === "json") {
+                body = typeof this.response === "string" ? this.response : JSON.stringify(this.response || "");
+              } else if (this.responseType === "document" && this.responseXML) {
+                body = new XMLSerializer().serializeToString(this.responseXML);
+              }
+            } catch {}
+            if (body && body.trim().length > 20) {
+              handleCapturedWire(body, reqUrl);
+            }
+          } catch {}
+        }, { once: true });
+      }
+    } catch {}
     return origSend.apply(this, args);
   };
 

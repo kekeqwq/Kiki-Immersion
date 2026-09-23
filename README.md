@@ -2,7 +2,7 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Frosted Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.5-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.1-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.5-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.2-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
@@ -22,6 +22,10 @@
   - Added `Space` to toggle play/pause smoothly without scrolling the page.
 - **Smart Popup Dismissal with Instant Playback**:
   - Clicking or tapping outside an active Yomitan lookup card or AI context explanation window now cleanly closes the popup and immediately resumes video playback, without triggering the player's single-tap pause gesture.
+
+**Loader v1.0.2 (Automated Updates & Universal Manager Sync)**:
+- **Native Auto-Update Metadata**: Added `@updateURL` and `@downloadURL` tags matching userscript standards (Safari Userscripts, Tampermonkey, Violentmonkey), enabling one-click update detection and background auto-updating.
+- **Dynamic Engine Version Sync**: Loader now dynamically inspects and records running `__kiki_engine_version` from `core.js` upon hot-reloading, eliminating mismatched version labels.
 
 **Loader v1.0.1 (iPadOS Desktop Redirection Fix)**:
 - **Immediate Desktop Enforcement**: Enforces `PREF` desktop cookies and redirects `m.youtube.com` to `www.youtube.com` right at `document-start` before fetching modules, preventing iPadOS Safari from getting trapped on the mobile web interface during fresh installation.
@@ -62,22 +66,24 @@ Since iPadOS Userscripts does not support direct remote URL script installation,
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.0.1
+// @version      1.0.2
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine & dynamic hot-reload.
 // @author       keke
 // @match        *://*.youtube.com/*
 // @match        *://youtube.com/*
 // @include      *://*.youtube.com/*
-// @include      *://youtube.com/*
+// @include      *://*.youtube.com/*
 // @run-at       document-start
 // @grant        none
 // @inject-into  page
+// @updateURL    https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/loader.user.js
+// @downloadURL  https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/loader.user.js
 // ==/UserScript==
 
 (() => {
   "use strict";
 
-  const KIKI_LOADER_VERSION = "1.0.1";
+  const KIKI_LOADER_VERSION = "1.0.2";
   const MODULES = ["core", "yomitan", "ai", "ui", "youtube"];
   const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/modules/";
 

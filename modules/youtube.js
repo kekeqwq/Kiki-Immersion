@@ -1244,7 +1244,6 @@
               trackOption.vss_id = targetTrack.vssId || targetTrack.vss_id;
             }
             p.setOption("captions", "track", trackOption);
-            p.setOption("captions", "reload", true);
           } catch {}
         }
         if (typeof p.toggleSubtitlesOn === "function") {
@@ -1256,7 +1255,7 @@
         if (!btn) return;
         const pressed = btn.getAttribute("aria-pressed");
         if (pressed === "false" || !pressed) {
-          clickElement(btn);
+          try { btn.click(); } catch {}
         }
       });
     } catch {}
@@ -1469,10 +1468,7 @@
         bestTrack = STATE.activeTrack;
       }
 
-      // 5. Early activation: trigger YouTube player module & XHR right now!
-      ensureCaptionsActive(bestTrack);
-
-      // 6. Direct timedtext fetch for bestTrack (prioritizing fmt=json3 and using PoToken)
+      // 5. Direct timedtext fetch for bestTrack (prioritizing fmt=json3 and using PoToken)
       if (bestTrack && bestTrack.baseUrl) {
         const jsonUrl = bestTrack.baseUrl.includes("fmt=")
           ? bestTrack.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
@@ -1495,6 +1491,9 @@
           return;
         }
       }
+
+      // 6. Direct fetch failed: activate player captions module to generate player XHR & PoToken
+      ensureCaptionsActive(bestTrack);
 
       // 7. Check if capturedLastUrl from resource timing / sniffer can be fetched directly
       const curLastUrl = capturedLastUrl || STATE.capturedLastUrl;
@@ -1698,8 +1697,8 @@
       if (!v) return;
 
       if (!STATE.cues.length && STATE.videoId) {
-        const isPlaying = v && !v.paused && (v.currentTime > 0 || v.readyState >= 2);
-        const retryTimeout = isPlaying ? 3500 : 20000;
+        const isPlaying = v && !v.paused && (v.currentTime > 0 || v.readyState >= 1);
+        const retryTimeout = isPlaying ? 2500 : 8000;
         if (!loadingTracks && !STATE.loadingTracks && Date.now() - lastLoadAttemptTime > retryTimeout) {
           loadForVideo();
         }
@@ -1766,18 +1765,17 @@
     if (!STATE.cues.length && !loadingTracks) setTimeout(onNavigate, 200);
   });
   window.addEventListener("popstate", () => setTimeout(onNavigate, 150));
-  document.addEventListener("play", (e) => {
-    const v = videoEl();
-    if (e.target === v) {
-      ensureCaptionsActive(STATE.activeTrack);
-      if (!STATE.cues.length) {
-        lastFailedVideoId = "";
-        if (!loadingTracks) {
-          setTimeout(() => loadForVideo(true), 250);
+  ["play", "playing", "canplay", "loadeddata"].forEach((evtName) => {
+    document.addEventListener(evtName, (e) => {
+      const v = videoEl();
+      if (e.target === v) {
+        if (!STATE.cues.length && !loadingTracks && !STATE.loadingTracks) {
+          lastFailedVideoId = "";
+          setTimeout(() => loadForVideo(true), 200);
         }
       }
-    }
-  }, true);
+    }, true);
+  });
 
   bindNativeGuard();
 

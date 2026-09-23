@@ -142,72 +142,71 @@
     }
   }
 
-  // Hook fetch early
-  const origFetch = window.fetch;
-  window.origFetch = origFetch;
-  window.fetch = function (...args) {
-    let reqUrl = "";
-    try {
-      const req = args[0];
-      reqUrl = typeof req === "string" ? req : (req?.url || req?.href || "");
-      noteTimedtextUrl(reqUrl);
-    } catch {}
-
-    const promise = origFetch.apply(this, args);
-    try {
-      if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
-        promise.then((res) => {
-          try {
-            res.clone().text().then((text) => {
-              if (text && text.trim().length > 20) {
-                handleCapturedWire(text, reqUrl);
-              }
-            }).catch(() => {});
-          } catch {}
-        }).catch(() => {});
-      }
-    } catch {}
-    return promise;
-  };
-
-  // Hook XMLHttpRequest early
-  const origOpen = XMLHttpRequest.prototype.open;
-  const origSend = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.open = function (method, url, ...rest) {
-    this.__kiki_url = typeof url === "string" ? url : (url?.href || String(url || ""));
-    noteTimedtextUrl(this.__kiki_url);
-    return origOpen.call(this, method, url, ...rest);
-  };
-  XMLHttpRequest.prototype.send = function (...args) {
-    this.addEventListener("load", function () {
+  // Hook fetch early (strictly preserving window context to prevent Illegal invocation)
+  const origFetch = (window.fetch ? window.fetch.bind(window) : null);
+  window.origFetch = origFetch || window.fetch;
+  if (origFetch) {
+    window.fetch = function (...args) {
+      let reqUrl = "";
       try {
-        const reqUrl = this.__kiki_url;
-        if (typeof reqUrl !== "string" || !reqUrl.includes(TIMEDTEXT_MARK)) return;
-        if (this.status && (this.status < 200 || this.status >= 400)) return;
-        let body = "";
-        try {
-          if (this.responseType === "" || this.responseType === "text") {
-            body = this.responseText || "";
-          } else if (this.responseType === "json") {
-            body = typeof this.response === "string" ? this.response : JSON.stringify(this.response || "");
-          } else if (this.responseType === "document" && this.responseXML) {
-            body = new XMLSerializer().serializeToString(this.responseXML);
-          } else if (this.responseType === "arraybuffer" && this.response) {
-            body = new TextDecoder("utf-8").decode(this.response);
-          } else if (this.responseType === "blob" && this.response) {
-            this.response.text().then((t) => {
-              if (t && t.trim().length > 20) {
-                handleCapturedWire(t, reqUrl);
-              }
-            }).catch(() => {});
-            return;
-          }
-        } catch {}
-        if (body && body.trim().length > 20) {
-          handleCapturedWire(body, reqUrl);
+        const req = args[0];
+        reqUrl = typeof req === "string" ? req : (req?.url || req?.href || "");
+        noteTimedtextUrl(reqUrl);
+      } catch {}
+
+      const promise = origFetch.apply(window, args);
+      try {
+        if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
+          promise.then((res) => {
+            try {
+              res.clone().text().then((text) => {
+                if (text && text.trim().length > 20) {
+                  handleCapturedWire(text, reqUrl);
+                }
+              }).catch(() => {});
+            } catch {}
+          }).catch(() => {});
         }
       } catch {}
-    });
+      return promise;
+    };
+  }
+
+  // Hook XMLHttpRequest early (strictly for timedtext capture, zero overhead on media buffers)
+  const origOpen = XMLHttpRequest.prototype.open;
+  const origSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (...args) {
+    try {
+      const url = args[1];
+      this.__kiki_url = typeof url === "string" ? url : (url?.href || String(url || ""));
+      noteTimedtextUrl(this.__kiki_url);
+    } catch {}
+    return origOpen.apply(this, args);
+  };
+  XMLHttpRequest.prototype.send = function (...args) {
+    try {
+      const reqUrl = this.__kiki_url;
+      if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
+        this.addEventListener("load", function () {
+          try {
+            if (this.status && (this.status < 200 || this.status >= 400)) return;
+            let body = "";
+            try {
+              if (this.responseType === "" || this.responseType === "text") {
+                body = this.responseText || "";
+              } else if (this.responseType === "json") {
+                body = typeof this.response === "string" ? this.response : JSON.stringify(this.response || "");
+              } else if (this.responseType === "document" && this.responseXML) {
+                body = new XMLSerializer().serializeToString(this.responseXML);
+              }
+            } catch {}
+            if (body && body.trim().length > 20) {
+              handleCapturedWire(body, reqUrl);
+            }
+          } catch {}
+        }, { once: true });
+      }
+    } catch {}
     return origSend.apply(this, args);
   };
 
@@ -6305,7 +6304,6 @@ window.KikiAudioEngine = KikiAudioEngine;
               trackOption.vss_id = targetTrack.vssId || targetTrack.vss_id;
             }
             p.setOption("captions", "track", trackOption);
-            p.setOption("captions", "reload", true);
           } catch {}
         }
         if (typeof p.toggleSubtitlesOn === "function") {
@@ -6317,7 +6315,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         if (!btn) return;
         const pressed = btn.getAttribute("aria-pressed");
         if (pressed === "false" || !pressed) {
-          clickElement(btn);
+          try { btn.click(); } catch {}
         }
       });
     } catch {}
@@ -6530,10 +6528,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         bestTrack = STATE.activeTrack;
       }
 
-      // 5. Early activation: trigger YouTube player module & XHR right now!
-      ensureCaptionsActive(bestTrack);
-
-      // 6. Direct timedtext fetch for bestTrack (prioritizing fmt=json3 and using PoToken)
+      // 5. Direct timedtext fetch for bestTrack (prioritizing fmt=json3 and using PoToken)
       if (bestTrack && bestTrack.baseUrl) {
         const jsonUrl = bestTrack.baseUrl.includes("fmt=")
           ? bestTrack.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
@@ -6556,6 +6551,9 @@ window.KikiAudioEngine = KikiAudioEngine;
           return;
         }
       }
+
+      // 6. Direct fetch failed: activate player captions module to generate player XHR & PoToken
+      ensureCaptionsActive(bestTrack);
 
       // 7. Check if capturedLastUrl from resource timing / sniffer can be fetched directly
       const curLastUrl = capturedLastUrl || STATE.capturedLastUrl;
@@ -6759,8 +6757,8 @@ window.KikiAudioEngine = KikiAudioEngine;
       if (!v) return;
 
       if (!STATE.cues.length && STATE.videoId) {
-        const isPlaying = v && !v.paused && (v.currentTime > 0 || v.readyState >= 2);
-        const retryTimeout = isPlaying ? 3500 : 20000;
+        const isPlaying = v && !v.paused && (v.currentTime > 0 || v.readyState >= 1);
+        const retryTimeout = isPlaying ? 2500 : 8000;
         if (!loadingTracks && !STATE.loadingTracks && Date.now() - lastLoadAttemptTime > retryTimeout) {
           loadForVideo();
         }
@@ -6827,18 +6825,17 @@ window.KikiAudioEngine = KikiAudioEngine;
     if (!STATE.cues.length && !loadingTracks) setTimeout(onNavigate, 200);
   });
   window.addEventListener("popstate", () => setTimeout(onNavigate, 150));
-  document.addEventListener("play", (e) => {
-    const v = videoEl();
-    if (e.target === v) {
-      ensureCaptionsActive(STATE.activeTrack);
-      if (!STATE.cues.length) {
-        lastFailedVideoId = "";
-        if (!loadingTracks) {
-          setTimeout(() => loadForVideo(true), 250);
+  ["play", "playing", "canplay", "loadeddata"].forEach((evtName) => {
+    document.addEventListener(evtName, (e) => {
+      const v = videoEl();
+      if (e.target === v) {
+        if (!STATE.cues.length && !loadingTracks && !STATE.loadingTracks) {
+          lastFailedVideoId = "";
+          setTimeout(() => loadForVideo(true), 200);
         }
       }
-    }
-  }, true);
+    }, true);
+  });
 
   bindNativeGuard();
 
