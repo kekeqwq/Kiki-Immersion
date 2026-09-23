@@ -11,7 +11,7 @@
 
   let savedPot = "";
   try {
-    savedPot = sessionStorage.getItem("kiki_pot") || "";
+    savedPot = window.__kiki_lastPoToken || sessionStorage.getItem("kiki_pot") || "";
   } catch {}
 
   const STATE = window.STATE = {
@@ -32,10 +32,10 @@
     liveFallbackAllowed: false,
     lastObservedText: "",
     lastPoToken: savedPot,
-    capturedLastUrl: "",
-    capturedBody: "",
+    capturedLastUrl: window.__kiki_capturedUrl || "",
+    capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.2.5"
+    engineVersion: "1.2.6"
   };
 
   // -------------------------------------------------------------

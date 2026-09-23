@@ -62,7 +62,7 @@
 
   let savedPot = "";
   try {
-    savedPot = sessionStorage.getItem("kiki_pot") || "";
+    savedPot = window.__kiki_lastPoToken || sessionStorage.getItem("kiki_pot") || "";
   } catch {}
 
   const STATE = window.STATE = {
@@ -83,10 +83,10 @@
     liveFallbackAllowed: false,
     lastObservedText: "",
     lastPoToken: savedPot,
-    capturedLastUrl: "",
-    capturedBody: "",
+    capturedLastUrl: window.__kiki_capturedUrl || "",
+    capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.2.5"
+    engineVersion: "1.2.6"
   };
 
   // -------------------------------------------------------------
@@ -6111,6 +6111,29 @@ window.KikiAudioEngine = KikiAudioEngine;
       lastObservedText = liveText;
       STATE.lastObservedText = liveText;
       STATE.liveMode = true;
+
+      // Accumulate into STATE.cues so keyboard navigation (A / D) works even in live mode!
+      try {
+        const v = videoEl();
+        const nowMs = Math.round((v ? v.currentTime : 0) * 1000);
+        if (!Array.isArray(STATE.cues)) STATE.cues = [];
+        if (STATE.cues.length > 0) {
+          const prev = STATE.cues[STATE.cues.length - 1];
+          if (prev && (prev.end > nowMs || nowMs - prev.start < 8000)) {
+            prev.end = Math.max(nowMs, prev.start + 500);
+          }
+        }
+        const lastCue = STATE.cues[STATE.cues.length - 1];
+        if (!lastCue || lastCue.text !== liveText) {
+          STATE.cues.push({
+            start: nowMs,
+            end: nowMs + 4000,
+            text: liveText
+          });
+          STATE.idx = STATE.cues.length - 1;
+        }
+      } catch {}
+
       const box = document.getElementById("kiki-captions");
       if (box && typeof window.renderTextToBox === "function") {
         window.renderTextToBox(box, liveText);
@@ -6294,9 +6317,8 @@ window.KikiAudioEngine = KikiAudioEngine;
         .replace(/\\u0026/g, "&")
         .replace(/\\\//g, "/");
 
-      const token = lastPoToken || STATE?.lastPoToken;
-      const hasSignature = isUrlSigned(cleanUrl);
-      if (!hasSignature && token && !cleanUrl.includes("&pot=") && !cleanUrl.includes("?pot=")) {
+      const token = lastPoToken || STATE?.lastPoToken || window.__kiki_lastPoToken;
+      if (token && !cleanUrl.includes("&pot=") && !cleanUrl.includes("?pot=")) {
         cleanUrl += (cleanUrl.includes("?") ? "&" : "?") + `potc=1&pot=${encodeURIComponent(token)}`;
       }
 
@@ -6516,11 +6538,11 @@ window.KikiAudioEngine = KikiAudioEngine;
       }
 
       // 1. Wire sniffer cache / early captured body
-      const cBody = capturedBody || STATE.capturedBody;
+      const cBody = capturedBody || STATE.capturedBody || window.__kiki_capturedBody;
       const cVid = capturedVideoId || STATE.capturedVideoId;
       if (cBody && (cVid === vid || !cVid) && cBody.trim().length > 20) {
         const cues = parseAny(cBody);
-        if (cues && cues.length) {
+        if (cues && cues.length >= 5) {
           applyLoadedCues(cues, "wire-cache", STATE.activeTrack);
           return;
         }

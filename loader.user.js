@@ -108,6 +108,96 @@
     localStorage.setItem("kiki_loader_version", KIKI_LOADER_VERSION);
   } catch (e) {}
 
+  // -------------------------------------------------------------
+  // Early Wire Sniffer in Loader (Captures TimedText before modules load)
+  // -------------------------------------------------------------
+  try {
+    const TIMEDTEXT_MARK = "/api/timedtext";
+    const noteUrl = (url) => {
+      if (typeof url !== "string" || !url.includes(TIMEDTEXT_MARK)) return;
+      try {
+        const u = new URL(url, location.href);
+        const pot = u.searchParams.get("pot");
+        if (pot && pot.length > 10) {
+          window.__kiki_lastPoToken = pot;
+          try { sessionStorage.setItem("kiki_pot", pot); } catch {}
+        }
+      } catch {}
+      window.__kiki_capturedUrl = url;
+    };
+
+    const origFetch = window.fetch;
+    if (origFetch) {
+      window.fetch = function (...args) {
+        try {
+          const req = args[0];
+          const reqUrl = typeof req === "string" ? req : (req?.url || req?.href || "");
+          noteUrl(reqUrl);
+          if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
+            const p = origFetch.apply(window, args);
+            p.then((res) => {
+              res.clone().text().then((txt) => {
+                if (txt && txt.trim().length > 20) {
+                  window.__kiki_capturedBody = txt;
+                  window.__kiki_capturedUrl = reqUrl;
+                  if (typeof window.__kiki_onCapturedWireBody === "function") {
+                    window.__kiki_onCapturedWireBody(txt, reqUrl);
+                  }
+                }
+              }).catch(() => {});
+            }).catch(() => {});
+            return p;
+          }
+        } catch {}
+        return origFetch.apply(window, args);
+      };
+    }
+
+    const origOpen = XMLHttpRequest.prototype.open;
+    const origSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function (...args) {
+      try {
+        const url = args[1];
+        this.__kiki_url = typeof url === "string" ? url : (url?.href || String(url || ""));
+        noteUrl(this.__kiki_url);
+      } catch {}
+      return origOpen.apply(this, args);
+    };
+    XMLHttpRequest.prototype.send = function (...args) {
+      try {
+        const reqUrl = this.__kiki_url;
+        if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
+          let captured = false;
+          const onDone = () => {
+            if (captured) return;
+            try {
+              if (this.status && (this.status < 200 || this.status >= 400)) return;
+              let body = "";
+              if (this.responseType === "" || this.responseType === "text") {
+                body = this.responseText || "";
+              } else if (this.responseType === "arraybuffer" && this.response) {
+                try { body = new TextDecoder("utf-8").decode(this.response); } catch {}
+              }
+              if (body && body.trim().length > 20) {
+                captured = true;
+                window.__kiki_capturedBody = body;
+                window.__kiki_capturedUrl = reqUrl;
+                if (typeof window.__kiki_onCapturedWireBody === "function") {
+                  window.__kiki_onCapturedWireBody(body, reqUrl);
+                }
+              }
+            } catch {}
+          };
+          this.addEventListener("load", onDone, { once: true });
+          this.addEventListener("readystatechange", () => {
+            if (this.readyState === 4) onDone();
+          });
+        }
+      } catch {}
+      return origSend.apply(this, args);
+    };
+  } catch (e) {}
+
   function getCachedModule(name) {
     try {
       return localStorage.getItem("kiki_mod_" + name);
