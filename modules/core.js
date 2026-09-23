@@ -4,6 +4,10 @@
 // =============================================================
 
   window.__kiki_engine_version = "1.2.5";
+  try {
+    localStorage.setItem("kiki_engine_version", "1.2.5");
+    localStorage.setItem("kiki_cache_version", "1.2.5");
+  } catch (e) {}
 
   let cachedPoToken = "";
   try {

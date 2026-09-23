@@ -53,6 +53,10 @@
 // =============================================================
 
   window.__kiki_engine_version = "1.2.5";
+  try {
+    localStorage.setItem("kiki_engine_version", "1.2.5");
+    localStorage.setItem("kiki_cache_version", "1.2.5");
+  } catch (e) {}
 
   let cachedPoToken = "";
   try {
@@ -4432,52 +4436,6 @@ window.KikiAudioEngine = KikiAudioEngine;
 
       let contentHtml = "";
 
-      
-      if (activeTab === "about") {
-        modal.querySelector("#kiki-hot-reload-btn")?.addEventListener("click", async (e) => {
-          e.stopPropagation();
-          const btn = modal.querySelector("#kiki-hot-reload-btn");
-          if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = "<span>⏳ Fetching latest modules from GitHub...</span>";
-          }
-          try {
-            if (typeof window.__kiki_reload_modules === "function") {
-              await window.__kiki_reload_modules(true);
-            } else {
-              const list = ["core", "yomitan", "ai", "ui", "youtube"];
-              const base = "https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/modules/";
-              await Promise.all(list.map(async (m) => {
-                const r = await fetch(`${base}${m}.js?_t=${Date.now()}`);
-                if (!r.ok) throw new Error(`HTTP ${r.status} on ${m}.js`);
-                const t = await r.text();
-                localStorage.setItem("kiki_mod_" + m, t);
-              }));
-              localStorage.setItem("kiki_cache_version", "1.2.2");
-              localStorage.setItem("kiki_cache_time", new Date().toLocaleString());
-              toast("✅ Core modules updated, reloading...");
-              setTimeout(() => location.reload(), 800);
-            }
-          } catch (err) {
-            alert("Update failed: " + err.message);
-            if (btn) {
-              btn.disabled = false;
-              btn.innerHTML = "<span>⚡ Check & Update Modules from GitHub (Hot-Reload)</span>";
-            }
-          }
-        });
-
-        modal.querySelector("#kiki-clear-cache-btn")?.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (confirm("Are you sure you want to clear the local module cache? Modules will be re-fetched on next reload.")) {
-            ["core", "yomitan", "ai", "ui", "youtube"].forEach(m => localStorage.removeItem("kiki_mod_" + m));
-            localStorage.removeItem("kiki_cache_time");
-            toast("🗑 Local module cache cleared");
-            renderModal();
-          }
-        });
-      }
-
       if (activeTab === "dict") {
         let listHtml = "";
         if (!dicts || !dicts.length) {
@@ -4514,8 +4472,8 @@ window.KikiAudioEngine = KikiAudioEngine;
         `;
             } else if (activeTab === "about") {
         const cacheTime = localStorage.getItem("kiki_cache_time") || "Initial / Local";
-        const engineVer = localStorage.getItem("kiki_cache_version") || "1.2.2";
-        const loaderVer = localStorage.getItem("kiki_loader_version") || (window.__kiki_loader_version || "1.0.1");
+        const engineVer = window.__kiki_engine_version || localStorage.getItem("kiki_engine_version") || localStorage.getItem("kiki_cache_version") || "1.2.5";
+        const loaderVer = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.1";
         const modulesList = ["core", "yomitan", "ai", "ui", "youtube"];
         const modStatus = modulesList.map(m => {
           const has = !!localStorage.getItem("kiki_mod_" + m);
@@ -4702,15 +4660,21 @@ window.KikiAudioEngine = KikiAudioEngine;
             } else {
               const list = ["core", "yomitan", "ai", "ui", "youtube"];
               const base = "https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/modules/";
+              let detectedVer = "1.2.5";
               await Promise.all(list.map(async (m) => {
                 const r = await fetch(`${base}${m}.js?_t=${Date.now()}`, { cache: "no-store" });
                 if (!r.ok) throw new Error(`HTTP ${r.status} on ${m}.js`);
                 const t = await r.text();
                 localStorage.setItem("kiki_mod_" + m, t);
+                if (m === "core") {
+                  const mVer = t.match(/window\.__kiki_engine_version\s*=\s*["']([^"']+)["']/);
+                  if (mVer && mVer[1]) detectedVer = mVer[1];
+                }
               }));
-              localStorage.setItem("kiki_cache_version", "1.2.2");
+              localStorage.setItem("kiki_cache_version", detectedVer);
+              localStorage.setItem("kiki_engine_version", detectedVer);
               localStorage.setItem("kiki_cache_time", new Date().toLocaleString());
-              toast("✅ Core modules updated, reloading...");
+              toast(`✅ Engine v${detectedVer} updated, reloading...`);
               setTimeout(() => location.reload(), 800);
             }
           } catch (err) {
@@ -4727,6 +4691,8 @@ window.KikiAudioEngine = KikiAudioEngine;
           if (confirm("Are you sure you want to clear the local module cache? Modules will be re-fetched on next reload.")) {
             ["core", "yomitan", "ai", "ui", "youtube"].forEach(m => localStorage.removeItem("kiki_mod_" + m));
             localStorage.removeItem("kiki_cache_time");
+            localStorage.removeItem("kiki_cache_version");
+            localStorage.removeItem("kiki_engine_version");
             toast("🗑 Local module cache cleared");
             renderModal();
           }

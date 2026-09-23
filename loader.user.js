@@ -214,15 +214,21 @@
     showLoaderHud("⏳ Kiki Immersion: Fetching core modules...");
 
     try {
+      let detectedVersion = EXPECTED_CACHE_VERSION;
       const results = await Promise.all(MODULES.map(m => fetchModule(m)));
       results.forEach((code, idx) => {
         setCachedModule(MODULES[idx], code);
+        if (MODULES[idx] === "core") {
+          const mVer = code.match(/window\.__kiki_engine_version\s*=\s*["']([^"']+)["']/);
+          if (mVer && mVer[1]) detectedVersion = mVer[1];
+        }
       });
-      localStorage.setItem("kiki_cache_version", EXPECTED_CACHE_VERSION);
+      localStorage.setItem("kiki_cache_version", detectedVersion);
+      localStorage.setItem("kiki_engine_version", detectedVersion);
       localStorage.setItem("kiki_loader_version", KIKI_LOADER_VERSION);
       localStorage.setItem("kiki_cache_time", new Date().toLocaleString());
 
-      showLoaderHud("✅ Kiki Immersion: Core modules ready!");
+      showLoaderHud(`✅ Kiki Immersion: Engine v${detectedVersion} ready!`);
       hideLoaderHud(1200);
 
       if (isManual) {
