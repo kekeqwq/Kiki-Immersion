@@ -9,9 +9,8 @@
     localStorage.setItem("kiki_cache_version", "1.2.5");
   } catch (e) {}
 
-  let cachedPoToken = "";
   try {
-    cachedPoToken = sessionStorage.getItem("kiki_pot") || "";
+    sessionStorage.removeItem("kiki_pot");
   } catch {}
 
   const STATE = window.STATE = {
@@ -31,7 +30,7 @@
     liveMode: false,
     liveFallbackAllowed: false,
     lastObservedText: "",
-    lastPoToken: cachedPoToken,
+    lastPoToken: "",
     capturedLastUrl: "",
     capturedBody: "",
     capturedVideoId: "",
@@ -39,7 +38,7 @@
   };
 
   // -------------------------------------------------------------
-  // Early TimedText Wire Sniffer & PoToken Session Cache
+  // Early TimedText Wire Sniffer & Dynamic URL Capture
   // -------------------------------------------------------------
   const TIMEDTEXT_MARK = "/api/timedtext";
 
@@ -50,7 +49,6 @@
       const pot = u.searchParams.get("pot");
       if (pot) {
         STATE.lastPoToken = pot;
-        try { sessionStorage.setItem("kiki_pot", pot); } catch {}
       }
     } catch {}
     let urlVid = "";

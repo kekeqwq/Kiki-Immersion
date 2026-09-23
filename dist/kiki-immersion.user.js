@@ -60,9 +60,8 @@
     localStorage.setItem("kiki_cache_version", "1.2.5");
   } catch (e) {}
 
-  let cachedPoToken = "";
   try {
-    cachedPoToken = sessionStorage.getItem("kiki_pot") || "";
+    sessionStorage.removeItem("kiki_pot");
   } catch {}
 
   const STATE = window.STATE = {
@@ -82,7 +81,7 @@
     liveMode: false,
     liveFallbackAllowed: false,
     lastObservedText: "",
-    lastPoToken: cachedPoToken,
+    lastPoToken: "",
     capturedLastUrl: "",
     capturedBody: "",
     capturedVideoId: "",
@@ -90,7 +89,7 @@
   };
 
   // -------------------------------------------------------------
-  // Early TimedText Wire Sniffer & PoToken Session Cache
+  // Early TimedText Wire Sniffer & Dynamic URL Capture
   // -------------------------------------------------------------
   const TIMEDTEXT_MARK = "/api/timedtext";
 
@@ -101,7 +100,6 @@
       const pot = u.searchParams.get("pot");
       if (pot) {
         STATE.lastPoToken = pot;
-        try { sessionStorage.setItem("kiki_pot", pot); } catch {}
       }
     } catch {}
     let urlVid = "";
@@ -6250,7 +6248,8 @@ window.KikiAudioEngine = KikiAudioEngine;
         .replace(/\\\//g, "/");
 
       const token = lastPoToken || STATE?.lastPoToken;
-      if (token && !cleanUrl.includes("&pot=") && !cleanUrl.includes("?pot=")) {
+      const hasSignature = cleanUrl.includes("&sig=") || cleanUrl.includes("?sig=");
+      if (!hasSignature && token && !cleanUrl.includes("&pot=") && !cleanUrl.includes("?pot=")) {
         cleanUrl += (cleanUrl.includes("?") ? "&" : "?") + `potc=1&pot=${encodeURIComponent(token)}`;
       }
 
@@ -6528,27 +6527,22 @@ window.KikiAudioEngine = KikiAudioEngine;
         bestTrack = STATE.activeTrack;
       }
 
-      // 5. Direct timedtext fetch for bestTrack (prioritizing fmt=json3 and using PoToken)
-      if (bestTrack && bestTrack.baseUrl) {
-        const jsonUrl = bestTrack.baseUrl.includes("fmt=")
-          ? bestTrack.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
-          : bestTrack.baseUrl + (bestTrack.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
-        let raw = await fetchExact(jsonUrl, 2500);
-        let cues = parseAny(raw);
-        if (cues && cues.length) {
-          applyLoadedCues(cues, bestTrack.kind === "asr" ? "auto" : "official", bestTrack);
-          return;
-        }
-
-        // If json3 failed, try srv3 (Format 3 XML)
-        const srvUrl = bestTrack.baseUrl.includes("fmt=")
-          ? bestTrack.baseUrl.replace(/fmt=[^&]+/, "fmt=srv3")
-          : bestTrack.baseUrl + (bestTrack.baseUrl.includes("?") ? "&" : "?") + "fmt=srv3";
-        raw = await fetchExact(srvUrl, 1500);
-        cues = parseAny(raw);
-        if (cues && cues.length) {
-          applyLoadedCues(cues, bestTrack.kind === "asr" ? "auto" : "official", bestTrack);
-          return;
+        // Try top prioritized tracks with direct baseUrl and json3
+        for (const pick of sorted.slice(0, 3)) {
+          if (!pick || !pick.baseUrl) continue;
+          let raw = await fetchExact(pick.baseUrl, 2000);
+          let cues = parseAny(raw);
+          if (!cues || !cues.length) {
+            const jsonUrl = pick.baseUrl.includes("fmt=")
+              ? pick.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
+              : pick.baseUrl + (pick.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
+            raw = await fetchExact(jsonUrl, 2000);
+            cues = parseAny(raw);
+          }
+          if (cues && cues.length) {
+            applyLoadedCues(cues, pick.kind === "asr" ? "auto" : "official", pick);
+            return;
+          }
         }
       }
 
@@ -6601,7 +6595,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
 
         const trackCues = extractCuesFromVideo();
-        if (trackCues && trackCues.length > 0) {
+        if (trackCues && trackCues.length > 2) {
           applyLoadedCues(trackCues, "video-track", bestTrack || STATE.activeTrack);
           return;
         }
@@ -6639,7 +6633,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
       }
       const finalCues = extractCuesFromVideo();
-      if (finalCues && finalCues.length > 0) {
+      if (finalCues && finalCues.length > 2) {
         applyLoadedCues(finalCues, "video-track", bestTrack);
         return;
       }
