@@ -6099,13 +6099,24 @@ window.KikiAudioEngine = KikiAudioEngine;
       }).catch(() => {});
     }
 
-    // While actively loading/fetching tracks, DO NOT preempt into live mode!
-    if (STATE.loadingTracks || loadingTracks) return;
+    // If genuine structured cues (>= 5 lines) already loaded and active, we don't need live DOM rendering
+    if (STATE.cues && STATE.cues.length >= 5 && !STATE.liveMode) return;
 
-    // Only allow live fallback if all structured tracks failed AND user enabled it
-    if (!STATE.liveFallbackAllowed && !STATE.liveMode) return;
+    // Check if resource timing captured a working player URL
+    if (typeof checkResourceTimingForTimedtext === "function") {
+      const foundUrl = checkResourceTimingForTimedtext();
+      if (foundUrl && (!lastSelfHealFetchTime || Date.now() - lastSelfHealFetchTime > 3000)) {
+        lastSelfHealFetchTime = Date.now();
+        fetchExact(foundUrl, 2000).then((raw) => {
+          const cues = parseAny(raw);
+          if (cues && cues.length >= 5) {
+            applyLoadedCues(cues, "wire-url", STATE.activeTrack);
+          }
+        }).catch(() => {});
+      }
+    }
 
-    // True Fallback: render live caption text if available
+    // Render live caption text immediately without any blocking
     const liveText = getLiveCaptionText();
     if (liveText && liveText !== lastObservedText) {
       lastObservedText = liveText;
@@ -6601,22 +6612,21 @@ window.KikiAudioEngine = KikiAudioEngine;
         // 5. Early activation: trigger YouTube player captions module & XHR right now!
         ensureCaptionsActive(bestTrack);
 
-        // Try top prioritized tracks with direct baseUrl and json3
-        for (const pick of sorted.slice(0, 3)) {
-          if (!pick || !pick.baseUrl) continue;
-          let raw = await fetchExact(pick.baseUrl, 2500);
+        // Try best prioritized track directly with fast timeout (1200ms)
+        if (bestTrack && bestTrack.baseUrl) {
+          let raw = await fetchExact(bestTrack.baseUrl, 1200);
           let cues = parseAny(raw);
           if (!cues || !cues.length) {
-            if (!isUrlSigned(pick.baseUrl)) {
-              const jsonUrl = pick.baseUrl.includes("fmt=")
-                ? pick.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
-                : pick.baseUrl + (pick.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
-              raw = await fetchExact(jsonUrl, 2500);
+            if (!isUrlSigned(bestTrack.baseUrl)) {
+              const jsonUrl = bestTrack.baseUrl.includes("fmt=")
+                ? bestTrack.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
+                : bestTrack.baseUrl + (bestTrack.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
+              raw = await fetchExact(jsonUrl, 1200);
               cues = parseAny(raw);
             }
           }
           if (cues && cues.length >= 5) {
-            applyLoadedCues(cues, pick.kind === "asr" ? "auto" : "official", pick);
+            applyLoadedCues(cues, bestTrack.kind === "asr" ? "auto" : "official", bestTrack);
             return;
           }
         }
@@ -6627,135 +6637,58 @@ window.KikiAudioEngine = KikiAudioEngine;
       // 6. Check if capturedLastUrl from resource timing / sniffer can be fetched directly
       const curLastUrl = capturedLastUrl || STATE.capturedLastUrl;
       if (curLastUrl && curLastUrl.includes(MARK)) {
-        // Try original URL first (preserves &sig= or &signature=)
-        let raw = await fetchExact(curLastUrl, 3000);
+        let raw = await fetchExact(curLastUrl, 1500);
         let cues = parseAny(raw);
-        if (!cues || !cues.length) {
-          if (!isUrlSigned(curLastUrl)) {
-            const directJson = curLastUrl.includes("fmt=")
-              ? curLastUrl.replace(/fmt=[^&]+/, "fmt=json3")
-              : curLastUrl + (curLastUrl.includes("?") ? "&" : "?") + "fmt=json3";
-            raw = await fetchExact(directJson, 2500);
-            cues = parseAny(raw);
-          }
-        }
         if (cues && cues.length >= 5) {
           applyLoadedCues(cues, "wire-url", bestTrack || STATE.activeTrack);
           return;
         }
       }
 
-      // 7. Grace period: wait for Player XHR / Wire Sniffer / textTracks (up to 3500ms)
-      const waitStart = Date.now();
-      while (Date.now() - waitStart < 3500) {
-        await sleep(150);
-
-        const currentBody = capturedBody || STATE.capturedBody;
-        const currentVid = capturedVideoId || STATE.capturedVideoId;
-        if (currentBody && (currentVid === vid || !currentVid) && currentBody.trim().length > 20) {
-          const cues = parseAny(currentBody);
-          if (cues && cues.length >= 5) {
-            applyLoadedCues(cues, "wire-sniffer", bestTrack || STATE.activeTrack);
-            return;
-          }
-        }
-
-        // Check if resource timing found a working timedtext URL during playback
-        if (typeof checkResourceTimingForTimedtext === "function") {
-          const foundUrl = checkResourceTimingForTimedtext();
-          if (foundUrl) {
-            let rawRetry = await fetchExact(foundUrl, 2500);
-            let cuesRetry = parseAny(rawRetry);
-            if (!cuesRetry || !cuesRetry.length) {
-              if (!isUrlSigned(foundUrl)) {
-                const retryJson = foundUrl.includes("fmt=")
-                  ? foundUrl.replace(/fmt=[^&]+/, "fmt=json3")
-                  : foundUrl + (foundUrl.includes("?") ? "&" : "?") + "fmt=json3";
-                rawRetry = await fetchExact(retryJson, 2000);
-                cuesRetry = parseAny(rawRetry);
-              }
-            }
-            if (cuesRetry && cuesRetry.length >= 5) {
-              applyLoadedCues(cuesRetry, "resource-timing", bestTrack || STATE.activeTrack);
-              return;
-            }
-          }
-        }
-
-        const trackCues = extractCuesFromVideo();
-        if (trackCues && trackCues.length >= 5) {
-          applyLoadedCues(trackCues, "video-track", bestTrack || STATE.activeTrack);
-          return;
-        }
-
-        if (STATE.cues && STATE.cues.length >= 5) {
-          return;
-        }
-      }
-
-      // 8. Fallback candidate API calls (with PoToken)
-      const directCandidates = [
-        `https://www.youtube.com/api/timedtext?v=${vid}&lang=en&fmt=json3`,
-        `https://www.youtube.com/api/timedtext?v=${vid}&lang=en&kind=asr&fmt=json3`,
-        `https://www.youtube.com/api/timedtext?v=${vid}&lang=ja&fmt=json3`,
-        `https://www.youtube.com/api/timedtext?v=${vid}&lang=ja&kind=asr&fmt=json3`
-      ];
-      for (const cand of directCandidates) {
-        try {
-          const raw = await fetchExact(cand, 1500);
-          const cues = parseAny(raw);
-          if (cues && cues.length >= 5) {
-            applyLoadedCues(cues, "direct", bestTrack);
-            return;
-          }
-        } catch {}
-      }
-
-      // 9. Re-check wire sniffer and textTracks one last time
-      const finalBody = capturedBody || STATE.capturedBody;
-      if (finalBody && finalBody.trim().length > 20) {
-        const cues = parseAny(finalBody);
-        if (cues && cues.length >= 5) {
-          applyLoadedCues(cues, "wire-sniffer-late", bestTrack || STATE.activeTrack);
-          return;
-        }
-      }
-      const finalCues = extractCuesFromVideo();
-      if (finalCues && finalCues.length >= 5) {
-        applyLoadedCues(finalCues, "video-track", bestTrack);
+      // 7. Check video textTracks immediately
+      const earlyCues = extractCuesFromVideo();
+      if (earlyCues && earlyCues.length >= 5) {
+        applyLoadedCues(earlyCues, "video-track", bestTrack || STATE.activeTrack);
         return;
       }
 
-      // 11. True Fallback: Only engage live mode if live text is actively present on screen!
-      if (tracks && tracks.length) {
-        const liveText = getLiveCaptionText();
-        const trkLabel = bestTrack?.name?.simpleText || bestTrack?.languageCode || "Track";
-        if (liveText) {
-          // Only set liveFallbackAllowed when there IS actual live text
-          STATE.liveFallbackAllowed = true;
-          lastObservedText = liveText;
-          STATE.lastObservedText = liveText;
-          STATE.liveMode = true;
-          const box = document.getElementById("kiki-captions");
-          if (box && typeof window.renderTextToBox === "function") {
-            window.renderTextToBox(box, liveText);
-          }
-          updateHud(`CC: Live (${trkLabel}) ▾`);
-          if (!liveToastShown) {
-            liveToastShown = true;
-            toast(`Captions: Realtime stream (${trkLabel})`);
-          }
-        } else {
-          // No live text visible — do NOT activate live fallback; keep waiting for wire sniffer
-          STATE.liveFallbackAllowed = false;
-          STATE.liveMode = false;
-          updateHud(`CC: ${trkLabel} ▾`);
+      // 8. Always enable live captioning fallback immediately — zero freeze, zero waiting!
+      STATE.liveFallbackAllowed = true;
+      const liveText = getLiveCaptionText();
+      const trkLabel = bestTrack?.name?.simpleText || bestTrack?.languageCode || "Track";
+      if (liveText) {
+        lastObservedText = liveText;
+        STATE.lastObservedText = liveText;
+        STATE.liveMode = true;
+        const box = document.getElementById("kiki-captions");
+        if (box && typeof window.renderTextToBox === "function") {
+          window.renderTextToBox(box, liveText);
         }
+        updateHud(`CC: Live (${trkLabel}) ▾`);
       } else {
-        STATE.liveFallbackAllowed = false;
-        lastFailedVideoId = vid;
-        updateHud("CC: None ▾");
+        STATE.liveMode = false;
+        updateHud(`CC: ${trkLabel} ▾`);
       }
+
+      // 9. Background self-heal: asynchronously try direct candidates without blocking UI
+      setTimeout(() => {
+        const directCandidates = [
+          `https://www.youtube.com/api/timedtext?v=${vid}&lang=en&fmt=json3`,
+          `https://www.youtube.com/api/timedtext?v=${vid}&lang=en&kind=asr&fmt=json3`,
+          `https://www.youtube.com/api/timedtext?v=${vid}&lang=ja&fmt=json3`,
+          `https://www.youtube.com/api/timedtext?v=${vid}&lang=ja&kind=asr&fmt=json3`
+        ];
+        Promise.all(directCandidates.map(c => fetchExact(c, 1500))).then((results) => {
+          if (STATE.cues && STATE.cues.length >= 5 && !STATE.liveMode) return;
+          for (const raw of results) {
+            const cues = parseAny(raw);
+            if (cues && cues.length >= 5) {
+              applyLoadedCues(cues, "direct", bestTrack);
+              return;
+            }
+          }
+        }).catch(() => {});
+      }, 500);
     } finally {
       loadingTracks = false;
       STATE.loadingTracks = false;
