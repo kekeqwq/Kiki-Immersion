@@ -2,11 +2,28 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Frosted Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.7-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.4-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.8-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.5-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
 ## 📢 Release Overview
+
+**v1.2.8 (Full Transcript Integration & YouTube PoToken Resolution)**:
+- **Breakthrough YouTube PoToken Bypass via Transcript Panel Integration**:
+  - Solved the platform-wide YouTube PoToken requirement (`exp=xpe` returning 0-byte timedtext responses) by integrating YouTube's native authenticated transcript extraction pipeline (`ytd-engagement-panel-searchable-transcript`).
+  - Seamlessly extracts hundreds to thousands of high-precision structured cues with exact millisecond timestamps (`startMs`, `endMs`, formatted text) without any network blocking.
+  - Automatically restores complete subtitle line counts in HUD (e.g., `CC: English (auto) · 120 ▾`) and ultra-responsive line-by-line `A` / `D` seeking.
+- **Silent Background Extraction & Seamless Live-to-Structured Upgrade**:
+  - Displays realtime scraped captions instantaneously upon video start (zero delay, zero freeze).
+  - Background transcript extractor silently resolves complete structured cues in ~500ms and upgrades the display with zero visual interruption.
+- **Early Trusted Types Policy Registration**:
+  - Injected an early `default` Trusted Types policy at `document-start` in `loader.user.js`, completely preventing YouTube's CSP from blocking module execution.
+- **Fixed Self-Heal Infinite Re-looping**:
+  - Removed periodic `loadForVideo(true)` in `tick()` that inadvertently cleared caption state every 8 seconds, ensuring uninterrupted live playback until structured cues arrive.
+
+**Loader v1.0.5 (Trusted Types Compliance & Engine Sync)**:
+- **Early Trusted Types Setup**: Automatically creates a fallback `default` policy at `document-start` to guarantee seamless `Function` and `script` execution across all YouTube pages.
+- **Instant Cache Upgrade**: Bumped `EXPECTED_CACHE_VERSION` to `1.2.8` to automatically sync to Engine v1.2.8.
 
 **v1.2.7 (Zero-Lag Subtitle Engine, Fixed Live/Structured Desync & Instant Fallback)**:
 - **Eliminated Subtitle Disappearance / Freeze**:

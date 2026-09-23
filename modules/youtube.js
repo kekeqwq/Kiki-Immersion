@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - YouTube Adapter & Subtitle Pipeline
-// Version: 1.2.7
+// Version: 1.2.8
 // =============================================================
 
   // -------------------------------------------------------------
@@ -1323,6 +1323,122 @@
     }
   }
 
+  let transcriptFetchInProgress = false;
+  let lastTranscriptAttemptTime = 0;
+
+  function closeTranscriptPanelSilently() {
+    try {
+      const panel = document.querySelector('[target-id="engagement-panel-searchable-transcript"]');
+      if (panel) {
+        const closeBtn = panel.querySelector('button[aria-label*="lose"], button[aria-label*="关闭"], button[aria-label*="閉じる"], yt-icon-button button');
+        if (closeBtn) {
+          closeBtn.click();
+        } else {
+          panel.setAttribute("visibility", "ENGAGEMENT_PANEL_VISIBILITY_HIDDEN");
+        }
+      }
+    } catch {}
+  }
+
+  async function tryLoadTranscriptPanel(vid, track = null) {
+    if (!vid || transcriptFetchInProgress) return false;
+    if (STATE.cues && STATE.cues.length >= 5 && !STATE.liveMode) return true;
+    if (Date.now() - lastTranscriptAttemptTime < 3000) return false;
+    lastTranscriptAttemptTime = Date.now();
+    transcriptFetchInProgress = true;
+
+    try {
+      function extractFromPanel() {
+        const p = document.querySelector('[target-id="engagement-panel-searchable-transcript"]');
+        if (!p) return null;
+        try {
+          const list = p.data?.content?.transcriptRenderer?.content?.transcriptSearchPanelRenderer?.body?.transcriptSegmentListRenderer;
+          const rawSegs = list?.initialSegments;
+          if (rawSegs && rawSegs.length >= 5) {
+            const parsed = rawSegs.map(s => {
+              const r = s.transcriptSegmentRenderer;
+              if (!r) return null;
+              const start = parseInt(r.startMs || "0", 10);
+              let end = parseInt(r.endMs || "0", 10);
+              if (!end || end <= start) end = start + 3000;
+              const text = (r.snippet?.runs || []).map(x => x.text).join("") || "";
+              return { start, end, text };
+            }).filter(c => c && c.text);
+            if (parsed.length >= 5) return parsed;
+          }
+        } catch {}
+
+        try {
+          const domSegs = p.querySelectorAll("ytd-transcript-segment-renderer");
+          if (domSegs && domSegs.length >= 5) {
+            const parsed = Array.from(domSegs).map(s => {
+              let start = 0, end = 0, text = "";
+              if (s.data) {
+                start = parseInt(s.data.startMs || "0", 10);
+                end = parseInt(s.data.endMs || "0", 10);
+                if (s.data.snippet?.runs) text = s.data.snippet.runs.map(x => x.text).join("");
+              }
+              if (!text) {
+                const textEl = s.querySelector(".segment-text, yt-formatted-string");
+                text = textEl ? textEl.innerText.trim() : "";
+              }
+              if (!end || end <= start) end = start + 3000;
+              return { start, end, text };
+            }).filter(c => c && c.text);
+            if (parsed.length >= 5) return parsed;
+          }
+        } catch {}
+        return null;
+      }
+
+      // Check if already populated
+      let cues = extractFromPanel();
+      if (cues && cues.length >= 5) {
+        closeTranscriptPanelSilently();
+        applyLoadedCues(cues, "transcript", track || STATE.activeTrack);
+        return true;
+      }
+
+      // Trigger the panel to open and load data
+      const p = document.querySelector('[target-id="engagement-panel-searchable-transcript"]');
+      if (p) {
+        p.setAttribute("visibility", "ENGAGEMENT_PANEL_VISIBILITY_EXPANDED");
+        p.removeAttribute("hidden");
+      }
+
+      // Also trigger transcript button if present
+      const allBtns = Array.from(document.querySelectorAll("button, ytd-button-renderer"));
+      const transcriptBtn = allBtns.find(b => {
+        const txt = (b.innerText || b.getAttribute("aria-label") || "").toLowerCase();
+        return txt.includes("transcript") || txt.includes("字幕文稿") || txt.includes("文字起こし");
+      });
+      if (transcriptBtn) {
+        try { (transcriptBtn.querySelector("button") || transcriptBtn).click(); } catch {}
+      }
+
+      // Poll for data to arrive (up to 2.4s)
+      for (let i = 0; i < 15; i++) {
+        await sleep(160);
+        if (currentVideoId() !== vid) break;
+        cues = extractFromPanel();
+        if (cues && cues.length >= 5) {
+          closeTranscriptPanelSilently();
+          applyLoadedCues(cues, "transcript", track || STATE.activeTrack);
+          return true;
+        }
+      }
+
+      closeTranscriptPanelSilently();
+      return false;
+    } catch (err) {
+      console.warn("[Kiki transcript panel error]", err);
+      closeTranscriptPanelSilently();
+      return false;
+    } finally {
+      transcriptFetchInProgress = false;
+    }
+  }
+
   function applyLoadedCues(cues, source, track = null) {
     if (!cues || cues.length < 5) return;
     if (cues.length <= 8 && cues.some((c) => isDummyCueText(c.text))) {
@@ -1341,6 +1457,15 @@
       STATE.activeTrack = track;
     }
     renderCue(-1);
+    const v = videoEl();
+    if (v && !v.paused && typeof findIndex === "function") {
+      const curMs = v.currentTime * 1000;
+      const i = findIndex(curMs);
+      if (i >= 0) {
+        STATE.idx = i;
+        renderCue(i);
+      }
+    }
     lastFailedVideoId = "";
     suppressNativeCaptions();
     updateHud();
@@ -1374,7 +1499,11 @@
       }
     }
 
-    // 2. Instruct player to switch to this track
+    // 2. Try loading structured cues from transcript panel
+    const transcriptOk = await tryLoadTranscriptPanel(currentVideoId(), track);
+    if (transcriptOk) return;
+
+    // 3. Instruct player to switch to this track
     try {
       const p = playerEl();
       if (p && typeof p.setOption === "function") {
@@ -1447,13 +1576,16 @@
     STATE.liveFallbackAllowed = true;
     if (force) {
       STATE.cues = [];
-      STATE.liveCues = [];
-      STATE.liveMode = true;
-      STATE.lastObservedText = "";
-      lastObservedText = "";
+      if (!STATE.liveMode && (!STATE.liveCues || !STATE.liveCues.length)) {
+        STATE.liveCues = [];
+        STATE.lastObservedText = "";
+        lastObservedText = "";
+      }
     }
     lastLoadAttemptTime = Date.now();
-    updateHud("CC: Loading... ▾");
+    if (!STATE.liveMode || !STATE.liveCues || !STATE.liveCues.length) {
+      updateHud("CC: Loading... ▾");
+    }
 
     try {
       // 0. Synchronous inspection of resource timing for any timedtext URL
@@ -1585,7 +1717,10 @@
       }
       updateHud(`CC: Live (${trkLabel}) ▾`);
 
-      // 9. Background self-heal: asynchronously try direct candidates without blocking UI
+      // 9. Silent background Transcript Panel extractor
+      tryLoadTranscriptPanel(vid, bestTrack);
+
+      // 10. Background self-heal: asynchronously try direct candidates without blocking UI
       setTimeout(() => {
         const directCandidates = [
           `https://www.youtube.com/api/timedtext?v=${vid}&lang=en&fmt=json3`,
@@ -1694,10 +1829,10 @@
         }
       }
 
-      // Self-heal: if in liveMode and without structured cues, periodically retry structured cues
+      // Self-heal: if in liveMode and without structured cues, periodically try transcript panel
       if (STATE.liveMode && (!STATE.cues || !STATE.cues.length) && STATE.videoId) {
-        if (!loadingTracks && !STATE.loadingTracks && Date.now() - lastLoadAttemptTime > 8000) {
-          loadForVideo(true);
+        if (!loadingTracks && !STATE.loadingTracks && Date.now() - lastTranscriptAttemptTime > 5000) {
+          tryLoadTranscriptPanel(STATE.videoId, STATE.activeTrack);
         }
       }
 
@@ -1808,4 +1943,4 @@
 
 
 
-  console.log('[Kiki Immersion] v1.2.5 Modular Engine Loaded on:', location.href);
+  console.log('[Kiki Immersion] v1.2.8 Modular Engine Loaded on:', location.href);

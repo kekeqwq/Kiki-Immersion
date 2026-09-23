@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.0.4
+// @version      1.0.5
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine & dynamic hot-reload.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -18,9 +18,34 @@
 (() => {
   "use strict";
 
-  const KIKI_LOADER_VERSION = "1.0.4";
+  const KIKI_LOADER_VERSION = "1.0.5";
   const MODULES = ["core", "yomitan", "ai", "ui", "youtube"];
   const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/modules/";
+
+  // -------------------------------------------------------------
+  // 0. Trusted Types Early Policy Auto-Setup (Bypasses script sinks)
+  // -------------------------------------------------------------
+  try {
+    const tt = (typeof window !== "undefined" && window.trustedTypes) ||
+               (typeof unsafeWindow !== "undefined" && unsafeWindow.trustedTypes);
+    if (tt && typeof tt.createPolicy === "function") {
+      try {
+        window.__kiki_policy = tt.createPolicy("default", {
+          createScript: s => s,
+          createHTML: h => h,
+          createScriptURL: u => u
+        });
+      } catch (e1) {
+        try {
+          window.__kiki_policy = tt.createPolicy("kiki-loader-default", {
+            createScript: s => s,
+            createHTML: h => h,
+            createScriptURL: u => u
+          });
+        } catch (e2) {}
+      }
+    }
+  } catch (e) {}
 
   // -------------------------------------------------------------
   // HUD Toast Notification (Safe at document-start)
@@ -212,7 +237,7 @@
     } catch (e) {}
   }
 
-  const EXPECTED_CACHE_VERSION = "1.2.7";
+  const EXPECTED_CACHE_VERSION = "1.2.8";
 
   function hasAllCachedModules() {
     if (localStorage.getItem("kiki_cache_version") !== EXPECTED_CACHE_VERSION) return false;
@@ -283,10 +308,18 @@
         runner();
       } catch (fnErr) {
         // Fallback: inject inline script element into DOM
-        const scriptEl = document.createElement("script");
-        scriptEl.textContent = scriptSource;
-        (document.head || document.documentElement).appendChild(scriptEl);
-        scriptEl.remove();
+        try {
+          const scriptEl = document.createElement("script");
+          if (p && typeof p.createScript === "function") {
+            try { scriptEl.text = p.createScript(fullCode); } catch (e) { scriptEl.textContent = fullCode; }
+          } else {
+            scriptEl.textContent = fullCode;
+          }
+          (document.head || document.documentElement).appendChild(scriptEl);
+          scriptEl.remove();
+        } catch (domErr) {
+          throw fnErr;
+        }
       }
     } catch (e) {
       console.error("[Kiki Loader] Module execution error:", e);
