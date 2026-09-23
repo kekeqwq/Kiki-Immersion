@@ -51,13 +51,13 @@
 
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.2.5
+// Version: 1.2.6
 // =============================================================
 
-  window.__kiki_engine_version = "1.2.5";
+  window.__kiki_engine_version = "1.2.6";
   try {
-    localStorage.setItem("kiki_engine_version", "1.2.5");
-    localStorage.setItem("kiki_cache_version", "1.2.5");
+    localStorage.setItem("kiki_engine_version", "1.2.6");
+    localStorage.setItem("kiki_cache_version", "1.2.6");
   } catch (e) {}
 
   let savedPot = "";
@@ -5908,6 +5908,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     if (!v || !v.textTracks || !v.textTracks.length) return [];
     for (let i = 0; i < v.textTracks.length; i++) {
       const track = v.textTracks[i];
+      if (track.kind === "chapters" || track.kind === "metadata") continue;
       if (track.mode === "disabled") {
         try { track.mode = "hidden"; } catch {}
       }
@@ -5924,7 +5925,7 @@ window.KikiAudioEngine = KikiAudioEngine;
             });
           }
         }
-        if (cues.length > 0) return cues;
+        if (cues.length >= 5) return cues;
       }
     }
     return [];
@@ -6062,9 +6063,9 @@ window.KikiAudioEngine = KikiAudioEngine;
     if (curBody && curBody.trim().length > 20) {
       if (!curVidCaptured || curVidCaptured === curVid) {
         const cues = parseAny(curBody);
-        if (cues && cues.length) {
+        if (cues && cues.length >= 5) {
           // If we're in liveMode OR have no cues, accept the wire sniffer data
-          if (STATE.liveMode || !STATE.cues || !STATE.cues.length) {
+          if (STATE.liveMode || !STATE.cues || STATE.cues.length < 5) {
             applyLoadedCues(cues, "wire-sniffer", STATE.activeTrack);
             return;
           }
@@ -6073,11 +6074,11 @@ window.KikiAudioEngine = KikiAudioEngine;
     }
 
     // If structured cues already loaded, never run live mode!
-    if (STATE.cues && STATE.cues.length > 0) return;
+    if (STATE.cues && STATE.cues.length >= 5) return;
 
     // Check if video.textTracks has loaded genuine cues
     const trackCues = extractCuesFromVideo();
-    if (trackCues && trackCues.length > 0) {
+    if (trackCues && trackCues.length >= 5) {
       applyLoadedCues(trackCues, "video-track", STATE.activeTrack);
       return;
     }
@@ -6086,12 +6087,13 @@ window.KikiAudioEngine = KikiAudioEngine;
     const pot = lastPoToken || STATE.lastPoToken;
     if (pot && STATE.activeTrack?.baseUrl && Date.now() - lastSelfHealFetchTime > 3500 && !loadingTracks) {
       lastSelfHealFetchTime = Date.now();
-      const jsonUrl = STATE.activeTrack.baseUrl.includes("fmt=")
-        ? STATE.activeTrack.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
-        : STATE.activeTrack.baseUrl + (STATE.activeTrack.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
-      fetchExact(jsonUrl, 2500).then((raw) => {
+      const rawUrl = STATE.activeTrack.baseUrl;
+      const targetUrl = isUrlSigned(rawUrl)
+        ? rawUrl
+        : (rawUrl.includes("fmt=") ? rawUrl.replace(/fmt=[^&]+/, "fmt=json3") : rawUrl + (rawUrl.includes("?") ? "&" : "?") + "fmt=json3");
+      fetchExact(targetUrl, 2500).then((raw) => {
         const cues = parseAny(raw);
-        if (cues && cues.length) {
+        if (cues && cues.length >= 5) {
           applyLoadedCues(cues, "pot-upgrade", STATE.activeTrack);
         }
       }).catch(() => {});
@@ -6279,6 +6281,11 @@ window.KikiAudioEngine = KikiAudioEngine;
     return sorted[0];
   }
 
+  function isUrlSigned(url) {
+    if (!url || typeof url !== "string") return false;
+    return url.includes("&sig=") || url.includes("?sig=") || url.includes("&signature=") || url.includes("?signature=");
+  }
+
   async function fetchExact(url, timeoutMs = 2500) {
     if (!url) return "";
     try {
@@ -6288,7 +6295,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         .replace(/\\\//g, "/");
 
       const token = lastPoToken || STATE?.lastPoToken;
-      const hasSignature = cleanUrl.includes("&sig=") || cleanUrl.includes("?sig=");
+      const hasSignature = isUrlSigned(cleanUrl);
       if (!hasSignature && token && !cleanUrl.includes("&pot=") && !cleanUrl.includes("?pot=")) {
         cleanUrl += (cleanUrl.includes("?") ? "&" : "?") + `potc=1&pot=${encodeURIComponent(token)}`;
       }
@@ -6296,7 +6303,8 @@ window.KikiAudioEngine = KikiAudioEngine;
       const ctrl = new AbortController();
       const tid = setTimeout(() => ctrl.abort(), timeoutMs);
       try {
-        const res = await origFetch.call(window, cleanUrl, {
+        const fetchFn = (typeof window !== "undefined" && (window.origFetch || window.fetch)) || fetch;
+        const res = await fetchFn.call(window, cleanUrl, {
           credentials: "include",
           cache: "default",
           signal: ctrl.signal
@@ -6364,8 +6372,8 @@ window.KikiAudioEngine = KikiAudioEngine;
   }
 
   function applyLoadedCues(cues, source, track = null) {
-    if (!cues || !cues.length) return;
-    if (cues.length <= 2 && cues.some((c) => isDummyCueText(c.text))) {
+    if (!cues || cues.length < 5) return;
+    if (cues.length <= 8 && cues.some((c) => isDummyCueText(c.text))) {
       return;
     }
     STATE.cues = cues;
@@ -6577,7 +6585,7 @@ window.KikiAudioEngine = KikiAudioEngine;
           let raw = await fetchExact(pick.baseUrl, 2500);
           let cues = parseAny(raw);
           if (!cues || !cues.length) {
-            if (!pick.baseUrl.includes("&sig=") && !pick.baseUrl.includes("?sig=")) {
+            if (!isUrlSigned(pick.baseUrl)) {
               const jsonUrl = pick.baseUrl.includes("fmt=")
                 ? pick.baseUrl.replace(/fmt=[^&]+/, "fmt=json3")
                 : pick.baseUrl + (pick.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
@@ -6585,7 +6593,7 @@ window.KikiAudioEngine = KikiAudioEngine;
               cues = parseAny(raw);
             }
           }
-          if (cues && cues.length) {
+          if (cues && cues.length >= 5) {
             applyLoadedCues(cues, pick.kind === "asr" ? "auto" : "official", pick);
             return;
           }
@@ -6597,11 +6605,11 @@ window.KikiAudioEngine = KikiAudioEngine;
       // 6. Check if capturedLastUrl from resource timing / sniffer can be fetched directly
       const curLastUrl = capturedLastUrl || STATE.capturedLastUrl;
       if (curLastUrl && curLastUrl.includes(MARK)) {
-        // Try original URL first (preserves &sig=)
+        // Try original URL first (preserves &sig= or &signature=)
         let raw = await fetchExact(curLastUrl, 3000);
         let cues = parseAny(raw);
         if (!cues || !cues.length) {
-          if (!curLastUrl.includes("&sig=") && !curLastUrl.includes("?sig=")) {
+          if (!isUrlSigned(curLastUrl)) {
             const directJson = curLastUrl.includes("fmt=")
               ? curLastUrl.replace(/fmt=[^&]+/, "fmt=json3")
               : curLastUrl + (curLastUrl.includes("?") ? "&" : "?") + "fmt=json3";
@@ -6609,7 +6617,7 @@ window.KikiAudioEngine = KikiAudioEngine;
             cues = parseAny(raw);
           }
         }
-        if (cues && cues.length) {
+        if (cues && cues.length >= 5) {
           applyLoadedCues(cues, "wire-url", bestTrack || STATE.activeTrack);
           return;
         }
@@ -6624,7 +6632,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         const currentVid = capturedVideoId || STATE.capturedVideoId;
         if (currentBody && (currentVid === vid || !currentVid) && currentBody.trim().length > 20) {
           const cues = parseAny(currentBody);
-          if (cues && cues.length) {
+          if (cues && cues.length >= 5) {
             applyLoadedCues(cues, "wire-sniffer", bestTrack || STATE.activeTrack);
             return;
           }
@@ -6637,7 +6645,7 @@ window.KikiAudioEngine = KikiAudioEngine;
             let rawRetry = await fetchExact(foundUrl, 2500);
             let cuesRetry = parseAny(rawRetry);
             if (!cuesRetry || !cuesRetry.length) {
-              if (!foundUrl.includes("&sig=")) {
+              if (!isUrlSigned(foundUrl)) {
                 const retryJson = foundUrl.includes("fmt=")
                   ? foundUrl.replace(/fmt=[^&]+/, "fmt=json3")
                   : foundUrl + (foundUrl.includes("?") ? "&" : "?") + "fmt=json3";
@@ -6645,7 +6653,7 @@ window.KikiAudioEngine = KikiAudioEngine;
                 cuesRetry = parseAny(rawRetry);
               }
             }
-            if (cuesRetry && cuesRetry.length) {
+            if (cuesRetry && cuesRetry.length >= 5) {
               applyLoadedCues(cuesRetry, "resource-timing", bestTrack || STATE.activeTrack);
               return;
             }
@@ -6653,12 +6661,12 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
 
         const trackCues = extractCuesFromVideo();
-        if (trackCues && trackCues.length > 0) {
+        if (trackCues && trackCues.length >= 5) {
           applyLoadedCues(trackCues, "video-track", bestTrack || STATE.activeTrack);
           return;
         }
 
-        if (STATE.cues && STATE.cues.length > 0) {
+        if (STATE.cues && STATE.cues.length >= 5) {
           return;
         }
       }
@@ -6674,7 +6682,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         try {
           const raw = await fetchExact(cand, 1500);
           const cues = parseAny(raw);
-          if (cues && cues.length) {
+          if (cues && cues.length >= 5) {
             applyLoadedCues(cues, "direct", bestTrack);
             return;
           }
@@ -6685,13 +6693,13 @@ window.KikiAudioEngine = KikiAudioEngine;
       const finalBody = capturedBody || STATE.capturedBody;
       if (finalBody && finalBody.trim().length > 20) {
         const cues = parseAny(finalBody);
-        if (cues && cues.length) {
+        if (cues && cues.length >= 5) {
           applyLoadedCues(cues, "wire-sniffer-late", bestTrack || STATE.activeTrack);
           return;
         }
       }
       const finalCues = extractCuesFromVideo();
-      if (finalCues && finalCues.length > 0) {
+      if (finalCues && finalCues.length >= 5) {
         applyLoadedCues(finalCues, "video-track", bestTrack);
         return;
       }

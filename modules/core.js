@@ -1,12 +1,12 @@
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.2.5
+// Version: 1.2.6
 // =============================================================
 
-  window.__kiki_engine_version = "1.2.5";
+  window.__kiki_engine_version = "1.2.6";
   try {
-    localStorage.setItem("kiki_engine_version", "1.2.5");
-    localStorage.setItem("kiki_cache_version", "1.2.5");
+    localStorage.setItem("kiki_engine_version", "1.2.6");
+    localStorage.setItem("kiki_cache_version", "1.2.6");
   } catch (e) {}
 
   let savedPot = "";
