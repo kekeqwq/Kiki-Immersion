@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.3.1
+// @version      1.3.2
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine, and global web lookup.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -56,13 +56,13 @@
 
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.3.1
+// Version: 1.3.2
 // =============================================================
 
-  window.__kiki_engine_version = "1.3.1";
+  window.__kiki_engine_version = "1.3.2";
   try {
-    localStorage.setItem("kiki_engine_version", "1.3.1");
-    localStorage.setItem("kiki_cache_version", "1.3.1");
+    localStorage.setItem("kiki_engine_version", "1.3.2");
+    localStorage.setItem("kiki_cache_version", "1.3.2");
   } catch (e) {}
 
   let savedPot = "";
@@ -95,8 +95,21 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.3.1"
+    engineVersion: "1.3.2"
   };
+
+  function currentVideoId() {
+    try {
+      const u = new URL(location.href);
+      if (u.searchParams.get("v")) return u.searchParams.get("v");
+      const m = u.pathname.match(/\/(?:shorts|live|watch)\/([a-zA-Z0-9_-]+)/);
+      if (m) return m[1];
+      return "";
+    } catch {
+      return "";
+    }
+  }
+  window.currentVideoId = currentVideoId;
 
   // -------------------------------------------------------------
   // Early TimedText Wire Sniffer & Dynamic URL Capture
@@ -368,6 +381,7 @@
     clearTimeout(toast._t);
     toast._t = setTimeout(() => el.classList.remove("show"), 1400);
   }
+  window.toast = toast;
 
 
   function escapeHtml(s) {
@@ -548,15 +562,14 @@
 
     /* Single-Line Captions above Video Controls */
     #kiki-captions {
-      position: fixed !important; transform: translateX(-50%) !important;
-      width: min(94%, 1000px) !important; pointer-events: auto !important;
-      z-index: 2147483645 !important; text-align: center !important;
-      min-height: 1em !important;
-    }
-    #kiki-captions {
-      position: fixed !important; transform: translateX(-50%) !important;
-      width: min(94%, 1000px) !important; pointer-events: auto !important;
-      z-index: 2147483645 !important; text-align: center !important;
+      position: fixed !important;
+      left: 50% !important;
+      bottom: 85px !important;
+      transform: translateX(-50%) !important;
+      width: min(94%, 1000px) !important;
+      pointer-events: auto !important;
+      z-index: 2147483645 !important;
+      text-align: center !important;
       min-height: 1em !important;
       transition: top 0.22s cubic-bezier(0.16, 1, 0.3, 1), bottom 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
     }
@@ -856,6 +869,7 @@
       console.warn('[Kiki injectStyles]', e);
     }
   }
+  window.injectStyles = injectStyles;
 
 
 
@@ -3511,7 +3525,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.3.1
+// Version: 1.3.2
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -3801,6 +3815,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
     return hud;
   }
+  window.ensureHud = ensureHud;
 
   function closeTrackDropdown() {
     const d = document.getElementById("kiki-track-dropdown");
@@ -3944,7 +3959,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       let targetCc = "CC: Searching... ▾";
       if (statusText) {
         targetCc = statusText.includes("▾") ? statusText : statusText + " ▾";
-      } else if (!currentVideoId()) {
+      } else if (!(typeof currentVideoId === "function" ? currentVideoId() : (typeof STATE !== "undefined" && STATE.videoId))) {
         targetCc = "Home ▾";
       } else if (STATE.cues && STATE.cues.length) {
         const rawName = STATE.activeTrack?.name?.simpleText || STATE.activeTrack?.languageCode?.toUpperCase() || "Track";
@@ -3968,6 +3983,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       }
     }
   }
+  window.updateHud = updateHud;
 
   function ensureRoot() {
     let root = document.getElementById("kiki-root");
@@ -3977,7 +3993,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       root.id = "kiki-root";
       root.style.cssText = "position: fixed !important; inset: 0 !important; pointer-events: none !important; z-index: 2147483640 !important;";
       setHtml(root, `
-        <div id="kiki-captions" class="${STATE.subsVisible === false ? 'kiki-hidden' : ''}" style="position: fixed !important; pointer-events: auto !important; z-index: 2147483645 !important; text-align: center !important; min-height: 1em !important;"></div>
+        <div id="kiki-captions" class="${STATE.subsVisible === false ? 'kiki-hidden' : ''}" style="position: fixed !important; left: 50% !important; bottom: 85px !important; transform: translateX(-50%) !important; pointer-events: auto !important; z-index: 2147483645 !important; text-align: center !important; min-height: 1em !important;"></div>
       `);
       targetHost.appendChild(root);
     }
@@ -3988,6 +4004,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     ensureYomitanCard();
     if (typeof ensureCaptionObserver === "function") ensureCaptionObserver();
     if (typeof bindVideoTrackListeners === "function") bindVideoTrackListeners();
+    if (typeof updateCaptionPosition === "function") updateCaptionPosition();
     if (root) root.style.display = STATE.enabled ? "" : "none";
     document.documentElement.classList.toggle("kiki-hide-native", !!(STATE.enabled && (STATE.cues.length > 0 || (typeof lastObservedText !== "undefined" && lastObservedText))));
     document.documentElement.classList.toggle("kiki-lock-chrome", !!STATE.enabled);
@@ -4273,6 +4290,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
   async function showYomitanCard(wordEl, term, coords = null, sentenceOverride = "") {
     window.showYomitanCard = showYomitanCard;
+    STATE.lastLookupOpenTime = Date.now();
     STATE.lookupWord = term;
     STATE.lookupEl = wordEl;
     STATE.sentenceContext = sentenceOverride || "";
@@ -4518,16 +4536,32 @@ window.KikiAudioEngine = KikiAudioEngine;
         return;
       }
 
+      // If modifier key is pressed (Ctrl/Alt/Meta), this is a lookup or shortcut gesture, NEVER dismiss!
+      if (e.ctrlKey || e.altKey || e.metaKey) {
+        return;
+      }
+
+      // Ignore dismissal if the card was just opened within the last 400ms (prevent pointerup/click of trigger gesture from dismissing)
+      if (Date.now() - (STATE.lastLookupOpenTime || 0) < 400) {
+        return;
+      }
+
       const isOpen = isAnyPopupOpen();
       const withinGrace = (Date.now() - (STATE.lastLookupDismissTime || 0)) < 600;
 
       if (isOpen) {
-        if (e.cancelable) e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        dismissAllPopups(true);
+        if (type === "pointerdown" || type === "touchstart" || type === "mousedown") {
+          if (e.cancelable) e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          dismissAllPopups(true);
+        } else {
+          if (e.cancelable) e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        }
       } else if (withinGrace) {
-        // Swallow remaining events of the dismissal gesture (e.g. mouseup, click)
+        // Swallow remaining events of the dismissal gesture (e.g. pointerup, mouseup, click)
         if (e.cancelable) e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
@@ -5243,7 +5277,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - Web Universal Lookup Module
-// Version: 1.3.1
+// Version: 1.3.2
 // Description: Global modifier-key word lookup for arbitrary web pages
 // =============================================================
 
@@ -5475,6 +5509,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
   // Intercept all mouse/pointer events to completely suppress Safari's native Ctrl+Click context menu
   window.addEventListener("pointerdown", onGlobalPointerDown, { capture: true, passive: false });
+  window.addEventListener("pointerup", suppressIfModifier, { capture: true, passive: false });
   window.addEventListener("mousedown", suppressIfModifier, { capture: true, passive: false });
   window.addEventListener("mouseup", suppressIfModifier, { capture: true, passive: false });
   window.addEventListener("click", suppressIfModifier, { capture: true, passive: false });
@@ -5500,7 +5535,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - YouTube Adapter & Subtitle Pipeline
-// Version: 1.3.1
+// Version: 1.3.2
 // =============================================================
 
 (() => {
@@ -7340,13 +7375,13 @@ window.KikiAudioEngine = KikiAudioEngine;
 
   function tick() {
     try {
-      dismissMiniplayer();
-      ensureHud();
-      ensureRoot();
-      ensureCaptionObserver();
-      bindVideoTrackListeners();
-      updateHud();
-      updateCaptionPosition();
+      try { dismissMiniplayer(); } catch {}
+      try { ensureHud(); } catch {}
+      try { ensureRoot(); } catch {}
+      try { ensureCaptionObserver(); } catch {}
+      try { bindVideoTrackListeners(); } catch {}
+      try { updateHud(); } catch {}
+      try { updateCaptionPosition(); } catch {}
       if (!STATE.enabled) return;
 
       const curVid = currentVideoId();
@@ -7480,7 +7515,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 
 
-  console.log('[Kiki Immersion] v1.3.1 Modular Engine Loaded on:', location.href);
+  console.log('[Kiki Immersion] v1.3.2 Modular Engine Loaded on:', location.href);
 })();
 
 

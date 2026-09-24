@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.3.1
+// Version: 1.3.2
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -290,6 +290,7 @@
 
     return hud;
   }
+  window.ensureHud = ensureHud;
 
   function closeTrackDropdown() {
     const d = document.getElementById("kiki-track-dropdown");
@@ -433,7 +434,7 @@
       let targetCc = "CC: Searching... ▾";
       if (statusText) {
         targetCc = statusText.includes("▾") ? statusText : statusText + " ▾";
-      } else if (!currentVideoId()) {
+      } else if (!(typeof currentVideoId === "function" ? currentVideoId() : (typeof STATE !== "undefined" && STATE.videoId))) {
         targetCc = "Home ▾";
       } else if (STATE.cues && STATE.cues.length) {
         const rawName = STATE.activeTrack?.name?.simpleText || STATE.activeTrack?.languageCode?.toUpperCase() || "Track";
@@ -457,6 +458,7 @@
       }
     }
   }
+  window.updateHud = updateHud;
 
   function ensureRoot() {
     let root = document.getElementById("kiki-root");
@@ -466,7 +468,7 @@
       root.id = "kiki-root";
       root.style.cssText = "position: fixed !important; inset: 0 !important; pointer-events: none !important; z-index: 2147483640 !important;";
       setHtml(root, `
-        <div id="kiki-captions" class="${STATE.subsVisible === false ? 'kiki-hidden' : ''}" style="position: fixed !important; pointer-events: auto !important; z-index: 2147483645 !important; text-align: center !important; min-height: 1em !important;"></div>
+        <div id="kiki-captions" class="${STATE.subsVisible === false ? 'kiki-hidden' : ''}" style="position: fixed !important; left: 50% !important; bottom: 85px !important; transform: translateX(-50%) !important; pointer-events: auto !important; z-index: 2147483645 !important; text-align: center !important; min-height: 1em !important;"></div>
       `);
       targetHost.appendChild(root);
     }
@@ -477,6 +479,7 @@
     ensureYomitanCard();
     if (typeof ensureCaptionObserver === "function") ensureCaptionObserver();
     if (typeof bindVideoTrackListeners === "function") bindVideoTrackListeners();
+    if (typeof updateCaptionPosition === "function") updateCaptionPosition();
     if (root) root.style.display = STATE.enabled ? "" : "none";
     document.documentElement.classList.toggle("kiki-hide-native", !!(STATE.enabled && (STATE.cues.length > 0 || (typeof lastObservedText !== "undefined" && lastObservedText))));
     document.documentElement.classList.toggle("kiki-lock-chrome", !!STATE.enabled);
@@ -762,6 +765,7 @@
 
   async function showYomitanCard(wordEl, term, coords = null, sentenceOverride = "") {
     window.showYomitanCard = showYomitanCard;
+    STATE.lastLookupOpenTime = Date.now();
     STATE.lookupWord = term;
     STATE.lookupEl = wordEl;
     STATE.sentenceContext = sentenceOverride || "";
@@ -1007,16 +1011,32 @@
         return;
       }
 
+      // If modifier key is pressed (Ctrl/Alt/Meta), this is a lookup or shortcut gesture, NEVER dismiss!
+      if (e.ctrlKey || e.altKey || e.metaKey) {
+        return;
+      }
+
+      // Ignore dismissal if the card was just opened within the last 400ms (prevent pointerup/click of trigger gesture from dismissing)
+      if (Date.now() - (STATE.lastLookupOpenTime || 0) < 400) {
+        return;
+      }
+
       const isOpen = isAnyPopupOpen();
       const withinGrace = (Date.now() - (STATE.lastLookupDismissTime || 0)) < 600;
 
       if (isOpen) {
-        if (e.cancelable) e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        dismissAllPopups(true);
+        if (type === "pointerdown" || type === "touchstart" || type === "mousedown") {
+          if (e.cancelable) e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          dismissAllPopups(true);
+        } else {
+          if (e.cancelable) e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        }
       } else if (withinGrace) {
-        // Swallow remaining events of the dismissal gesture (e.g. mouseup, click)
+        // Swallow remaining events of the dismissal gesture (e.g. pointerup, mouseup, click)
         if (e.cancelable) e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();

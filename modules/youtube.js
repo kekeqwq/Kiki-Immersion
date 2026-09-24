@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - YouTube Adapter & Subtitle Pipeline
-// Version: 1.3.1
+// Version: 1.3.2
 // =============================================================
 
 (() => {
@@ -1840,13 +1840,13 @@
 
   function tick() {
     try {
-      dismissMiniplayer();
-      ensureHud();
-      ensureRoot();
-      ensureCaptionObserver();
-      bindVideoTrackListeners();
-      updateHud();
-      updateCaptionPosition();
+      try { dismissMiniplayer(); } catch {}
+      try { ensureHud(); } catch {}
+      try { ensureRoot(); } catch {}
+      try { ensureCaptionObserver(); } catch {}
+      try { bindVideoTrackListeners(); } catch {}
+      try { updateHud(); } catch {}
+      try { updateCaptionPosition(); } catch {}
       if (!STATE.enabled) return;
 
       const curVid = currentVideoId();
@@ -1980,5 +1980,5 @@
 
 
 
-  console.log('[Kiki Immersion] v1.3.1 Modular Engine Loaded on:', location.href);
+  console.log('[Kiki Immersion] v1.3.2 Modular Engine Loaded on:', location.href);
 })();

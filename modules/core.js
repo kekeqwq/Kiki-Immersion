@@ -1,12 +1,12 @@
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.3.1
+// Version: 1.3.2
 // =============================================================
 
-  window.__kiki_engine_version = "1.3.1";
+  window.__kiki_engine_version = "1.3.2";
   try {
-    localStorage.setItem("kiki_engine_version", "1.3.1");
-    localStorage.setItem("kiki_cache_version", "1.3.1");
+    localStorage.setItem("kiki_engine_version", "1.3.2");
+    localStorage.setItem("kiki_cache_version", "1.3.2");
   } catch (e) {}
 
   let savedPot = "";
@@ -39,8 +39,21 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.3.1"
+    engineVersion: "1.3.2"
   };
+
+  function currentVideoId() {
+    try {
+      const u = new URL(location.href);
+      if (u.searchParams.get("v")) return u.searchParams.get("v");
+      const m = u.pathname.match(/\/(?:shorts|live|watch)\/([a-zA-Z0-9_-]+)/);
+      if (m) return m[1];
+      return "";
+    } catch {
+      return "";
+    }
+  }
+  window.currentVideoId = currentVideoId;
 
   // -------------------------------------------------------------
   // Early TimedText Wire Sniffer & Dynamic URL Capture
@@ -312,6 +325,7 @@
     clearTimeout(toast._t);
     toast._t = setTimeout(() => el.classList.remove("show"), 1400);
   }
+  window.toast = toast;
 
 
   function escapeHtml(s) {
@@ -492,15 +506,14 @@
 
     /* Single-Line Captions above Video Controls */
     #kiki-captions {
-      position: fixed !important; transform: translateX(-50%) !important;
-      width: min(94%, 1000px) !important; pointer-events: auto !important;
-      z-index: 2147483645 !important; text-align: center !important;
-      min-height: 1em !important;
-    }
-    #kiki-captions {
-      position: fixed !important; transform: translateX(-50%) !important;
-      width: min(94%, 1000px) !important; pointer-events: auto !important;
-      z-index: 2147483645 !important; text-align: center !important;
+      position: fixed !important;
+      left: 50% !important;
+      bottom: 85px !important;
+      transform: translateX(-50%) !important;
+      width: min(94%, 1000px) !important;
+      pointer-events: auto !important;
+      z-index: 2147483645 !important;
+      text-align: center !important;
       min-height: 1em !important;
       transition: top 0.22s cubic-bezier(0.16, 1, 0.3, 1), bottom 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
     }
@@ -800,6 +813,7 @@
       console.warn('[Kiki injectStyles]', e);
     }
   }
+  window.injectStyles = injectStyles;
 
 
 

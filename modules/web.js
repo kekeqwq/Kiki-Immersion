@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - Web Universal Lookup Module
-// Version: 1.3.1
+// Version: 1.3.2
 // Description: Global modifier-key word lookup for arbitrary web pages
 // =============================================================
 
@@ -232,6 +232,7 @@
 
   // Intercept all mouse/pointer events to completely suppress Safari's native Ctrl+Click context menu
   window.addEventListener("pointerdown", onGlobalPointerDown, { capture: true, passive: false });
+  window.addEventListener("pointerup", suppressIfModifier, { capture: true, passive: false });
   window.addEventListener("mousedown", suppressIfModifier, { capture: true, passive: false });
   window.addEventListener("mouseup", suppressIfModifier, { capture: true, passive: false });
   window.addEventListener("click", suppressIfModifier, { capture: true, passive: false });

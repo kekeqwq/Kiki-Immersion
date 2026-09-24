@@ -5,7 +5,7 @@ MODULE_ORDER = ['core', 'yomitan', 'ai', 'ui', 'web', 'youtube']
 header = r"""// ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.3.1
+// @version      1.3.2
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine, and global web lookup.
 // @author       keke
 // @match        *://*.youtube.com/*
