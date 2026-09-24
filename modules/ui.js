@@ -676,6 +676,7 @@
 
   function getSentenceContext() {
     if (STATE.sentenceContext) return STATE.sentenceContext;
+    if (STATE.contextSource === "web") return "";
     if (STATE.idx >= 0 && STATE.idx < STATE.cues.length) {
       return (STATE.cues[STATE.idx].text || "").trim();
     }
@@ -771,12 +772,14 @@
   }
 
 
-  async function showYomitanCard(wordEl, term, coords = null, sentenceOverride = "") {
+  async function showYomitanCard(wordEl, term, coords = null, sentenceOverride = "", contextSource = null, paragraphOverride = "") {
     window.showYomitanCard = showYomitanCard;
     STATE.lastLookupOpenTime = Date.now();
     STATE.lookupWord = term;
     STATE.lookupEl = wordEl;
     STATE.sentenceContext = sentenceOverride || "";
+    STATE.paragraphContext = paragraphOverride || "";
+    STATE.contextSource = contextSource || (wordEl ? "subtitle" : (sentenceOverride ? "web" : (STATE.isYouTube ? "subtitle" : "web")));
     const card = ensureYomitanCard();
     setHtml(card, `
       <div class="kiki-card-header">
@@ -979,6 +982,8 @@
     STATE.lookupEl = null;
     STATE.lookupWord = "";
     STATE.sentenceContext = "";
+    STATE.paragraphContext = "";
+    STATE.contextSource = null;
     try {
       if (window.getSelection) {
         window.getSelection().removeAllRanges();

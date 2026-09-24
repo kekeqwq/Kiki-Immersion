@@ -197,29 +197,54 @@
     const cfg = getAiConfig();
     const isEn = cfg.aiLang === "en";
     const curMode = cfg.aiMode || "quick";
-    const isWholeSentence = !term || term === sentence;
+    const isWeb = STATE.contextSource === "web" || !STATE.isYouTube;
+    const isWholeSentence = !term || (term === sentence && !STATE.lookupWord && !isWeb);
     const wordPlaceholder = isWholeSentence
       ? (isEn ? "entire sentence" : "全句")
       : term;
     const displayTerm = isWholeSentence
-      ? (isEn ? "Entire Subtitle" : "全句解析")
+      ? (isEn ? (isWeb ? "Sentence Breakdown" : "Entire Subtitle") : (isWeb ? "整句解析" : "全句解析"))
       : term;
 
     let tmpl = "";
-    if (curMode === "deep") {
-      tmpl = isEn ? AI_MODES.deep.promptEn : AI_MODES.deep.promptZh;
-    } else if (curMode === "custom") {
+    if (curMode === "custom") {
       tmpl = isEn ? (cfg.promptEn || AI_MODES.quick.promptEn) : (cfg.promptZh || AI_MODES.quick.promptZh);
+    } else if (isWeb) {
+      if (curMode === "deep") {
+        tmpl = isEn
+          ? "You are an experienced language mentor. The learner is reading: \"{{sentence}}\" and looked up \"{{word}}\". Provide an insightful deep-dive breakdown: 1. Accurate contextual meaning and part of speech in this sentence; 2. Core grammatical usage, collocations, or literary/cultural nuances; 3. Two natural example sentences with translations; 4. Memory mnemonic or confusing word comparison. Keep formatting clean and structured.\n\nAt the end, list 2-3 follow-up exploration topics wrapped between <<<EXPLORE>>> and <<<END_EXPLORE>>> with each topic starting with - ."
+          : "你是资深语言外教。学习者在阅读文本「{{sentence}}」中查阅了「{{word}}」。请结合上下文详细教学解析：1. 本词/短语在本文语境中的精准含义与词性；2. 核心语法搭配、习惯用法或文化背景；3. 提供 2 个贴近该语境的地道例句（附中文对照）；4. 记忆技巧或易混辨析。排版清晰美观。\n\n在回答最后以 <<<EXPLORE>>> 开头列出 2–3 个深入追问或拓展探索方向（每行以 - 开头），并以 <<<END_EXPLORE>>> 结尾。";
+      } else {
+        tmpl = isEn
+          ? "You are a concise language tutor. The learner is reading: \"{{sentence}}\" and looked up \"{{word}}\". Explain its precise contextual meaning in 2-4 short sentences. Mention part of speech if applicable. Do not literally translate the whole text.\n\nAt the end, list 2-3 follow-up exploration topics wrapped between <<<EXPLORE>>> and <<<END_EXPLORE>>> with each topic starting with - ."
+          : "你是简洁的语言老师。学习者在阅读文本「{{sentence}}」中查阅了「{{word}}」。请结合上下文提供精准、通顺的中文释义与用法解析（2–4 句）。必要时注明词性。无需死板翻译整段。\n\n在回答最后以 <<<EXPLORE>>> 开头列出 2–3 个学习者可能想继续探索的方向（如本词语法句法、类似词辨析、派生用法或实用造句，每行以 - 开头），并以 <<<END_EXPLORE>>> 结尾。";
+      }
     } else {
-      tmpl = isEn ? AI_MODES.quick.promptEn : AI_MODES.quick.promptZh;
+      // YouTube Subtitle default prompts (completely preserved)
+      if (curMode === "deep") {
+        tmpl = isEn ? AI_MODES.deep.promptEn : AI_MODES.deep.promptZh;
+      } else {
+        tmpl = isEn ? AI_MODES.quick.promptEn : AI_MODES.quick.promptZh;
+      }
     }
 
     const system = String(tmpl || AI_DEFAULTS[isEn ? "promptEn" : "promptZh"])
       .replaceAll("{{word}}", wordPlaceholder)
       .replaceAll("{{sentence}}", sentence || "");
-    const initialUserPrompt = isEn
-      ? (isWholeSentence ? `Subtitle: ${sentence}` : `Word: ${term}\nSubtitle: ${sentence}`)
-      : (isWholeSentence ? `字幕：${sentence}` : `词：${term}\n字幕：${sentence}`);
+
+    let initialUserPrompt = "";
+    if (isWeb) {
+      const contextLabel = isEn ? "Reading Context" : "阅读上下文";
+      const paraContext = STATE.paragraphContext && STATE.paragraphContext !== sentence ? STATE.paragraphContext : "";
+      const paraAddition = paraContext ? (isEn ? `\nParagraph Background: ${paraContext}` : `\n段落背景：${paraContext}`) : "";
+      initialUserPrompt = isEn
+        ? (isWholeSentence ? `${contextLabel}: ${sentence}${paraAddition}` : `Word: ${term}\n${contextLabel}: ${sentence}${paraAddition}`)
+        : (isWholeSentence ? `${contextLabel}：${sentence}${paraAddition}` : `词：${term}\n${contextLabel}：${sentence}${paraAddition}`);
+    } else {
+      initialUserPrompt = isEn
+        ? (isWholeSentence ? `Subtitle: ${sentence}` : `Word: ${term}\nSubtitle: ${sentence}`)
+        : (isWholeSentence ? `字幕：${sentence}` : `词：${term}\n字幕：${sentence}`);
+    }
 
     STATE.aiMessages = [
       { role: "system", content: system },
@@ -228,6 +253,22 @@
 
     if (STATE.lookupEl) {
       STATE.lookupEl.classList.add("kiki-active");
+    }
+
+    const paraContext = isWeb && STATE.paragraphContext && STATE.paragraphContext !== sentence ? STATE.paragraphContext : "";
+    const hasParagraph = Boolean(paraContext);
+
+    function formatContextHtml(txt, targetWord) {
+      if (!txt) return "(no context)";
+      let res = escapeHtml(txt);
+      if (targetWord && targetWord.trim()) {
+        try {
+          const escW = escapeHtml(targetWord.trim());
+          const re = new RegExp(`(${escW.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')})`, "gi");
+          res = res.replace(re, '<mark style="background: rgba(99, 102, 241, 0.35); color: #FFF; padding: 1px 4px; border-radius: 4px; font-weight: 700; font-style: normal;">$1</mark>');
+        } catch {}
+      }
+      return res;
     }
 
     setHtml(card, `
@@ -250,8 +291,21 @@
         </div>
       </div>
 
-      <div style="background: rgba(255, 255, 255, 0.06); border-left: 3px solid #6366F1; padding: 7px 12px; border-radius: 0 8px 8px 0; margin-bottom: 12px; font-size: 13.5px; color: #CBD5E1; font-style: italic; line-height: 1.45;">
-        “${escapeHtml(sentence || "(no sentence context)")}”
+      <div style="background: rgba(255, 255, 255, 0.06); border-left: 3px solid #6366F1; padding: 8px 12px; border-radius: 0 8px 8px 0; margin-bottom: 12px; font-size: 13.5px; color: #CBD5E1; line-height: 1.45;">
+        <div style="font-style: italic;">
+          “${formatContextHtml(sentence || "(no sentence context)", term)}”
+        </div>
+        ${hasParagraph ? `
+          <div class="kiki-ai-para-wrap" style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.15); display: none;">
+            <div style="font-size: 11px; font-weight: 700; color: #94A3B8; margin-bottom: 3px; text-transform: uppercase;">Paragraph Context (段落上下文)</div>
+            <div style="font-size: 12.5px; color: #94A3B8; font-style: italic; line-height: 1.4;">${formatContextHtml(paraContext, term)}</div>
+          </div>
+          <div style="margin-top: 5px; text-align: right;">
+            <button type="button" class="kiki-toggle-para-btn" style="background: none; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0; text-decoration: underline;">
+              📄 查看完整段落
+            </button>
+          </div>
+        ` : ''}
       </div>
 
       <div class="kiki-ai-scroll-container" style="font-size: 15px; line-height: 1.65; color: #F1F5F9; max-height: 380px; overflow-y: auto; padding-right: 2px;">
@@ -271,6 +325,17 @@
         </div>
       </div>
     `);
+
+    const toggleParaBtn = card.querySelector(".kiki-toggle-para-btn");
+    const paraWrap = card.querySelector(".kiki-ai-para-wrap");
+    if (toggleParaBtn && paraWrap) {
+      toggleParaBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isHidden = paraWrap.style.display === "none";
+        paraWrap.style.display = isHidden ? "block" : "none";
+        toggleParaBtn.textContent = isHidden ? "📄 收起段落" : "📄 查看完整段落";
+      });
+    }
 
     card.querySelector(".kiki-card-settings-btn")?.addEventListener("click", (e) => {
       e.stopPropagation();

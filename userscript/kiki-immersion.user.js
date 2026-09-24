@@ -71,8 +71,10 @@
     savedPot = window.__kiki_lastPoToken || sessionStorage.getItem("kiki_pot") || "";
   } catch {}
 
+  const isYouTubeDomain = /(?:^|\.)youtube\.com$/.test(location.hostname);
   const STATE = window.STATE = {
     enabled: true,
+    isYouTube: isYouTubeDomain,
     subsVisible: localStorage.getItem("kiki_subs_visible") !== "0",
     webLookupKey: localStorage.getItem("kiki_web_lookup_key") || "ctrl",
     cues: [],
@@ -167,7 +169,6 @@
   }
 
   // Hook fetch & XMLHttpRequest early for YouTube timedtext capture (only on YouTube domains)
-  const isYouTubeDomain = /(?:^|\.)youtube\.com$/.test(location.hostname);
   if (isYouTubeDomain) {
     const origFetch = (window.fetch ? window.fetch.bind(window) : null);
     window.origFetch = origFetch || window.fetch;
@@ -3203,29 +3204,54 @@ window.KikiAudioEngine = KikiAudioEngine;
     const cfg = getAiConfig();
     const isEn = cfg.aiLang === "en";
     const curMode = cfg.aiMode || "quick";
-    const isWholeSentence = !term || term === sentence;
+    const isWeb = STATE.contextSource === "web" || !STATE.isYouTube;
+    const isWholeSentence = !term || (term === sentence && !STATE.lookupWord && !isWeb);
     const wordPlaceholder = isWholeSentence
       ? (isEn ? "entire sentence" : "全句")
       : term;
     const displayTerm = isWholeSentence
-      ? (isEn ? "Entire Subtitle" : "全句解析")
+      ? (isEn ? (isWeb ? "Sentence Breakdown" : "Entire Subtitle") : (isWeb ? "整句解析" : "全句解析"))
       : term;
 
     let tmpl = "";
-    if (curMode === "deep") {
-      tmpl = isEn ? AI_MODES.deep.promptEn : AI_MODES.deep.promptZh;
-    } else if (curMode === "custom") {
+    if (curMode === "custom") {
       tmpl = isEn ? (cfg.promptEn || AI_MODES.quick.promptEn) : (cfg.promptZh || AI_MODES.quick.promptZh);
+    } else if (isWeb) {
+      if (curMode === "deep") {
+        tmpl = isEn
+          ? "You are an experienced language mentor. The learner is reading: \"{{sentence}}\" and looked up \"{{word}}\". Provide an insightful deep-dive breakdown: 1. Accurate contextual meaning and part of speech in this sentence; 2. Core grammatical usage, collocations, or literary/cultural nuances; 3. Two natural example sentences with translations; 4. Memory mnemonic or confusing word comparison. Keep formatting clean and structured.\n\nAt the end, list 2-3 follow-up exploration topics wrapped between <<<EXPLORE>>> and <<<END_EXPLORE>>> with each topic starting with - ."
+          : "你是资深语言外教。学习者在阅读文本「{{sentence}}」中查阅了「{{word}}」。请结合上下文详细教学解析：1. 本词/短语在本文语境中的精准含义与词性；2. 核心语法搭配、习惯用法或文化背景；3. 提供 2 个贴近该语境的地道例句（附中文对照）；4. 记忆技巧或易混辨析。排版清晰美观。\n\n在回答最后以 <<<EXPLORE>>> 开头列出 2–3 个深入追问或拓展探索方向（每行以 - 开头），并以 <<<END_EXPLORE>>> 结尾。";
+      } else {
+        tmpl = isEn
+          ? "You are a concise language tutor. The learner is reading: \"{{sentence}}\" and looked up \"{{word}}\". Explain its precise contextual meaning in 2-4 short sentences. Mention part of speech if applicable. Do not literally translate the whole text.\n\nAt the end, list 2-3 follow-up exploration topics wrapped between <<<EXPLORE>>> and <<<END_EXPLORE>>> with each topic starting with - ."
+          : "你是简洁的语言老师。学习者在阅读文本「{{sentence}}」中查阅了「{{word}}」。请结合上下文提供精准、通顺的中文释义与用法解析（2–4 句）。必要时注明词性。无需死板翻译整段。\n\n在回答最后以 <<<EXPLORE>>> 开头列出 2–3 个学习者可能想继续探索的方向（如本词语法句法、类似词辨析、派生用法或实用造句，每行以 - 开头），并以 <<<END_EXPLORE>>> 结尾。";
+      }
     } else {
-      tmpl = isEn ? AI_MODES.quick.promptEn : AI_MODES.quick.promptZh;
+      // YouTube Subtitle default prompts (completely preserved)
+      if (curMode === "deep") {
+        tmpl = isEn ? AI_MODES.deep.promptEn : AI_MODES.deep.promptZh;
+      } else {
+        tmpl = isEn ? AI_MODES.quick.promptEn : AI_MODES.quick.promptZh;
+      }
     }
 
     const system = String(tmpl || AI_DEFAULTS[isEn ? "promptEn" : "promptZh"])
       .replaceAll("{{word}}", wordPlaceholder)
       .replaceAll("{{sentence}}", sentence || "");
-    const initialUserPrompt = isEn
-      ? (isWholeSentence ? `Subtitle: ${sentence}` : `Word: ${term}\nSubtitle: ${sentence}`)
-      : (isWholeSentence ? `字幕：${sentence}` : `词：${term}\n字幕：${sentence}`);
+
+    let initialUserPrompt = "";
+    if (isWeb) {
+      const contextLabel = isEn ? "Reading Context" : "阅读上下文";
+      const paraContext = STATE.paragraphContext && STATE.paragraphContext !== sentence ? STATE.paragraphContext : "";
+      const paraAddition = paraContext ? (isEn ? `\nParagraph Background: ${paraContext}` : `\n段落背景：${paraContext}`) : "";
+      initialUserPrompt = isEn
+        ? (isWholeSentence ? `${contextLabel}: ${sentence}${paraAddition}` : `Word: ${term}\n${contextLabel}: ${sentence}${paraAddition}`)
+        : (isWholeSentence ? `${contextLabel}：${sentence}${paraAddition}` : `词：${term}\n${contextLabel}：${sentence}${paraAddition}`);
+    } else {
+      initialUserPrompt = isEn
+        ? (isWholeSentence ? `Subtitle: ${sentence}` : `Word: ${term}\nSubtitle: ${sentence}`)
+        : (isWholeSentence ? `字幕：${sentence}` : `词：${term}\n字幕：${sentence}`);
+    }
 
     STATE.aiMessages = [
       { role: "system", content: system },
@@ -3234,6 +3260,22 @@ window.KikiAudioEngine = KikiAudioEngine;
 
     if (STATE.lookupEl) {
       STATE.lookupEl.classList.add("kiki-active");
+    }
+
+    const paraContext = isWeb && STATE.paragraphContext && STATE.paragraphContext !== sentence ? STATE.paragraphContext : "";
+    const hasParagraph = Boolean(paraContext);
+
+    function formatContextHtml(txt, targetWord) {
+      if (!txt) return "(no context)";
+      let res = escapeHtml(txt);
+      if (targetWord && targetWord.trim()) {
+        try {
+          const escW = escapeHtml(targetWord.trim());
+          const re = new RegExp(`(${escW.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')})`, "gi");
+          res = res.replace(re, '<mark style="background: rgba(99, 102, 241, 0.35); color: #FFF; padding: 1px 4px; border-radius: 4px; font-weight: 700; font-style: normal;">$1</mark>');
+        } catch {}
+      }
+      return res;
     }
 
     setHtml(card, `
@@ -3256,8 +3298,21 @@ window.KikiAudioEngine = KikiAudioEngine;
         </div>
       </div>
 
-      <div style="background: rgba(255, 255, 255, 0.06); border-left: 3px solid #6366F1; padding: 7px 12px; border-radius: 0 8px 8px 0; margin-bottom: 12px; font-size: 13.5px; color: #CBD5E1; font-style: italic; line-height: 1.45;">
-        “${escapeHtml(sentence || "(no sentence context)")}”
+      <div style="background: rgba(255, 255, 255, 0.06); border-left: 3px solid #6366F1; padding: 8px 12px; border-radius: 0 8px 8px 0; margin-bottom: 12px; font-size: 13.5px; color: #CBD5E1; line-height: 1.45;">
+        <div style="font-style: italic;">
+          “${formatContextHtml(sentence || "(no sentence context)", term)}”
+        </div>
+        ${hasParagraph ? `
+          <div class="kiki-ai-para-wrap" style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.15); display: none;">
+            <div style="font-size: 11px; font-weight: 700; color: #94A3B8; margin-bottom: 3px; text-transform: uppercase;">Paragraph Context (段落上下文)</div>
+            <div style="font-size: 12.5px; color: #94A3B8; font-style: italic; line-height: 1.4;">${formatContextHtml(paraContext, term)}</div>
+          </div>
+          <div style="margin-top: 5px; text-align: right;">
+            <button type="button" class="kiki-toggle-para-btn" style="background: none; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0; text-decoration: underline;">
+              📄 查看完整段落
+            </button>
+          </div>
+        ` : ''}
       </div>
 
       <div class="kiki-ai-scroll-container" style="font-size: 15px; line-height: 1.65; color: #F1F5F9; max-height: 380px; overflow-y: auto; padding-right: 2px;">
@@ -3277,6 +3332,17 @@ window.KikiAudioEngine = KikiAudioEngine;
         </div>
       </div>
     `);
+
+    const toggleParaBtn = card.querySelector(".kiki-toggle-para-btn");
+    const paraWrap = card.querySelector(".kiki-ai-para-wrap");
+    if (toggleParaBtn && paraWrap) {
+      toggleParaBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isHidden = paraWrap.style.display === "none";
+        paraWrap.style.display = isHidden ? "block" : "none";
+        toggleParaBtn.textContent = isHidden ? "📄 收起段落" : "📄 查看完整段落";
+      });
+    }
 
     card.querySelector(".kiki-card-settings-btn")?.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -4222,6 +4288,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
   function getSentenceContext() {
     if (STATE.sentenceContext) return STATE.sentenceContext;
+    if (STATE.contextSource === "web") return "";
     if (STATE.idx >= 0 && STATE.idx < STATE.cues.length) {
       return (STATE.cues[STATE.idx].text || "").trim();
     }
@@ -4317,12 +4384,14 @@ window.KikiAudioEngine = KikiAudioEngine;
   }
 
 
-  async function showYomitanCard(wordEl, term, coords = null, sentenceOverride = "") {
+  async function showYomitanCard(wordEl, term, coords = null, sentenceOverride = "", contextSource = null, paragraphOverride = "") {
     window.showYomitanCard = showYomitanCard;
     STATE.lastLookupOpenTime = Date.now();
     STATE.lookupWord = term;
     STATE.lookupEl = wordEl;
     STATE.sentenceContext = sentenceOverride || "";
+    STATE.paragraphContext = paragraphOverride || "";
+    STATE.contextSource = contextSource || (wordEl ? "subtitle" : (sentenceOverride ? "web" : (STATE.isYouTube ? "subtitle" : "web")));
     const card = ensureYomitanCard();
     setHtml(card, `
       <div class="kiki-card-header">
@@ -4525,6 +4594,8 @@ window.KikiAudioEngine = KikiAudioEngine;
     STATE.lookupEl = null;
     STATE.lookupWord = "";
     STATE.sentenceContext = "";
+    STATE.paragraphContext = "";
+    STATE.contextSource = null;
     try {
       if (window.getSelection) {
         window.getSelection().removeAllRanges();
@@ -5367,8 +5438,114 @@ window.KikiAudioEngine = KikiAudioEngine;
   }
 
   // -------------------------------------------------------------
-  // 3. Multilingual Word & Sentence Context Extraction
+  // 3. Multilingual Word & Web Context Extraction (Sentence & Paragraph)
   // -------------------------------------------------------------
+  function getEnclosingBlock(node) {
+    let el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    const inlineTags = new Set([
+      "A", "ABBR", "ACRONYM", "B", "BDO", "BIG", "BR", "BUTTON", "CITE", "CODE",
+      "DFN", "EM", "I", "IMG", "INPUT", "KBD", "LABEL", "MAP", "MARK", "OBJECT",
+      "OUTPUT", "Q", "SAMP", "SCRIPT", "SELECT", "SMALL", "SPAN", "STRONG", "SUB",
+      "SUP", "TEXTAREA", "TIME", "TT", "VAR", "RUBY", "RT", "RP", "U", "S", "STRIKE"
+    ]);
+
+    while (el && el.parentElement && el !== document.body && el !== document.documentElement) {
+      const tag = el.tagName ? el.tagName.toUpperCase() : "";
+      if (inlineTags.has(tag)) {
+        el = el.parentElement;
+        continue;
+      }
+      try {
+        const display = window.getComputedStyle(el).display;
+        if (display && display.startsWith("inline")) {
+          el = el.parentElement;
+          continue;
+        }
+      } catch {}
+      break;
+    }
+    return el || document.body;
+  }
+
+  function extractWebContext(node, offset, term) {
+    const blockEl = getEnclosingBlock(node);
+    let fullText = "";
+    let globalOffset = 0;
+
+    try {
+      const preRange = document.createRange();
+      preRange.selectNodeContents(blockEl);
+      preRange.setEnd(node, Math.min(offset, node.textContent ? node.textContent.length : offset));
+      globalOffset = preRange.toString().length;
+      fullText = blockEl.textContent || "";
+    } catch {
+      fullText = (node.parentElement?.textContent || node.textContent || "");
+      globalOffset = offset;
+    }
+
+    if (!fullText) {
+      return { sentence: term || "", paragraph: term || "" };
+    }
+
+    // 1. Identify Paragraph boundaries (bounded by double-newline or block boundaries)
+    let paraStart = globalOffset;
+    while (paraStart > 0) {
+      if (fullText[paraStart - 1] === "\n" && (paraStart >= 2 && fullText[paraStart - 2] === "\n")) {
+        break;
+      }
+      paraStart--;
+    }
+    let paraEnd = globalOffset;
+    while (paraEnd < fullText.length) {
+      if (fullText[paraEnd] === "\n" && (paraEnd + 1 < fullText.length && fullText[paraEnd + 1] === "\n")) {
+        break;
+      }
+      paraEnd++;
+    }
+    const rawParagraph = fullText.slice(paraStart, paraEnd).replace(/[ \t\r\n]+/g, " ").trim();
+
+    // 2. Identify Sentence boundaries around globalOffset
+    const sentDelimRegex = /[.!?。\n\r！？]/;
+    let sentStart = globalOffset;
+    while (sentStart > paraStart && !sentDelimRegex.test(fullText[sentStart - 1])) {
+      sentStart--;
+    }
+    let sentEnd = globalOffset;
+    while (sentEnd < paraEnd && !sentDelimRegex.test(fullText[sentEnd])) {
+      sentEnd++;
+    }
+    if (sentEnd < paraEnd && sentDelimRegex.test(fullText[sentEnd])) {
+      sentEnd++;
+      // Include trailing quotation marks, parenthesis, or brackets (e.g. ." or .”)
+      while (sentEnd < paraEnd && /["”'’」』)\]》]/.test(fullText[sentEnd])) {
+        sentEnd++;
+      }
+    }
+
+    let sentence = fullText.slice(sentStart, sentEnd).replace(/[ \t\r\n]+/g, " ").trim();
+
+    // Quality check: If sentence is too short or identical to term, expand to paragraph
+    if ((!sentence || sentence.length < (term?.length || 1) + 6 || sentence.toLowerCase() === term?.toLowerCase()) && rawParagraph.length > sentence.length) {
+      sentence = rawParagraph;
+    }
+
+    // Limit oversized sentence length safely (e.g. max 450 chars)
+    if (sentence.length > 450) {
+      const idx = sentence.toLowerCase().indexOf(term?.toLowerCase() || "");
+      if (idx !== -1) {
+        const start = Math.max(0, idx - 180);
+        const end = Math.min(sentence.length, idx + (term?.length || 0) + 180);
+        sentence = (start > 0 ? "…" : "") + sentence.slice(start, end).trim() + (end < sentence.length ? "…" : "");
+      } else {
+        sentence = sentence.slice(0, 450) + "…";
+      }
+    }
+
+    const paragraph = rawParagraph.length <= 800 ? rawParagraph : (rawParagraph.slice(0, 800) + "…");
+
+    return { sentence, paragraph };
+  }
+
   async function resolveTargetWordAndContext(node, offset) {
     if (!node || node.nodeType !== Node.TEXT_NODE) return null;
     const text = node.textContent || "";
@@ -5387,27 +5564,6 @@ window.KikiAudioEngine = KikiAudioEngine;
         ch = text[idx];
       } else {
         return null;
-      }
-    }
-
-    // Sentence context extraction (bounded by sentence punctuation or line breaks)
-    let sentStart = idx;
-    while (sentStart > 0 && !/[.!?。\n\r！？]/.test(text[sentStart - 1])) {
-      sentStart--;
-    }
-    let sentEnd = idx;
-    while (sentEnd < text.length && !/[.!?。\n\r！？]/.test(text[sentEnd])) {
-      sentEnd++;
-    }
-    if (sentEnd < text.length && /[.!?。\n\r！？]/.test(text[sentEnd])) {
-      sentEnd++;
-    }
-    let sentence = text.slice(sentStart, sentEnd).trim();
-
-    if (sentence.length < 15 && node.parentElement) {
-      const pText = (node.parentElement.innerText || node.parentElement.textContent || "").trim();
-      if (pText.length >= sentence.length && pText.length < 400) {
-        sentence = pText;
       }
     }
 
@@ -5431,7 +5587,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         const best = searchResults.find(item => item.res && item.res.length > 0);
         if (best) {
           const matchedTerm = forwardSlice.slice(0, best.len);
-          // Highlight matched range
+          const { sentence, paragraph } = extractWebContext(node, idx, matchedTerm);
           const hlRange = document.createRange();
           try {
             hlRange.setStart(node, idx);
@@ -5440,6 +5596,7 @@ window.KikiAudioEngine = KikiAudioEngine;
           return {
             term: matchedTerm,
             sentence,
+            paragraph,
             isJp: true,
             range: hlRange
           };
@@ -5456,7 +5613,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       while (start > 0 && regex.test(text[start - 1])) start--;
       let end = idx;
       while (end < text.length && regex.test(text[end])) end++;
-      // If Kanji followed by Hiragana (okurigana like 食べる, 美味しい), include trailing Hiragana (unless it's a particle)
+      // If Kanji followed by Hiragana (okurigana like 食べる, 美味しい), include trailing Hiragana
       if (regex.source.includes('4e00') && end < text.length && /[\u3040-\u309f]/.test(text[end])) {
         const nextChar = text[end];
         if (!/^[をにがのはでともへや]/.test(nextChar)) {
@@ -5468,12 +5625,13 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
       }
       const term = text.slice(start, end);
+      const { sentence, paragraph } = extractWebContext(node, idx, term);
       const hlRange = document.createRange();
       try {
         hlRange.setStart(node, start);
         hlRange.setEnd(node, end);
       } catch {}
-      return { term, sentence, isJp: true, range: hlRange };
+      return { term, sentence, paragraph, isJp: true, range: hlRange };
     } else {
       // Latin / English word extraction
       let start = idx;
@@ -5483,12 +5641,13 @@ window.KikiAudioEngine = KikiAudioEngine;
       const term = text.slice(start, end).replace(/^['-]+|['-]+$/g, "");
       if (!term || term.length < 1) return null;
 
+      const { sentence, paragraph } = extractWebContext(node, idx, term);
       const hlRange = document.createRange();
       try {
         hlRange.setStart(node, start);
         hlRange.setEnd(node, end);
       } catch {}
-      return { term, sentence, isJp: false, range: hlRange };
+      return { term, sentence, paragraph, isJp: false, range: hlRange };
     }
   }
 
@@ -5506,9 +5665,9 @@ window.KikiAudioEngine = KikiAudioEngine;
     e.stopPropagation();
     e.stopImmediatePropagation();
 
-    // Do not trigger on Kiki's own UI elements
+    // Do not trigger on Kiki's own UI elements or YouTube subtitle bar
     if (e.target && typeof e.target.closest === "function" &&
-        e.target.closest("#kiki-yomitan-card, #kiki-settings-modal, #kiki-hud, .kiki-toast")) {
+        e.target.closest("#kiki-yomitan-card, #kiki-settings-modal, #kiki-hud, .kiki-toast, #kiki-captions")) {
       return;
     }
 
@@ -5537,9 +5696,9 @@ window.KikiAudioEngine = KikiAudioEngine;
       try { injectStyles(); } catch {}
     }
 
-    // Show floating Yomitan card with sentence context
+    // Show floating Yomitan card with sentence and paragraph context
     if (typeof showYomitanCard === "function") {
-      showYomitanCard(null, resolved.term, { x: e.clientX, y: e.clientY }, resolved.sentence);
+      showYomitanCard(null, resolved.term, { x: e.clientX, y: e.clientY }, resolved.sentence, "web", resolved.paragraph);
     }
   }
 

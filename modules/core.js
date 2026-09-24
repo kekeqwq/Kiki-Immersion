@@ -14,8 +14,10 @@
     savedPot = window.__kiki_lastPoToken || sessionStorage.getItem("kiki_pot") || "";
   } catch {}
 
+  const isYouTubeDomain = /(?:^|\.)youtube\.com$/.test(location.hostname);
   const STATE = window.STATE = {
     enabled: true,
+    isYouTube: isYouTubeDomain,
     subsVisible: localStorage.getItem("kiki_subs_visible") !== "0",
     webLookupKey: localStorage.getItem("kiki_web_lookup_key") || "ctrl",
     cues: [],
@@ -110,7 +112,6 @@
   }
 
   // Hook fetch & XMLHttpRequest early for YouTube timedtext capture (only on YouTube domains)
-  const isYouTubeDomain = /(?:^|\.)youtube\.com$/.test(location.hostname);
   if (isYouTubeDomain) {
     const origFetch = (window.fetch ? window.fetch.bind(window) : null);
     window.origFetch = origFetch || window.fetch;

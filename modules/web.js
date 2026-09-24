@@ -49,8 +49,114 @@
   }
 
   // -------------------------------------------------------------
-  // 3. Multilingual Word & Sentence Context Extraction
+  // 3. Multilingual Word & Web Context Extraction (Sentence & Paragraph)
   // -------------------------------------------------------------
+  function getEnclosingBlock(node) {
+    let el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    const inlineTags = new Set([
+      "A", "ABBR", "ACRONYM", "B", "BDO", "BIG", "BR", "BUTTON", "CITE", "CODE",
+      "DFN", "EM", "I", "IMG", "INPUT", "KBD", "LABEL", "MAP", "MARK", "OBJECT",
+      "OUTPUT", "Q", "SAMP", "SCRIPT", "SELECT", "SMALL", "SPAN", "STRONG", "SUB",
+      "SUP", "TEXTAREA", "TIME", "TT", "VAR", "RUBY", "RT", "RP", "U", "S", "STRIKE"
+    ]);
+
+    while (el && el.parentElement && el !== document.body && el !== document.documentElement) {
+      const tag = el.tagName ? el.tagName.toUpperCase() : "";
+      if (inlineTags.has(tag)) {
+        el = el.parentElement;
+        continue;
+      }
+      try {
+        const display = window.getComputedStyle(el).display;
+        if (display && display.startsWith("inline")) {
+          el = el.parentElement;
+          continue;
+        }
+      } catch {}
+      break;
+    }
+    return el || document.body;
+  }
+
+  function extractWebContext(node, offset, term) {
+    const blockEl = getEnclosingBlock(node);
+    let fullText = "";
+    let globalOffset = 0;
+
+    try {
+      const preRange = document.createRange();
+      preRange.selectNodeContents(blockEl);
+      preRange.setEnd(node, Math.min(offset, node.textContent ? node.textContent.length : offset));
+      globalOffset = preRange.toString().length;
+      fullText = blockEl.textContent || "";
+    } catch {
+      fullText = (node.parentElement?.textContent || node.textContent || "");
+      globalOffset = offset;
+    }
+
+    if (!fullText) {
+      return { sentence: term || "", paragraph: term || "" };
+    }
+
+    // 1. Identify Paragraph boundaries (bounded by double-newline or block boundaries)
+    let paraStart = globalOffset;
+    while (paraStart > 0) {
+      if (fullText[paraStart - 1] === "\n" && (paraStart >= 2 && fullText[paraStart - 2] === "\n")) {
+        break;
+      }
+      paraStart--;
+    }
+    let paraEnd = globalOffset;
+    while (paraEnd < fullText.length) {
+      if (fullText[paraEnd] === "\n" && (paraEnd + 1 < fullText.length && fullText[paraEnd + 1] === "\n")) {
+        break;
+      }
+      paraEnd++;
+    }
+    const rawParagraph = fullText.slice(paraStart, paraEnd).replace(/[ \t\r\n]+/g, " ").trim();
+
+    // 2. Identify Sentence boundaries around globalOffset
+    const sentDelimRegex = /[.!?。\n\r！？]/;
+    let sentStart = globalOffset;
+    while (sentStart > paraStart && !sentDelimRegex.test(fullText[sentStart - 1])) {
+      sentStart--;
+    }
+    let sentEnd = globalOffset;
+    while (sentEnd < paraEnd && !sentDelimRegex.test(fullText[sentEnd])) {
+      sentEnd++;
+    }
+    if (sentEnd < paraEnd && sentDelimRegex.test(fullText[sentEnd])) {
+      sentEnd++;
+      // Include trailing quotation marks, parenthesis, or brackets (e.g. ." or .”)
+      while (sentEnd < paraEnd && /["”'’」』)\]》]/.test(fullText[sentEnd])) {
+        sentEnd++;
+      }
+    }
+
+    let sentence = fullText.slice(sentStart, sentEnd).replace(/[ \t\r\n]+/g, " ").trim();
+
+    // Quality check: If sentence is too short or identical to term, expand to paragraph
+    if ((!sentence || sentence.length < (term?.length || 1) + 6 || sentence.toLowerCase() === term?.toLowerCase()) && rawParagraph.length > sentence.length) {
+      sentence = rawParagraph;
+    }
+
+    // Limit oversized sentence length safely (e.g. max 450 chars)
+    if (sentence.length > 450) {
+      const idx = sentence.toLowerCase().indexOf(term?.toLowerCase() || "");
+      if (idx !== -1) {
+        const start = Math.max(0, idx - 180);
+        const end = Math.min(sentence.length, idx + (term?.length || 0) + 180);
+        sentence = (start > 0 ? "…" : "") + sentence.slice(start, end).trim() + (end < sentence.length ? "…" : "");
+      } else {
+        sentence = sentence.slice(0, 450) + "…";
+      }
+    }
+
+    const paragraph = rawParagraph.length <= 800 ? rawParagraph : (rawParagraph.slice(0, 800) + "…");
+
+    return { sentence, paragraph };
+  }
+
   async function resolveTargetWordAndContext(node, offset) {
     if (!node || node.nodeType !== Node.TEXT_NODE) return null;
     const text = node.textContent || "";
@@ -69,27 +175,6 @@
         ch = text[idx];
       } else {
         return null;
-      }
-    }
-
-    // Sentence context extraction (bounded by sentence punctuation or line breaks)
-    let sentStart = idx;
-    while (sentStart > 0 && !/[.!?。\n\r！？]/.test(text[sentStart - 1])) {
-      sentStart--;
-    }
-    let sentEnd = idx;
-    while (sentEnd < text.length && !/[.!?。\n\r！？]/.test(text[sentEnd])) {
-      sentEnd++;
-    }
-    if (sentEnd < text.length && /[.!?。\n\r！？]/.test(text[sentEnd])) {
-      sentEnd++;
-    }
-    let sentence = text.slice(sentStart, sentEnd).trim();
-
-    if (sentence.length < 15 && node.parentElement) {
-      const pText = (node.parentElement.innerText || node.parentElement.textContent || "").trim();
-      if (pText.length >= sentence.length && pText.length < 400) {
-        sentence = pText;
       }
     }
 
@@ -113,7 +198,7 @@
         const best = searchResults.find(item => item.res && item.res.length > 0);
         if (best) {
           const matchedTerm = forwardSlice.slice(0, best.len);
-          // Highlight matched range
+          const { sentence, paragraph } = extractWebContext(node, idx, matchedTerm);
           const hlRange = document.createRange();
           try {
             hlRange.setStart(node, idx);
@@ -122,6 +207,7 @@
           return {
             term: matchedTerm,
             sentence,
+            paragraph,
             isJp: true,
             range: hlRange
           };
@@ -138,7 +224,7 @@
       while (start > 0 && regex.test(text[start - 1])) start--;
       let end = idx;
       while (end < text.length && regex.test(text[end])) end++;
-      // If Kanji followed by Hiragana (okurigana like 食べる, 美味しい), include trailing Hiragana (unless it's a particle)
+      // If Kanji followed by Hiragana (okurigana like 食べる, 美味しい), include trailing Hiragana
       if (regex.source.includes('4e00') && end < text.length && /[\u3040-\u309f]/.test(text[end])) {
         const nextChar = text[end];
         if (!/^[をにがのはでともへや]/.test(nextChar)) {
@@ -150,12 +236,13 @@
         }
       }
       const term = text.slice(start, end);
+      const { sentence, paragraph } = extractWebContext(node, idx, term);
       const hlRange = document.createRange();
       try {
         hlRange.setStart(node, start);
         hlRange.setEnd(node, end);
       } catch {}
-      return { term, sentence, isJp: true, range: hlRange };
+      return { term, sentence, paragraph, isJp: true, range: hlRange };
     } else {
       // Latin / English word extraction
       let start = idx;
@@ -165,12 +252,13 @@
       const term = text.slice(start, end).replace(/^['-]+|['-]+$/g, "");
       if (!term || term.length < 1) return null;
 
+      const { sentence, paragraph } = extractWebContext(node, idx, term);
       const hlRange = document.createRange();
       try {
         hlRange.setStart(node, start);
         hlRange.setEnd(node, end);
       } catch {}
-      return { term, sentence, isJp: false, range: hlRange };
+      return { term, sentence, paragraph, isJp: false, range: hlRange };
     }
   }
 
@@ -188,9 +276,9 @@
     e.stopPropagation();
     e.stopImmediatePropagation();
 
-    // Do not trigger on Kiki's own UI elements
+    // Do not trigger on Kiki's own UI elements or YouTube subtitle bar
     if (e.target && typeof e.target.closest === "function" &&
-        e.target.closest("#kiki-yomitan-card, #kiki-settings-modal, #kiki-hud, .kiki-toast")) {
+        e.target.closest("#kiki-yomitan-card, #kiki-settings-modal, #kiki-hud, .kiki-toast, #kiki-captions")) {
       return;
     }
 
@@ -219,9 +307,9 @@
       try { injectStyles(); } catch {}
     }
 
-    // Show floating Yomitan card with sentence context
+    // Show floating Yomitan card with sentence and paragraph context
     if (typeof showYomitanCard === "function") {
-      showYomitanCard(null, resolved.term, { x: e.clientX, y: e.clientY }, resolved.sentence);
+      showYomitanCard(null, resolved.term, { x: e.clientX, y: e.clientY }, resolved.sentence, "web", resolved.paragraph);
     }
   }
 
