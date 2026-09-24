@@ -1048,20 +1048,28 @@
 
       const isOpen = isAnyPopupOpen();
       const withinGrace = (Date.now() - (STATE.lastLookupDismissTime || 0)) < 600;
+      const isYtPlayerClick = Boolean(
+        STATE.isYouTube &&
+        e.target &&
+        typeof e.target.closest === "function" &&
+        e.target.closest("#movie_player, .html5-video-player, video")
+      );
 
       if (isOpen) {
         if (type === "pointerdown" || type === "touchstart" || type === "mousedown") {
-          if (e.cancelable) e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
           dismissAllPopups(true);
-        } else {
+          if (isYtPlayerClick) {
+            if (e.cancelable) e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+          }
+        } else if (isYtPlayerClick) {
           if (e.cancelable) e.preventDefault();
           e.stopPropagation();
           e.stopImmediatePropagation();
         }
-      } else if (withinGrace) {
-        // Swallow remaining events of the dismissal gesture (e.g. pointerup, mouseup, click)
+      } else if (withinGrace && isYtPlayerClick) {
+        // Swallow remaining events of the dismissal gesture only on YouTube video player
         if (e.cancelable) e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();

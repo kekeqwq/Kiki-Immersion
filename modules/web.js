@@ -280,16 +280,14 @@
       return;
     }
 
-    // In 'none' mode (direct click/tap), do not intercept interactive elements (links, buttons, inputs)
-    if (mode === "none") {
-      if (e.target && typeof e.target.closest === "function" &&
-          e.target.closest("a, button, input, textarea, select, label, [role='button'], [role='link']")) {
-        return;
-      }
+    // Only ignore form inputs where user is actively typing text
+    if (e.target && typeof e.target.closest === "function" &&
+        e.target.closest("input, textarea, select, [contenteditable='true']")) {
+      return;
     }
 
     const now = Date.now();
-    if (now - lastTriggerTime < 350) return;
+    if (now - lastTriggerTime < 250) return;
 
     const caret = getCaretPoint(e.clientX, e.clientY);
     if (!caret || !caret.node) return;
@@ -297,17 +295,19 @@
     const resolved = await resolveTargetWordAndContext(caret.node, caret.offset);
     if (!resolved || !resolved.term) return;
 
-    // Suppress native actions only when a valid word was resolved
-    if (e.cancelable) e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
+    // DO NOT preventDefault or stopPropagation on word clicks!
+    // This allows the website's native click handlers (e.g. LingQ's sidebar, reader controls)
+    // to execute concurrently without being blocked by Kiki.
+    if (mode !== "none" && e.ctrlKey) {
+      if (e.cancelable) e.preventDefault();
+    }
 
     lastTriggerTime = now;
 
-    // Visual selection feedback
+    // Visual selection feedback (apply only in modifier mode so we do not clear reader focus outlines)
     try {
       const sel = window.getSelection();
-      if (sel && resolved.range) {
+      if (sel && resolved.range && mode !== "none") {
         sel.removeAllRanges();
         sel.addRange(resolved.range);
       }
@@ -326,28 +326,18 @@
 
   function suppressIfModifier(e) {
     const mode = getTriggerKey();
-    if (mode === "none") {
-      if (Date.now() - lastTriggerTime < 400) {
-        if (e.cancelable) e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      }
-      return;
-    }
+    if (mode === "none") return;
 
-    if (isTriggerKeyPressed(e) || (Date.now() - lastTriggerTime < 600)) {
+    // In modifier mode, suppress native contextmenu when Ctrl is held to avoid Safari's context menu
+    if (e.type === "contextmenu" && (e.ctrlKey || mode === "ctrl")) {
       if (e.cancelable) e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
     }
   }
 
-  // Intercept all mouse/pointer events to completely suppress Safari's native Ctrl+Click context menu
+  // Intercept pointerdown for word lookup, and suppress native context menu only when Ctrl is held
   window.addEventListener("pointerdown", onGlobalPointerDown, { capture: true, passive: false });
-  window.addEventListener("pointerup", suppressIfModifier, { capture: true, passive: false });
-  window.addEventListener("mousedown", suppressIfModifier, { capture: true, passive: false });
-  window.addEventListener("mouseup", suppressIfModifier, { capture: true, passive: false });
-  window.addEventListener("click", suppressIfModifier, { capture: true, passive: false });
   window.addEventListener("contextmenu", suppressIfModifier, { capture: true, passive: false });
 
   // -------------------------------------------------------------
