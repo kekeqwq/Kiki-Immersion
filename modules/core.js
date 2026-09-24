@@ -48,11 +48,34 @@
   // -------------------------------------------------------------
   // Theme Management (Liquid Glass Dark & Light Modes)
   // -------------------------------------------------------------
+  function isPageDark() {
+    try {
+      if (typeof STATE !== "undefined" && STATE.isYouTube) return true;
+      const docEl = document.documentElement;
+      if (docEl && (docEl.classList.contains("dark") || docEl.getAttribute("data-theme") === "dark")) return true;
+      if (document.body) {
+        const bColor = window.getComputedStyle(document.body).backgroundColor;
+        const rgb = bColor ? bColor.match(/\d+/g) : null;
+        if (rgb && rgb.length >= 3) {
+          const r = +rgb[0], g = +rgb[1], b = +rgb[2];
+          // Check if not transparent
+          if (rgb.length < 4 || +rgb[3] > 0.1) {
+            const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            if (lum < 115) return true;
+          }
+        }
+      }
+    } catch {}
+    return false;
+  }
+
   function getResolvedTheme() {
     const pref = (typeof STATE !== "undefined" && STATE.theme) ||
                  localStorage.getItem("kiki_theme") || "auto";
     if (pref === "dark") return "dark";
     if (pref === "light") return "light";
+    // In "auto" mode: follow dark webpage environment (e.g. LingQ dark mode, YouTube)
+    if (isPageDark()) return "dark";
     return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
   }
   window.getResolvedTheme = getResolvedTheme;
@@ -596,12 +619,13 @@
     #kiki-yomitan-card {
       position: fixed !important; z-index: 2147483647 !important;
       left: 50% !important; transform: translateX(-50%) !important;
-      background: rgba(18, 18, 22, 0.78) !important;
-      backdrop-filter: blur(20px) saturate(160%) !important;
-      -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
+      background: rgba(16, 16, 20, 0.78) !important;
+      backdrop-filter: blur(28px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
       border: 1.5px solid rgba(255, 255, 255, 0.28) !important;
-      border-radius: 18px !important; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75) !important;
-      color: #EFEBE3 !important;
+      border-radius: 20px !important;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1.5px 1.5px rgba(255, 255, 255, 0.25) !important;
+      color: #F1F5F9 !important;
       overflow-x: hidden !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important;
       padding: 18px 22px !important; box-sizing: border-box !important; display: none; pointer-events: auto !important;
       width: min(580px, calc(100vw - 28px)) !important;
@@ -611,25 +635,26 @@
     #kiki-yomitan-card.show { display: block !important; }
     .kiki-card-header { margin-bottom: 12px; }
     .kiki-card-term-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
-    .kiki-card-term { font-size: 22px !important; font-weight: 800; letter-spacing: -0.01em; color: #FFFFFF !important; line-height: 1.25 !important; }
+    .kiki-card-term { font-size: 24px !important; font-weight: 800; letter-spacing: -0.02em; color: #FFFFFF !important; line-height: 1.2 !important; }
     .kiki-card-reading { font-size: 14.5px !important; opacity: 0.9; color: #CBD5E1 !important; font-weight: 500; }
     .kiki-card-audio-btn {
-      background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2);
-      color: #FFF; border-radius: 50%; width: 28px; height: 28px;
-      display: inline-flex; align-items: center; justify-content: center;
-      cursor: pointer; font-size: 13px; transition: background 0.15s; user-select: none;
+      background: rgba(255, 255, 255, 0.12) !important; border: 1px solid rgba(255, 255, 255, 0.22) !important;
+      color: #FFF !important; border-radius: 50% !important; width: 28px !important; height: 28px !important;
+      display: inline-flex !important; align-items: center !important; justify-content: center !important;
+      cursor: pointer !important; font-size: 13px !important; transition: all 0.15s ease !important; user-select: none !important;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3) !important;
     }
-    .kiki-card-audio-btn:hover, .kiki-card-audio-btn:active { background: rgba(255, 255, 255, 0.28); }
+    .kiki-card-audio-btn:hover, .kiki-card-audio-btn:active { background: rgba(255, 255, 255, 0.28) !important; transform: scale(1.06) !important; }
     .kiki-card-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
     .kiki-badge {
-      font-size: 11.5px !important; font-weight: 600; padding: 2.5px 8px !important; border-radius: 4px; line-height: 1.35;
-      display: inline-flex; align-items: center;
+      font-size: 11.5px !important; font-weight: 700 !important; padding: 2.5px 8px !important; border-radius: 6px !important; line-height: 1.35 !important;
+      display: inline-flex !important; align-items: center !important;
     }
-    .kiki-badge-dict { background: rgba(255, 255, 255, 0.08); color: #9B9890; border: 1px solid rgba(255, 255, 255, 0.14); }
-    .kiki-badge-redirect { color: #10B981; background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(16, 185, 129, 0.3); }
-    .kiki-badge-pos { color: #E86B5A; background: rgba(232, 107, 90, 0.15); border: 1px solid rgba(232, 107, 90, 0.32); }
-    .kiki-badge-level { color: #60A5FA; background: rgba(37, 99, 235, 0.15); border: 1px solid rgba(37, 99, 235, 0.32); }
-    .kiki-badge-vocab { color: #A78BFA; background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(124, 58, 237, 0.32); }
+    .kiki-badge-dict { background: rgba(255, 255, 255, 0.08) !important; color: #94A3B8 !important; border: 1px solid rgba(255, 255, 255, 0.14) !important; font-weight: 600 !important; }
+    .kiki-badge-redirect { color: #34D399 !important; background: rgba(16, 185, 129, 0.2) !important; border: 1px solid rgba(16, 185, 129, 0.4) !important; }
+    .kiki-badge-pos { color: #F87171 !important; background: rgba(239, 68, 68, 0.2) !important; border: 1px solid rgba(239, 68, 68, 0.4) !important; }
+    .kiki-badge-level { color: #60A5FA !important; background: rgba(37, 99, 235, 0.2) !important; border: 1px solid rgba(37, 99, 235, 0.4) !important; }
+    .kiki-badge-vocab { color: #A78BFA !important; background: rgba(124, 58, 237, 0.2) !important; border: 1px solid rgba(124, 58, 237, 0.4) !important; }
     .kiki-card-body { font-size: 15px !important; line-height: 1.65 !important; margin-top: 12px; color: #F1F5F9 !important; }
     .kiki-card-body p { margin-bottom: 8px !important; font-size: 15px !important; line-height: 1.65 !important; }
     .kiki-card-body ul, .kiki-card-body ol { margin: 6px 0 10px 18px !important; padding: 0 !important; }
@@ -669,14 +694,17 @@
       color: #FFFFFF !important;
     }
     .kiki-card-ai-switch-btn {
-      background: rgba(99, 102, 241, 0.25) !important; color: #C7D2FE !important;
-      border: 1px solid rgba(165, 180, 252, 0.35) !important; border-radius: 6px !important;
-      padding: 3px 8px !important; font-size: 11.5px !important; font-weight: 600 !important;
+      background: linear-gradient(135deg, #6366F1, #8B5CF6) !important; color: #FFFFFF !important;
+      border: none !important; border-radius: 8px !important;
+      padding: 3.5px 10px !important; font-size: 11.5px !important; font-weight: 700 !important;
       cursor: pointer !important; display: inline-flex !important; align-items: center !important; gap: 4px !important;
       user-select: none !important; -webkit-user-select: none !important;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35) !important;
+      transition: all 0.15s ease !important;
     }
     .kiki-card-ai-switch-btn:hover {
-      background: rgba(99, 102, 241, 0.5) !important; color: #FFF !important;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.55) !important;
+      transform: scale(0.97) !important;
     }
     .kiki-ai-thinking {
       animation: kikiPulse 1.5s infinite ease-in-out !important;
@@ -947,15 +975,15 @@
     /* ========================================================= */
     /* Light Theme - White Translucent Liquid Glass              */
     /* ========================================================= */
-    html[data-kiki-theme="light"] .kiki-line,
     @media (prefers-color-scheme: light) {
       html:not([data-kiki-theme="dark"]) .kiki-line {
         color: #0F172A !important;
-        background: rgba(255, 255, 255, 0.84) !important;
-        backdrop-filter: blur(20px) saturate(180%) !important;
-        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-        border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
-        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.60) 100%) !important;
+        backdrop-filter: blur(28px) saturate(200%) !important;
+        -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.9) !important;
+        border-radius: 18px !important;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06), inset 0 1.5px 1.5px rgba(255, 255, 255, 1) !important;
       }
       html:not([data-kiki-theme="dark"]) .kiki-word.kiki-active,
       html:not([data-kiki-theme="dark"]) .kiki-word:hover {
@@ -964,27 +992,33 @@
         color: #9A3412 !important;
       }
       html:not([data-kiki-theme="dark"]) #kiki-yomitan-card {
-        background: rgba(255, 255, 255, 0.88) !important;
-        backdrop-filter: blur(24px) saturate(180%) !important;
-        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-        border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
-        box-shadow: 0 20px 50px rgba(15, 23, 42, 0.15), 0 4px 12px rgba(15, 23, 42, 0.05), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
-        color: #1E293B !important;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.76) 0%, rgba(255, 255, 255, 0.58) 100%) !important;
+        backdrop-filter: blur(32px) saturate(220%) contrast(96%) brightness(104%) !important;
+        -webkit-backdrop-filter: blur(32px) saturate(220%) contrast(96%) brightness(104%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.9) !important;
+        border-radius: 20px !important;
+        box-shadow: 0 24px 60px -12px rgba(15, 23, 42, 0.22), 0 8px 24px -4px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.08), inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 1), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.04) !important;
+        color: #0F172A !important;
       }
       html:not([data-kiki-theme="dark"]) .kiki-card-term {
+        font-size: 24px !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.02em !important;
         color: #0F172A !important;
       }
       html:not([data-kiki-theme="dark"]) .kiki-card-reading {
         color: #475569 !important;
       }
       html:not([data-kiki-theme="dark"]) .kiki-card-audio-btn {
-        background: rgba(0, 0, 0, 0.06) !important;
-        border: 1px solid rgba(0, 0, 0, 0.1) !important;
-        color: #1E293B !important;
+        background: rgba(0, 0, 0, 0.05) !important;
+        border: 1px solid rgba(0, 0, 0, 0.08) !important;
+        color: #0F172A !important;
+        box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.8) !important;
       }
       html:not([data-kiki-theme="dark"]) .kiki-card-audio-btn:hover,
       html:not([data-kiki-theme="dark"]) .kiki-card-audio-btn:active {
-        background: rgba(0, 0, 0, 0.12) !important;
+        background: rgba(0, 0, 0, 0.1) !important;
+        transform: scale(1.06) !important;
       }
       html:not([data-kiki-theme="dark"]) .kiki-card-settings-btn,
       html:not([data-kiki-theme="dark"]) .kiki-card-close-btn {
@@ -995,38 +1029,49 @@
         color: #0F172A !important;
       }
       html:not([data-kiki-theme="dark"]) .kiki-card-ai-switch-btn {
-        background: rgba(99, 102, 241, 0.1) !important;
-        color: #4F46E5 !important;
-        border-color: rgba(99, 102, 241, 0.25) !important;
+        background: linear-gradient(135deg, #6366F1, #8B5CF6) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 3.5px 10px !important;
+        font-weight: 700 !important;
+        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35) !important;
       }
       html:not([data-kiki-theme="dark"]) .kiki-card-ai-switch-btn:hover {
-        background: rgba(99, 102, 241, 0.2) !important;
-        color: #3730A3 !important;
+        box-shadow: 0 4px 14px rgba(99, 102, 241, 0.55) !important;
+        transform: scale(0.97) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-badge {
+        font-size: 11.5px !important;
+        font-weight: 700 !important;
+        padding: 2.5px 8px !important;
+        border-radius: 6px !important;
       }
       html:not([data-kiki-theme="dark"]) .kiki-badge-dict {
         background: rgba(0, 0, 0, 0.05) !important;
         color: #475569 !important;
         border: 1px solid rgba(0, 0, 0, 0.08) !important;
+        font-weight: 600 !important;
       }
       html:not([data-kiki-theme="dark"]) .kiki-badge-redirect {
-        color: #059669 !important;
-        background: rgba(16, 185, 129, 0.1) !important;
-        border: 1px solid rgba(16, 185, 129, 0.25) !important;
+        color: #047857 !important;
+        background: rgba(16, 185, 129, 0.14) !important;
+        border: 1px solid rgba(16, 185, 129, 0.35) !important;
       }
       html:not([data-kiki-theme="dark"]) .kiki-badge-pos {
-        color: #DC2626 !important;
-        background: rgba(239, 68, 68, 0.1) !important;
-        border: 1px solid rgba(239, 68, 68, 0.22) !important;
+        color: #B91C1C !important;
+        background: rgba(239, 68, 68, 0.14) !important;
+        border: 1px solid rgba(239, 68, 68, 0.35) !important;
       }
       html:not([data-kiki-theme="dark"]) .kiki-badge-level {
-        color: #2563EB !important;
-        background: rgba(37, 99, 235, 0.1) !important;
-        border: 1px solid rgba(37, 99, 235, 0.22) !important;
+        color: #1D4ED8 !important;
+        background: rgba(37, 99, 235, 0.14) !important;
+        border: 1px solid rgba(37, 99, 235, 0.35) !important;
       }
       html:not([data-kiki-theme="dark"]) .kiki-badge-vocab {
-        color: #7C3AED !important;
-        background: rgba(124, 58, 237, 0.1) !important;
-        border: 1px solid rgba(124, 58, 237, 0.22) !important;
+        color: #6D28D9 !important;
+        background: rgba(124, 58, 237, 0.14) !important;
+        border: 1px solid rgba(124, 58, 237, 0.35) !important;
       }
       html:not([data-kiki-theme="dark"]) .kiki-card-body {
         color: #1E293B !important;
@@ -1050,20 +1095,20 @@
         color: #FFFFFF !important;
       }
       html:not([data-kiki-theme="dark"]) #kiki-toast {
-        background: rgba(255, 255, 255, 0.92) !important;
-        backdrop-filter: blur(24px) saturate(180%) !important;
-        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.72) 100%) !important;
+        backdrop-filter: blur(28px) saturate(200%) !important;
+        -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
         color: #0F172A !important;
-        border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
-        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.06) !important;
+        border: 1px solid rgba(255, 255, 255, 0.95) !important;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
       }
       html:not([data-kiki-theme="dark"]) #kiki-hud {
-        background: rgba(255, 255, 255, 0.88) !important;
-        backdrop-filter: blur(20px) saturate(180%) !important;
-        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.65) 100%) !important;
+        backdrop-filter: blur(24px) saturate(200%) !important;
+        -webkit-backdrop-filter: blur(24px) saturate(200%) !important;
         color: #0F172A !important;
         border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
-        box-shadow: 0 10px 32px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.06) !important;
+        box-shadow: 0 10px 32px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(0, 0, 0, 0.06) !important;
       }
       html:not([data-kiki-theme="dark"]) #kiki-hud:hover {
         background: rgba(255, 255, 255, 0.96) !important;
@@ -1077,11 +1122,11 @@
         background: rgba(0, 0, 0, 0.12) !important;
       }
       html:not([data-kiki-theme="dark"]) #kiki-track-dropdown {
-        background: rgba(255, 255, 255, 0.95) !important;
-        backdrop-filter: blur(24px) saturate(180%) !important;
-        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%) !important;
+        backdrop-filter: blur(28px) saturate(200%) !important;
+        -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
         border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
-        box-shadow: 0 20px 48px rgba(15, 23, 42, 0.18) !important;
+        box-shadow: 0 20px 48px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
       }
       html:not([data-kiki-theme="dark"]) .kiki-dropdown-header {
         color: #64748B !important;
@@ -1107,11 +1152,11 @@
         background: rgba(0, 0, 0, 0.08) !important;
       }
       html:not([data-kiki-theme="dark"]) #kiki-settings-modal {
-        background: rgba(255, 255, 255, 0.94) !important;
-        backdrop-filter: blur(28px) saturate(180%) !important;
-        -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.74) 100%) !important;
+        backdrop-filter: blur(32px) saturate(220%) !important;
+        -webkit-backdrop-filter: blur(32px) saturate(220%) !important;
         border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
-        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18), 0 4px 14px rgba(15, 23, 42, 0.06), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
+        box-shadow: 0 28px 70px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.08), inset 0 1.5px 1.5px rgba(255, 255, 255, 1) !important;
         color: #0F172A !important;
       }
       html:not([data-kiki-theme="dark"]) #kiki-yomitan-card::-webkit-scrollbar-thumb,
@@ -1160,11 +1205,12 @@
     /* Light Theme Explicit Attribute Overrides */
     html[data-kiki-theme="light"] .kiki-line {
       color: #0F172A !important;
-      background: rgba(255, 255, 255, 0.84) !important;
-      backdrop-filter: blur(20px) saturate(180%) !important;
-      -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-      border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
-      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.60) 100%) !important;
+      backdrop-filter: blur(28px) saturate(200%) !important;
+      -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.9) !important;
+      border-radius: 18px !important;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06), inset 0 1.5px 1.5px rgba(255, 255, 255, 1) !important;
     }
     html[data-kiki-theme="light"] .kiki-word.kiki-active,
     html[data-kiki-theme="light"] .kiki-word:hover {
@@ -1173,27 +1219,33 @@
       color: #9A3412 !important;
     }
     html[data-kiki-theme="light"] #kiki-yomitan-card {
-      background: rgba(255, 255, 255, 0.88) !important;
-      backdrop-filter: blur(24px) saturate(180%) !important;
-      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-      border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
-      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.15), 0 4px 12px rgba(15, 23, 42, 0.05), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
-      color: #1E293B !important;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.76) 0%, rgba(255, 255, 255, 0.58) 100%) !important;
+      backdrop-filter: blur(32px) saturate(220%) contrast(96%) brightness(104%) !important;
+      -webkit-backdrop-filter: blur(32px) saturate(220%) contrast(96%) brightness(104%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.9) !important;
+      border-radius: 20px !important;
+      box-shadow: 0 24px 60px -12px rgba(15, 23, 42, 0.22), 0 8px 24px -4px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.08), inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 1), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.04) !important;
+      color: #0F172A !important;
     }
     html[data-kiki-theme="light"] .kiki-card-term {
+      font-size: 24px !important;
+      font-weight: 800 !important;
+      letter-spacing: -0.02em !important;
       color: #0F172A !important;
     }
     html[data-kiki-theme="light"] .kiki-card-reading {
       color: #475569 !important;
     }
     html[data-kiki-theme="light"] .kiki-card-audio-btn {
-      background: rgba(0, 0, 0, 0.06) !important;
-      border: 1px solid rgba(0, 0, 0, 0.1) !important;
-      color: #1E293B !important;
+      background: rgba(0, 0, 0, 0.05) !important;
+      border: 1px solid rgba(0, 0, 0, 0.08) !important;
+      color: #0F172A !important;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.8) !important;
     }
     html[data-kiki-theme="light"] .kiki-card-audio-btn:hover,
     html[data-kiki-theme="light"] .kiki-card-audio-btn:active {
-      background: rgba(0, 0, 0, 0.12) !important;
+      background: rgba(0, 0, 0, 0.1) !important;
+      transform: scale(1.06) !important;
     }
     html[data-kiki-theme="light"] .kiki-card-settings-btn,
     html[data-kiki-theme="light"] .kiki-card-close-btn {
@@ -1204,38 +1256,49 @@
       color: #0F172A !important;
     }
     html[data-kiki-theme="light"] .kiki-card-ai-switch-btn {
-      background: rgba(99, 102, 241, 0.1) !important;
-      color: #4F46E5 !important;
-      border-color: rgba(99, 102, 241, 0.25) !important;
+      background: linear-gradient(135deg, #6366F1, #8B5CF6) !important;
+      color: #FFFFFF !important;
+      border: none !important;
+      border-radius: 8px !important;
+      padding: 3.5px 10px !important;
+      font-weight: 700 !important;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35) !important;
     }
     html[data-kiki-theme="light"] .kiki-card-ai-switch-btn:hover {
-      background: rgba(99, 102, 241, 0.2) !important;
-      color: #3730A3 !important;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.55) !important;
+      transform: scale(0.97) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-badge {
+      font-size: 11.5px !important;
+      font-weight: 700 !important;
+      padding: 2.5px 8px !important;
+      border-radius: 6px !important;
     }
     html[data-kiki-theme="light"] .kiki-badge-dict {
       background: rgba(0, 0, 0, 0.05) !important;
       color: #475569 !important;
       border: 1px solid rgba(0, 0, 0, 0.08) !important;
+      font-weight: 600 !important;
     }
     html[data-kiki-theme="light"] .kiki-badge-redirect {
-      color: #059669 !important;
-      background: rgba(16, 185, 129, 0.1) !important;
-      border: 1px solid rgba(16, 185, 129, 0.25) !important;
+      color: #047857 !important;
+      background: rgba(16, 185, 129, 0.14) !important;
+      border: 1px solid rgba(16, 185, 129, 0.35) !important;
     }
     html[data-kiki-theme="light"] .kiki-badge-pos {
-      color: #DC2626 !important;
-      background: rgba(239, 68, 68, 0.1) !important;
-      border: 1px solid rgba(239, 68, 68, 0.22) !important;
+      color: #B91C1C !important;
+      background: rgba(239, 68, 68, 0.14) !important;
+      border: 1px solid rgba(239, 68, 68, 0.35) !important;
     }
     html[data-kiki-theme="light"] .kiki-badge-level {
-      color: #2563EB !important;
-      background: rgba(37, 99, 235, 0.1) !important;
-      border: 1px solid rgba(37, 99, 235, 0.22) !important;
+      color: #1D4ED8 !important;
+      background: rgba(37, 99, 235, 0.14) !important;
+      border: 1px solid rgba(37, 99, 235, 0.35) !important;
     }
     html[data-kiki-theme="light"] .kiki-badge-vocab {
-      color: #7C3AED !important;
-      background: rgba(124, 58, 237, 0.1) !important;
-      border: 1px solid rgba(124, 58, 237, 0.22) !important;
+      color: #6D28D9 !important;
+      background: rgba(124, 58, 237, 0.14) !important;
+      border: 1px solid rgba(124, 58, 237, 0.35) !important;
     }
     html[data-kiki-theme="light"] .kiki-card-body {
       color: #1E293B !important;
@@ -1259,20 +1322,20 @@
       color: #FFFFFF !important;
     }
     html[data-kiki-theme="light"] #kiki-toast {
-      background: rgba(255, 255, 255, 0.92) !important;
-      backdrop-filter: blur(24px) saturate(180%) !important;
-      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.72) 100%) !important;
+      backdrop-filter: blur(28px) saturate(200%) !important;
+      -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
       color: #0F172A !important;
-      border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
-      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.06) !important;
+      border: 1px solid rgba(255, 255, 255, 0.95) !important;
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
     }
     html[data-kiki-theme="light"] #kiki-hud {
-      background: rgba(255, 255, 255, 0.88) !important;
-      backdrop-filter: blur(20px) saturate(180%) !important;
-      -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.65) 100%) !important;
+      backdrop-filter: blur(24px) saturate(200%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(200%) !important;
       color: #0F172A !important;
       border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
-      box-shadow: 0 10px 32px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.06) !important;
+      box-shadow: 0 10px 32px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(0, 0, 0, 0.06) !important;
     }
     html[data-kiki-theme="light"] #kiki-hud:hover {
       background: rgba(255, 255, 255, 0.96) !important;
@@ -1286,11 +1349,11 @@
       background: rgba(0, 0, 0, 0.12) !important;
     }
     html[data-kiki-theme="light"] #kiki-track-dropdown {
-      background: rgba(255, 255, 255, 0.95) !important;
-      backdrop-filter: blur(24px) saturate(180%) !important;
-      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%) !important;
+      backdrop-filter: blur(28px) saturate(200%) !important;
+      -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
       border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
-      box-shadow: 0 20px 48px rgba(15, 23, 42, 0.18) !important;
+      box-shadow: 0 20px 48px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
     }
     html[data-kiki-theme="light"] .kiki-dropdown-header {
       color: #64748B !important;
@@ -1316,11 +1379,11 @@
       background: rgba(0, 0, 0, 0.08) !important;
     }
     html[data-kiki-theme="light"] #kiki-settings-modal {
-      background: rgba(255, 255, 255, 0.94) !important;
-      backdrop-filter: blur(28px) saturate(180%) !important;
-      -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.74) 100%) !important;
+      backdrop-filter: blur(32px) saturate(220%) !important;
+      -webkit-backdrop-filter: blur(32px) saturate(220%) !important;
       border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
-      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18), 0 4px 14px rgba(15, 23, 42, 0.06), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
+      box-shadow: 0 28px 70px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.08), inset 0 1.5px 1.5px rgba(255, 255, 255, 1) !important;
       color: #0F172A !important;
     }
     html[data-kiki-theme="light"] #kiki-yomitan-card::-webkit-scrollbar-thumb,
