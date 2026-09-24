@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - YouTube Adapter & Subtitle Pipeline
-// Version: 1.2.8
+// Version: 1.2.9
 // =============================================================
 
   // -------------------------------------------------------------
@@ -287,13 +287,25 @@
   let lastTapX = 0;
   let lastTapY = 0;
   let singleTapTimer = null;
+  window.__kiki_cancelSingleTap = () => {
+    if (singleTapTimer) {
+      clearTimeout(singleTapTimer);
+      singleTapTimer = null;
+    }
+    singleTapActionFired = false;
+  };
 
   function isLookupOrCardOpen() {
+    if (typeof window.isAnyPopupOpen === "function") {
+      return window.isAnyPopupOpen();
+    }
     const card = document.getElementById("kiki-yomitan-card");
+    const modal = document.getElementById("kiki-settings-modal");
     return Boolean(
       (card && card.classList.contains("show")) ||
       STATE.lookupEl ||
-      STATE.pausedForLookup
+      STATE.pausedForLookup ||
+      (modal && modal.style.display !== "none")
     );
   }
 
@@ -313,17 +325,32 @@
       return;
     }
 
-    // Dismiss open Yomitan / AI card without triggering pause gesture
-    if (isLookupOrCardOpen()) {
+    const effectiveDismissTime = Math.max(lastLookupDismissTime || 0, STATE?.lastLookupDismissTime || 0);
+    if (Date.now() - effectiveDismissTime < 600) {
       if (e.cancelable) e.preventDefault();
       e.stopImmediatePropagation();
-      lastLookupDismissTime = Date.now();
       if (singleTapTimer) {
         clearTimeout(singleTapTimer);
         singleTapTimer = null;
       }
       singleTapActionFired = false;
-      if (typeof closeLookup === "function") {
+      return;
+    }
+
+    // Dismiss open Yomitan / AI card without triggering pause gesture
+    if (isLookupOrCardOpen()) {
+      if (e.cancelable) e.preventDefault();
+      e.stopImmediatePropagation();
+      lastLookupDismissTime = Date.now();
+      if (typeof STATE !== "undefined") STATE.lastLookupDismissTime = lastLookupDismissTime;
+      if (singleTapTimer) {
+        clearTimeout(singleTapTimer);
+        singleTapTimer = null;
+      }
+      singleTapActionFired = false;
+      if (typeof window.dismissAllPopups === "function") {
+        window.dismissAllPopups(true);
+      } else if (typeof closeLookup === "function") {
         closeLookup(true);
       }
       return;
@@ -394,9 +421,14 @@
   let singleTapActionFired = false;
   function handleTap(p, cx, cy, inputType = "touch") {
     lastTapInputType = inputType;
-    if (isLookupOrCardOpen() || (Date.now() - lastLookupDismissTime < 450)) {
-      if (isLookupOrCardOpen() && typeof closeLookup === "function") {
-        closeLookup(true);
+    const effectiveDismissTime = Math.max(lastLookupDismissTime || 0, STATE?.lastLookupDismissTime || 0);
+    if (isLookupOrCardOpen() || (Date.now() - effectiveDismissTime < 600)) {
+      if (isLookupOrCardOpen()) {
+        if (typeof window.dismissAllPopups === "function") {
+          window.dismissAllPopups(true);
+        } else if (typeof closeLookup === "function") {
+          closeLookup(true);
+        }
       }
       clearTimeout(singleTapTimer);
       singleTapTimer = null;
@@ -1943,4 +1975,4 @@
 
 
 
-  console.log('[Kiki Immersion] v1.2.8 Modular Engine Loaded on:', location.href);
+  console.log('[Kiki Immersion] v1.2.9 Modular Engine Loaded on:', location.href);

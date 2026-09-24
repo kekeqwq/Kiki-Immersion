@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.0.5
+// @version      1.0.6
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine & dynamic hot-reload.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -18,7 +18,7 @@
 (() => {
   "use strict";
 
-  const KIKI_LOADER_VERSION = "1.0.5";
+  const KIKI_LOADER_VERSION = "1.0.6";
   const MODULES = ["core", "yomitan", "ai", "ui", "youtube"];
   const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/modules/";
 
@@ -237,7 +237,7 @@
     } catch (e) {}
   }
 
-  const EXPECTED_CACHE_VERSION = "1.2.8";
+  const EXPECTED_CACHE_VERSION = "1.2.9";
 
   function hasAllCachedModules() {
     if (localStorage.getItem("kiki_cache_version") !== EXPECTED_CACHE_VERSION) return false;

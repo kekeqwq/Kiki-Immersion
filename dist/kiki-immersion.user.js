@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.2.8
+// @version      1.2.9
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, and touch/mouse gestures.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -51,13 +51,13 @@
 
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.2.8
+// Version: 1.2.9
 // =============================================================
 
-  window.__kiki_engine_version = "1.2.8";
+  window.__kiki_engine_version = "1.2.9";
   try {
-    localStorage.setItem("kiki_engine_version", "1.2.8");
-    localStorage.setItem("kiki_cache_version", "1.2.8");
+    localStorage.setItem("kiki_engine_version", "1.2.9");
+    localStorage.setItem("kiki_cache_version", "1.2.9");
   } catch (e) {}
 
   let savedPot = "";
@@ -76,6 +76,7 @@
     pausedForLookup: false,
     lookupEl: null,
     lookupWord: "",
+    lastLookupDismissTime: 0,
     fs: false,
     videoId: null,
     hudVisible: false,
@@ -87,7 +88,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.2.8"
+    engineVersion: "1.2.9"
   };
 
   // -------------------------------------------------------------
@@ -3502,9 +3503,10 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.2.8
+// Version: 1.2.9
 // =============================================================
 
+  window.playVideoSync = playVideoSync;
   function playVideoSync() {
     STATE.pausedForLookup = false;
     const p = playerEl();
@@ -3518,8 +3520,25 @@ window.KikiAudioEngine = KikiAudioEngine;
         if (pr && typeof pr.catch === "function") pr.catch(() => {});
       } catch {}
     }
+    // Safety check after a short frame to make sure video resumed
+    setTimeout(() => {
+      if (STATE.enabled && !STATE.pausedForLookup && (typeof isAnyPopupOpen !== "function" || !isAnyPopupOpen())) {
+        const video = videoEl();
+        if (video && video.paused) {
+          const player = playerEl();
+          if (player && typeof player.playVideo === "function") {
+            try { player.playVideo(); } catch {}
+          }
+          try {
+            const p2 = video.play();
+            if (p2 && typeof p2.catch === "function") p2.catch(() => {});
+          } catch {}
+        }
+      }
+    }, 60);
   }
 
+  window.pauseVideoSync = pauseVideoSync;
   function pauseVideoSync() {
     const p = playerEl();
     if (p && typeof p.pauseVideo === "function") {
@@ -4387,6 +4406,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     });
   }
 
+  window.closeLookup = closeLookup;
   function closeLookup(resume = true) {
     abortActiveAi();
     STATE.lookupEl = null;
@@ -4402,17 +4422,57 @@ window.KikiAudioEngine = KikiAudioEngine;
     }
   }
 
-  document.addEventListener("pointerdown", (e) => {
-    const card = $("#kiki-yomitan-card");
-    const cardOpen = card && card.classList.contains("show");
-    if ((STATE.lookupEl || cardOpen) && !e.target.closest("#kiki-yomitan-card, .kiki-word, .kiki-cap-ai-btn, #kiki-settings-modal, #kiki-hud, .kiki-toast")) {
-      closeLookup(true);
+  function isAnyPopupOpen() {
+    const card = document.getElementById("kiki-yomitan-card");
+    const modal = document.getElementById("kiki-settings-modal");
+    return Boolean(
+      (card && card.classList.contains("show")) ||
+      STATE.lookupEl ||
+      STATE.pausedForLookup ||
+      (modal && modal.style.display !== "none")
+    );
+  }
+  window.isAnyPopupOpen = isAnyPopupOpen;
+
+  function dismissAllPopups(resume = true) {
+    STATE.lastLookupDismissTime = Date.now();
+    if (typeof window.__kiki_cancelSingleTap === "function") {
+      window.__kiki_cancelSingleTap();
     }
     const modal = document.getElementById("kiki-settings-modal");
-    if (modal && modal.style.display !== "none" && !e.target.closest("#kiki-settings-modal, #kiki-hud")) {
+    if (modal && modal.style.display !== "none") {
       modal.style.display = "none";
     }
-  }, true);
+    closeLookup(resume);
+  }
+  window.dismissAllPopups = dismissAllPopups;
+
+  // Unified popup dismissal: capture events on window to cleanly dismiss and resume without single-tap conflict
+  const popupDismissEvents = ["pointerdown", "mousedown", "pointerup", "mouseup", "touchstart", "touchend", "click"];
+  popupDismissEvents.forEach((type) => {
+    window.addEventListener(type, (e) => {
+      // Allow interaction inside popup card, words, AI button, settings modal, HUD, and toasts
+      if (e.target && typeof e.target.closest === "function" &&
+          e.target.closest("#kiki-yomitan-card, .kiki-word, .kiki-cap-ai-btn, #kiki-settings-modal, #kiki-hud, .kiki-toast")) {
+        return;
+      }
+
+      const isOpen = isAnyPopupOpen();
+      const withinGrace = (Date.now() - (STATE.lastLookupDismissTime || 0)) < 600;
+
+      if (isOpen) {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        dismissAllPopups(true);
+      } else if (withinGrace) {
+        // Swallow remaining events of the dismissal gesture (e.g. mouseup, click)
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    }, { capture: true });
+  });
 
 
   async function clearAllStorageAndConfig() {
@@ -5099,7 +5159,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - YouTube Adapter & Subtitle Pipeline
-// Version: 1.2.8
+// Version: 1.2.9
 // =============================================================
 
   // -------------------------------------------------------------
@@ -5386,13 +5446,25 @@ window.KikiAudioEngine = KikiAudioEngine;
   let lastTapX = 0;
   let lastTapY = 0;
   let singleTapTimer = null;
+  window.__kiki_cancelSingleTap = () => {
+    if (singleTapTimer) {
+      clearTimeout(singleTapTimer);
+      singleTapTimer = null;
+    }
+    singleTapActionFired = false;
+  };
 
   function isLookupOrCardOpen() {
+    if (typeof window.isAnyPopupOpen === "function") {
+      return window.isAnyPopupOpen();
+    }
     const card = document.getElementById("kiki-yomitan-card");
+    const modal = document.getElementById("kiki-settings-modal");
     return Boolean(
       (card && card.classList.contains("show")) ||
       STATE.lookupEl ||
-      STATE.pausedForLookup
+      STATE.pausedForLookup ||
+      (modal && modal.style.display !== "none")
     );
   }
 
@@ -5412,17 +5484,32 @@ window.KikiAudioEngine = KikiAudioEngine;
       return;
     }
 
-    // Dismiss open Yomitan / AI card without triggering pause gesture
-    if (isLookupOrCardOpen()) {
+    const effectiveDismissTime = Math.max(lastLookupDismissTime || 0, STATE?.lastLookupDismissTime || 0);
+    if (Date.now() - effectiveDismissTime < 600) {
       if (e.cancelable) e.preventDefault();
       e.stopImmediatePropagation();
-      lastLookupDismissTime = Date.now();
       if (singleTapTimer) {
         clearTimeout(singleTapTimer);
         singleTapTimer = null;
       }
       singleTapActionFired = false;
-      if (typeof closeLookup === "function") {
+      return;
+    }
+
+    // Dismiss open Yomitan / AI card without triggering pause gesture
+    if (isLookupOrCardOpen()) {
+      if (e.cancelable) e.preventDefault();
+      e.stopImmediatePropagation();
+      lastLookupDismissTime = Date.now();
+      if (typeof STATE !== "undefined") STATE.lastLookupDismissTime = lastLookupDismissTime;
+      if (singleTapTimer) {
+        clearTimeout(singleTapTimer);
+        singleTapTimer = null;
+      }
+      singleTapActionFired = false;
+      if (typeof window.dismissAllPopups === "function") {
+        window.dismissAllPopups(true);
+      } else if (typeof closeLookup === "function") {
         closeLookup(true);
       }
       return;
@@ -5493,9 +5580,14 @@ window.KikiAudioEngine = KikiAudioEngine;
   let singleTapActionFired = false;
   function handleTap(p, cx, cy, inputType = "touch") {
     lastTapInputType = inputType;
-    if (isLookupOrCardOpen() || (Date.now() - lastLookupDismissTime < 450)) {
-      if (isLookupOrCardOpen() && typeof closeLookup === "function") {
-        closeLookup(true);
+    const effectiveDismissTime = Math.max(lastLookupDismissTime || 0, STATE?.lastLookupDismissTime || 0);
+    if (isLookupOrCardOpen() || (Date.now() - effectiveDismissTime < 600)) {
+      if (isLookupOrCardOpen()) {
+        if (typeof window.dismissAllPopups === "function") {
+          window.dismissAllPopups(true);
+        } else if (typeof closeLookup === "function") {
+          closeLookup(true);
+        }
       }
       clearTimeout(singleTapTimer);
       singleTapTimer = null;
@@ -7042,7 +7134,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 
 
-  console.log('[Kiki Immersion] v1.2.8 Modular Engine Loaded on:', location.href);
+  console.log('[Kiki Immersion] v1.2.9 Modular Engine Loaded on:', location.href);
 
 
 // >>> END MODULE: youtube <<<

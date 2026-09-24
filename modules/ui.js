@@ -1,8 +1,9 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.2.8
+// Version: 1.2.9
 // =============================================================
 
+  window.playVideoSync = playVideoSync;
   function playVideoSync() {
     STATE.pausedForLookup = false;
     const p = playerEl();
@@ -16,8 +17,25 @@
         if (pr && typeof pr.catch === "function") pr.catch(() => {});
       } catch {}
     }
+    // Safety check after a short frame to make sure video resumed
+    setTimeout(() => {
+      if (STATE.enabled && !STATE.pausedForLookup && (typeof isAnyPopupOpen !== "function" || !isAnyPopupOpen())) {
+        const video = videoEl();
+        if (video && video.paused) {
+          const player = playerEl();
+          if (player && typeof player.playVideo === "function") {
+            try { player.playVideo(); } catch {}
+          }
+          try {
+            const p2 = video.play();
+            if (p2 && typeof p2.catch === "function") p2.catch(() => {});
+          } catch {}
+        }
+      }
+    }, 60);
   }
 
+  window.pauseVideoSync = pauseVideoSync;
   function pauseVideoSync() {
     const p = playerEl();
     if (p && typeof p.pauseVideo === "function") {
@@ -885,6 +903,7 @@
     });
   }
 
+  window.closeLookup = closeLookup;
   function closeLookup(resume = true) {
     abortActiveAi();
     STATE.lookupEl = null;
@@ -900,17 +919,57 @@
     }
   }
 
-  document.addEventListener("pointerdown", (e) => {
-    const card = $("#kiki-yomitan-card");
-    const cardOpen = card && card.classList.contains("show");
-    if ((STATE.lookupEl || cardOpen) && !e.target.closest("#kiki-yomitan-card, .kiki-word, .kiki-cap-ai-btn, #kiki-settings-modal, #kiki-hud, .kiki-toast")) {
-      closeLookup(true);
+  function isAnyPopupOpen() {
+    const card = document.getElementById("kiki-yomitan-card");
+    const modal = document.getElementById("kiki-settings-modal");
+    return Boolean(
+      (card && card.classList.contains("show")) ||
+      STATE.lookupEl ||
+      STATE.pausedForLookup ||
+      (modal && modal.style.display !== "none")
+    );
+  }
+  window.isAnyPopupOpen = isAnyPopupOpen;
+
+  function dismissAllPopups(resume = true) {
+    STATE.lastLookupDismissTime = Date.now();
+    if (typeof window.__kiki_cancelSingleTap === "function") {
+      window.__kiki_cancelSingleTap();
     }
     const modal = document.getElementById("kiki-settings-modal");
-    if (modal && modal.style.display !== "none" && !e.target.closest("#kiki-settings-modal, #kiki-hud")) {
+    if (modal && modal.style.display !== "none") {
       modal.style.display = "none";
     }
-  }, true);
+    closeLookup(resume);
+  }
+  window.dismissAllPopups = dismissAllPopups;
+
+  // Unified popup dismissal: capture events on window to cleanly dismiss and resume without single-tap conflict
+  const popupDismissEvents = ["pointerdown", "mousedown", "pointerup", "mouseup", "touchstart", "touchend", "click"];
+  popupDismissEvents.forEach((type) => {
+    window.addEventListener(type, (e) => {
+      // Allow interaction inside popup card, words, AI button, settings modal, HUD, and toasts
+      if (e.target && typeof e.target.closest === "function" &&
+          e.target.closest("#kiki-yomitan-card, .kiki-word, .kiki-cap-ai-btn, #kiki-settings-modal, #kiki-hud, .kiki-toast")) {
+        return;
+      }
+
+      const isOpen = isAnyPopupOpen();
+      const withinGrace = (Date.now() - (STATE.lastLookupDismissTime || 0)) < 600;
+
+      if (isOpen) {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        dismissAllPopups(true);
+      } else if (withinGrace) {
+        // Swallow remaining events of the dismissal gesture (e.g. mouseup, click)
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    }, { capture: true });
+  });
 
 
   async function clearAllStorageAndConfig() {

@@ -2,11 +2,21 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Frosted Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.8-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.5-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.9-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.6-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
 ## 📢 Release Overview
+
+**v1.2.9 (Unified Popup Dismissal & Playback Restoration Fix)**:
+- **Clean Popup Dismissal with Guaranteed Playback Resume**:
+  - Solved the race condition where dismissing an open lookup (Yomitan card, AI explanation card, or Settings modal) by clicking on blank space (inside the player or on the page) failed to resume playback or immediately re-paused due to single-click gesture conflicts.
+  - Implemented high-priority capture-phase event interception (`window.addEventListener(..., { capture: true })`) across `pointerdown`, `mousedown`, `pointerup`, `mouseup`, `touchstart`, `touchend`, and `click`.
+  - Added a 600ms gesture grace period and immediate cancellation of Kiki's `singleTapTimer` (`window.__kiki_cancelSingleTap()`), completely preventing YouTube's native player (`#movie_player`) click listeners and Kiki's pause toggle from triggering during dismissal.
+  - Added synchronous `playVideoSync()` with 60ms verification guard to ensure reliable video resumption across desktop mouse clicks and iPad touch taps.
+
+**Loader v1.0.6 (Cache Invalidation & Engine Sync)**:
+- **Instant Cache Upgrade**: Bumped `EXPECTED_CACHE_VERSION` to `1.2.9` to automatically flush legacy cached modules in `localStorage` and ensure immediate pickup of Engine v1.2.9.
 
 **v1.2.8 (Full Transcript Integration & YouTube PoToken Resolution)**:
 - **Breakthrough YouTube PoToken Bypass via Transcript Panel Integration**:
