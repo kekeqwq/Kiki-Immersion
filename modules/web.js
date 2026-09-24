@@ -18,6 +18,7 @@
 
   function isTriggerKeyPressed(e) {
     const mode = getTriggerKey();
+    if (mode === "none") return true;
     if (mode === "ctrl") return e.ctrlKey;
     if (mode === "alt") return e.altKey;
     if (mode === "meta") return e.metaKey;
@@ -271,15 +272,20 @@
     // 0. Performance: early bailout if modifier key is not held (zero overhead)
     if (!isTriggerKeyPressed(e)) return;
 
-    // Suppress native context menu and default selection immediately
-    if (e.cancelable) e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
+    const mode = getTriggerKey();
 
     // Do not trigger on Kiki's own UI elements or YouTube subtitle bar
     if (e.target && typeof e.target.closest === "function" &&
         e.target.closest("#kiki-yomitan-card, #kiki-settings-modal, #kiki-hud, .kiki-toast, #kiki-captions")) {
       return;
+    }
+
+    // In 'none' mode (direct click/tap), do not intercept interactive elements (links, buttons, inputs)
+    if (mode === "none") {
+      if (e.target && typeof e.target.closest === "function" &&
+          e.target.closest("a, button, input, textarea, select, label, [role='button'], [role='link']")) {
+        return;
+      }
     }
 
     const now = Date.now();
@@ -290,6 +296,11 @@
 
     const resolved = await resolveTargetWordAndContext(caret.node, caret.offset);
     if (!resolved || !resolved.term) return;
+
+    // Suppress native actions only when a valid word was resolved
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
 
     lastTriggerTime = now;
 
@@ -314,6 +325,16 @@
   }
 
   function suppressIfModifier(e) {
+    const mode = getTriggerKey();
+    if (mode === "none") {
+      if (Date.now() - lastTriggerTime < 400) {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+      return;
+    }
+
     if (isTriggerKeyPressed(e) || (Date.now() - lastTriggerTime < 600)) {
       if (e.cancelable) e.preventDefault();
       e.stopPropagation();

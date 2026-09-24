@@ -297,12 +297,12 @@
         </div>
         ${hasParagraph ? `
           <div class="kiki-ai-para-wrap" style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.15); display: none;">
-            <div style="font-size: 11px; font-weight: 700; color: #94A3B8; margin-bottom: 3px; text-transform: uppercase;">Paragraph Context (段落上下文)</div>
+            <div style="font-size: 11px; font-weight: 700; color: #94A3B8; margin-bottom: 3px; text-transform: uppercase;">Paragraph Context</div>
             <div style="font-size: 12.5px; color: #94A3B8; font-style: italic; line-height: 1.4;">${formatContextHtml(paraContext, term)}</div>
           </div>
           <div style="margin-top: 5px; text-align: right;">
             <button type="button" class="kiki-toggle-para-btn" style="background: none; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0; text-decoration: underline;">
-              📄 查看完整段落
+              📄 View Full Paragraph
             </button>
           </div>
         ` : ''}
@@ -333,7 +333,7 @@
         e.stopPropagation();
         const isHidden = paraWrap.style.display === "none";
         paraWrap.style.display = isHidden ? "block" : "none";
-        toggleParaBtn.textContent = isHidden ? "📄 收起段落" : "📄 查看完整段落";
+        toggleParaBtn.textContent = isHidden ? "📄 Hide Paragraph" : "📄 View Full Paragraph";
       });
     }
 
@@ -503,7 +503,7 @@
         if (followupInput) followupInput.disabled = false;
         if (followupSendBtn) {
           followupSendBtn.disabled = false;
-          followupSendBtn.textContent = isEn ? "Send" : "发送";
+          followupSendBtn.textContent = "Send";
         }
       }
     }

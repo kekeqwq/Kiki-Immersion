@@ -1166,14 +1166,15 @@
 
             <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 10px 12px; margin-top: 4px;">
               <div style="font-size: 12px; font-weight: 700; color: #E2E8F0; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
-                <span>🌐 全局网页查词修饰键 (Web Lookup)</span>
-                <span style="font-size: 11px; color: #94A3B8;">按住修饰键点击即查</span>
+                <span>🌐 Web Word Lookup Trigger</span>
+                <span style="font-size: 11px; color: #94A3B8;">Modifier key for this site</span>
               </div>
               <select id="kiki-web-lookup-key-select" style="width: 100%; background: rgba(0, 0, 0, 0.4); color: #FFF; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none;">
-                <option value="ctrl" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key") || "ctrl") === "ctrl" ? "selected" : ""}>Ctrl 键 (默认)</option>
-                <option value="alt" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "alt" ? "selected" : ""}>Option / Alt 键</option>
-                <option value="meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "meta" ? "selected" : ""}>Command / Meta 键</option>
-                <option value="ctrl_or_meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "ctrl_or_meta" ? "selected" : ""}>Ctrl 或 Command 键</option>
+                <option value="none" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "none" ? "selected" : ""}>None (Direct Click / Tap)</option>
+                <option value="ctrl" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key") || "ctrl") === "ctrl" ? "selected" : ""}>Ctrl Key (Default)</option>
+                <option value="alt" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "alt" ? "selected" : ""}>Option / Alt Key</option>
+                <option value="meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "meta" ? "selected" : ""}>Command / Meta Key</option>
+                <option value="ctrl_or_meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "ctrl_or_meta" ? "selected" : ""}>Ctrl or Command Key</option>
               </select>
             </div>
           </div>
@@ -1455,7 +1456,7 @@
             const val = e.target.value;
             STATE.webLookupKey = val;
             try { localStorage.setItem("kiki_web_lookup_key", val); } catch {}
-            toast(`✦ 全局查词修饰键: ${val}`);
+            toast(`✦ Web lookup trigger: ${val === "none" ? "Direct Click / Tap" : val.toUpperCase()}`);
           });
         }
       } else {

@@ -3304,12 +3304,12 @@ window.KikiAudioEngine = KikiAudioEngine;
         </div>
         ${hasParagraph ? `
           <div class="kiki-ai-para-wrap" style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.15); display: none;">
-            <div style="font-size: 11px; font-weight: 700; color: #94A3B8; margin-bottom: 3px; text-transform: uppercase;">Paragraph Context (段落上下文)</div>
+            <div style="font-size: 11px; font-weight: 700; color: #94A3B8; margin-bottom: 3px; text-transform: uppercase;">Paragraph Context</div>
             <div style="font-size: 12.5px; color: #94A3B8; font-style: italic; line-height: 1.4;">${formatContextHtml(paraContext, term)}</div>
           </div>
           <div style="margin-top: 5px; text-align: right;">
             <button type="button" class="kiki-toggle-para-btn" style="background: none; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0; text-decoration: underline;">
-              📄 查看完整段落
+              📄 View Full Paragraph
             </button>
           </div>
         ` : ''}
@@ -3340,7 +3340,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         e.stopPropagation();
         const isHidden = paraWrap.style.display === "none";
         paraWrap.style.display = isHidden ? "block" : "none";
-        toggleParaBtn.textContent = isHidden ? "📄 收起段落" : "📄 查看完整段落";
+        toggleParaBtn.textContent = isHidden ? "📄 Hide Paragraph" : "📄 View Full Paragraph";
       });
     }
 
@@ -3510,7 +3510,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         if (followupInput) followupInput.disabled = false;
         if (followupSendBtn) {
           followupSendBtn.disabled = false;
-          followupSendBtn.textContent = isEn ? "Send" : "发送";
+          followupSendBtn.textContent = "Send";
         }
       }
     }
@@ -4778,14 +4778,15 @@ window.KikiAudioEngine = KikiAudioEngine;
 
             <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 10px 12px; margin-top: 4px;">
               <div style="font-size: 12px; font-weight: 700; color: #E2E8F0; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
-                <span>🌐 全局网页查词修饰键 (Web Lookup)</span>
-                <span style="font-size: 11px; color: #94A3B8;">按住修饰键点击即查</span>
+                <span>🌐 Web Word Lookup Trigger</span>
+                <span style="font-size: 11px; color: #94A3B8;">Modifier key for this site</span>
               </div>
               <select id="kiki-web-lookup-key-select" style="width: 100%; background: rgba(0, 0, 0, 0.4); color: #FFF; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none;">
-                <option value="ctrl" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key") || "ctrl") === "ctrl" ? "selected" : ""}>Ctrl 键 (默认)</option>
-                <option value="alt" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "alt" ? "selected" : ""}>Option / Alt 键</option>
-                <option value="meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "meta" ? "selected" : ""}>Command / Meta 键</option>
-                <option value="ctrl_or_meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "ctrl_or_meta" ? "selected" : ""}>Ctrl 或 Command 键</option>
+                <option value="none" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "none" ? "selected" : ""}>None (Direct Click / Tap)</option>
+                <option value="ctrl" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key") || "ctrl") === "ctrl" ? "selected" : ""}>Ctrl Key (Default)</option>
+                <option value="alt" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "alt" ? "selected" : ""}>Option / Alt Key</option>
+                <option value="meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "meta" ? "selected" : ""}>Command / Meta Key</option>
+                <option value="ctrl_or_meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "ctrl_or_meta" ? "selected" : ""}>Ctrl or Command Key</option>
               </select>
             </div>
           </div>
@@ -5067,7 +5068,7 @@ window.KikiAudioEngine = KikiAudioEngine;
             const val = e.target.value;
             STATE.webLookupKey = val;
             try { localStorage.setItem("kiki_web_lookup_key", val); } catch {}
-            toast(`✦ 全局查词修饰键: ${val}`);
+            toast(`✦ Web lookup trigger: ${val === "none" ? "Direct Click / Tap" : val.toUpperCase()}`);
           });
         }
       } else {
@@ -5407,6 +5408,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
   function isTriggerKeyPressed(e) {
     const mode = getTriggerKey();
+    if (mode === "none") return true;
     if (mode === "ctrl") return e.ctrlKey;
     if (mode === "alt") return e.altKey;
     if (mode === "meta") return e.metaKey;
@@ -5660,15 +5662,20 @@ window.KikiAudioEngine = KikiAudioEngine;
     // 0. Performance: early bailout if modifier key is not held (zero overhead)
     if (!isTriggerKeyPressed(e)) return;
 
-    // Suppress native context menu and default selection immediately
-    if (e.cancelable) e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
+    const mode = getTriggerKey();
 
     // Do not trigger on Kiki's own UI elements or YouTube subtitle bar
     if (e.target && typeof e.target.closest === "function" &&
         e.target.closest("#kiki-yomitan-card, #kiki-settings-modal, #kiki-hud, .kiki-toast, #kiki-captions")) {
       return;
+    }
+
+    // In 'none' mode (direct click/tap), do not intercept interactive elements (links, buttons, inputs)
+    if (mode === "none") {
+      if (e.target && typeof e.target.closest === "function" &&
+          e.target.closest("a, button, input, textarea, select, label, [role='button'], [role='link']")) {
+        return;
+      }
     }
 
     const now = Date.now();
@@ -5679,6 +5686,11 @@ window.KikiAudioEngine = KikiAudioEngine;
 
     const resolved = await resolveTargetWordAndContext(caret.node, caret.offset);
     if (!resolved || !resolved.term) return;
+
+    // Suppress native actions only when a valid word was resolved
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
 
     lastTriggerTime = now;
 
@@ -5703,6 +5715,16 @@ window.KikiAudioEngine = KikiAudioEngine;
   }
 
   function suppressIfModifier(e) {
+    const mode = getTriggerKey();
+    if (mode === "none") {
+      if (Date.now() - lastTriggerTime < 400) {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+      return;
+    }
+
     if (isTriggerKeyPressed(e) || (Date.now() - lastTriggerTime < 600)) {
       if (e.cancelable) e.preventDefault();
       e.stopPropagation();
