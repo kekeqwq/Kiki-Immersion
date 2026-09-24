@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - Web Universal Lookup Module
-// Version: 1.3.0
+// Version: 1.3.1
 // Description: Global modifier-key word lookup for arbitrary web pages
 // =============================================================
 
@@ -180,6 +180,11 @@
     // 0. Performance: early bailout if modifier key is not held (zero overhead)
     if (!isTriggerKeyPressed(e)) return;
 
+    // Suppress native context menu and default selection immediately
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
     // Do not trigger on Kiki's own UI elements
     if (e.target && typeof e.target.closest === "function" &&
         e.target.closest("#kiki-yomitan-card, #kiki-settings-modal, #kiki-hud, .kiki-toast")) {
@@ -196,11 +201,6 @@
     if (!resolved || !resolved.term) return;
 
     lastTriggerTime = now;
-
-    // Prevent default browser behavior (e.g. following link, double click selection)
-    if (e.cancelable) e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
 
     // Visual selection feedback
     try {
@@ -222,18 +222,29 @@
     }
   }
 
-  function onGlobalClick(e) {
-    if (isTriggerKeyPressed(e)) {
-      if (Date.now() - lastTriggerTime < 600) {
-        if (e.cancelable) e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      }
+  function suppressIfModifier(e) {
+    if (isTriggerKeyPressed(e) || (Date.now() - lastTriggerTime < 600)) {
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
     }
   }
 
+  // Intercept all mouse/pointer events to completely suppress Safari's native Ctrl+Click context menu
   window.addEventListener("pointerdown", onGlobalPointerDown, { capture: true, passive: false });
-  window.addEventListener("click", onGlobalClick, { capture: true, passive: false });
+  window.addEventListener("mousedown", suppressIfModifier, { capture: true, passive: false });
+  window.addEventListener("mouseup", suppressIfModifier, { capture: true, passive: false });
+  window.addEventListener("click", suppressIfModifier, { capture: true, passive: false });
+  window.addEventListener("contextmenu", suppressIfModifier, { capture: true, passive: false });
+
+  // Ensure styles are injected on any webpage
+  if (document.head || document.documentElement) {
+    try { if (typeof injectStyles === "function") injectStyles(); } catch {}
+  } else {
+    document.addEventListener("DOMContentLoaded", () => {
+      try { if (typeof injectStyles === "function") injectStyles(); } catch {}
+    }, { once: true });
+  }
 
   console.log('[Kiki Immersion] Web Universal Lookup Module Loaded (Trigger: ' + getTriggerKey() + '+Click)');
 })();

@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.3.0
+// Version: 1.3.1
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -965,8 +965,9 @@
     const card = $("#kiki-yomitan-card");
     if (card) card.classList.remove("show");
 
+    const wasPausedByKiki = Boolean(STATE.pausedForLookup);
     STATE.pausedForLookup = false;
-    if (resume) {
+    if (resume && wasPausedByKiki) {
       playVideoSync();
     }
   }

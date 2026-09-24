@@ -1,12 +1,12 @@
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.3.0
+// Version: 1.3.1
 // =============================================================
 
-  window.__kiki_engine_version = "1.3.0";
+  window.__kiki_engine_version = "1.3.1";
   try {
-    localStorage.setItem("kiki_engine_version", "1.3.0");
-    localStorage.setItem("kiki_cache_version", "1.3.0");
+    localStorage.setItem("kiki_engine_version", "1.3.1");
+    localStorage.setItem("kiki_cache_version", "1.3.1");
   } catch (e) {}
 
   let savedPot = "";
@@ -39,7 +39,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.3.0"
+    engineVersion: "1.3.1"
   };
 
   // -------------------------------------------------------------

@@ -2,11 +2,26 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Frosted Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.3.0-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.1.0-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.3.1-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.1.1-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
 ## 📢 Release Overview
+
+**v1.3.1 (Cross-Site Bundle Fix, Safari Context Menu Suppression & Video State Decoupling)**:
+- **Universal Multi-Site Bundle Resolution**:
+  - Fixed an issue where `youtube.js`'s early domain check returned from the bundle's outer IIFE, prematurely terminating execution of `web.js` on non-YouTube websites.
+  - Re-ordered `MODULE_ORDER` to place `web.js` before `youtube.js`, and wrapped `youtube.js` in its own isolated IIFE. Verified fully functional across external domains (Wikipedia, Example.com, etc.).
+- **Safari macOS Native Context Menu Suppression**:
+  - Prevented macOS Safari from opening the native context menu when clicking with `Ctrl` held. Intercepted `contextmenu`, `mousedown`, `pointerdown`, and `click` in the window capture phase with `preventDefault()`.
+- **Decoupled User Video Pause from Web/Comment Lookup**:
+  - Fixed video auto-resuming when closing a lookup card on YouTube comments/descriptions: `closeLookup()` now strictly verifies `wasPausedByKiki = Boolean(STATE.pausedForLookup)`.
+  - If the user manually paused the video before reading comments or web text, dismissing the card keeps the video paused; only Kiki-initiated subtitle lookups will auto-resume playback.
+- **Automatic Style Initialization**:
+  - Auto-injected `#kiki-yomitan-card` and base styles on all non-YouTube websites upon DOM load.
+
+**Loader v1.1.1 (Engine Sync)**:
+- **Instant Cache Upgrade**: Bumped `EXPECTED_CACHE_VERSION` to `1.3.1`.
 
 **v1.3.0 (Global Web Universal Lookup & Domain-Based Modular Engine)**:
 - **Zero-DOM-Mutation Global Word Lookup (`modules/web.js`)**:
