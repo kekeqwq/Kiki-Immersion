@@ -18,6 +18,7 @@
   const STATE = window.STATE = {
     enabled: true,
     isYouTube: isYouTubeDomain,
+    theme: localStorage.getItem("kiki_theme") || "auto",
     subsVisible: localStorage.getItem("kiki_subs_visible") !== "0",
     webLookupKey: localStorage.getItem("kiki_web_lookup_key") || "ctrl",
     cues: [],
@@ -43,6 +44,53 @@
     capturedVideoId: "",
     engineVersion: "1.3.3"
   };
+
+  // -------------------------------------------------------------
+  // Theme Management (Liquid Glass Dark & Light Modes)
+  // -------------------------------------------------------------
+  function getResolvedTheme() {
+    const pref = (typeof STATE !== "undefined" && STATE.theme) ||
+                 localStorage.getItem("kiki_theme") || "auto";
+    if (pref === "dark") return "dark";
+    if (pref === "light") return "light";
+    return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+  }
+  window.getResolvedTheme = getResolvedTheme;
+
+  function applyTheme(theme) {
+    if (theme) {
+      STATE.theme = theme;
+      try { localStorage.setItem("kiki_theme", theme); } catch {}
+    }
+    const resolved = getResolvedTheme();
+    try {
+      if (document.documentElement) {
+        document.documentElement.setAttribute("data-kiki-theme", resolved);
+        document.documentElement.setAttribute("data-kiki-theme-pref", STATE.theme || "auto");
+      }
+    } catch {}
+    return resolved;
+  }
+  window.applyTheme = applyTheme;
+
+  // Initialize theme on script load
+  applyTheme();
+
+  // Listen to system color scheme changes in real-time (Windows & macOS)
+  if (typeof window !== "undefined" && window.matchMedia) {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onSchemeChange = () => {
+      const pref = (typeof STATE !== "undefined" && STATE.theme) || localStorage.getItem("kiki_theme") || "auto";
+      if (pref === "auto") {
+        applyTheme("auto");
+      }
+    };
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", onSchemeChange);
+    } else if (typeof mq.addListener === "function") {
+      mq.addListener(onSchemeChange);
+    }
+  }
 
   function currentVideoId() {
     try {
@@ -638,6 +686,49 @@
       50% { opacity: 1; }
     }
 
+    /* AI Card Base Styles */
+    .kiki-card-mode-select {
+      background: rgba(255, 255, 255, 0.12) !important;
+      color: #E2E8F0 !important;
+      font-size: 11.5px !important;
+      font-weight: 600 !important;
+      padding: 2px 6px !important;
+      border-radius: 6px !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      cursor: pointer !important;
+      outline: none !important;
+    }
+    .kiki-ai-quote-box {
+      background: rgba(255, 255, 255, 0.06) !important;
+      color: #CBD5E1 !important;
+    }
+    .kiki-ai-scroll-container {
+      color: #F1F5F9 !important;
+    }
+    .kiki-ai-input-wrap {
+      border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+    }
+    .kiki-ai-followup-input {
+      background: rgba(0, 0, 0, 0.35) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      color: #FFFFFF !important;
+    }
+    .kiki-ai-followup-input::placeholder {
+      color: rgba(255, 255, 255, 0.45) !important;
+    }
+    .kiki-ai-thought-box {
+      background: rgba(255, 255, 255, 0.05) !important;
+      color: #94A3B8 !important;
+    }
+    .kiki-ai-thought-text {
+      color: #CBD5E1 !important;
+    }
+    .kiki-ai-user-bubble {
+      background: rgba(99, 102, 241, 0.28) !important;
+      border: 1px solid rgba(165, 180, 252, 0.4) !important;
+      color: #E0E7FF !important;
+    }
+
     /* On-Screen Feedback Toast (Centered Glassmorphism) */
     #kiki-toast {
       position: fixed !important;
@@ -787,6 +878,491 @@
       height: 1px !important;
       background: rgba(255, 255, 255, 0.12) !important;
       margin: 4px 2px !important;
+    }
+
+    /* Settings Modal Base Style */
+    #kiki-settings-modal {
+      position: fixed !important;
+      top: 50% !important;
+      left: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      width: min(92vw, 500px) !important;
+      max-height: 88vh !important;
+      background: rgba(22, 22, 26, 0.96) !important;
+      backdrop-filter: blur(24px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      border-radius: 18px !important;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75) !important;
+      z-index: 2147483647 !important;
+      color: #FFFFFF !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+      padding: 20px !important;
+      box-sizing: border-box !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 14px !important;
+      touch-action: manipulation !important;
+      pointer-events: auto !important;
+    }
+
+    /* Sleek Frosted Glass Scrollbars */
+    #kiki-yomitan-card::-webkit-scrollbar,
+    #kiki-settings-modal::-webkit-scrollbar,
+    #kiki-track-dropdown::-webkit-scrollbar,
+    .kiki-ai-scroll-container::-webkit-scrollbar {
+      width: 6px !important;
+      height: 6px !important;
+    }
+    #kiki-yomitan-card::-webkit-scrollbar-track,
+    #kiki-settings-modal::-webkit-scrollbar-track,
+    #kiki-track-dropdown::-webkit-scrollbar-track,
+    .kiki-ai-scroll-container::-webkit-scrollbar-track {
+      background: transparent !important;
+    }
+    #kiki-yomitan-card::-webkit-scrollbar-thumb,
+    #kiki-settings-modal::-webkit-scrollbar-thumb,
+    #kiki-track-dropdown::-webkit-scrollbar-thumb,
+    .kiki-ai-scroll-container::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.22) !important;
+      border-radius: 4px !important;
+    }
+
+    /* Card buttons base */
+    .kiki-card-settings-btn, .kiki-card-close-btn {
+      background: transparent !important;
+      border: none !important;
+      color: #94A3B8 !important;
+      font-size: 16px !important;
+      cursor: pointer !important;
+      line-height: 1 !important;
+      padding: 0 4px !important;
+      transition: color 0.15s ease !important;
+    }
+    .kiki-card-close-btn { font-size: 20px !important; }
+    .kiki-card-settings-btn:hover, .kiki-card-close-btn:hover {
+      color: #FFFFFF !important;
+    }
+
+    /* ========================================================= */
+    /* Light Theme - White Translucent Liquid Glass              */
+    /* ========================================================= */
+    html[data-kiki-theme="light"] .kiki-line,
+    @media (prefers-color-scheme: light) {
+      html:not([data-kiki-theme="dark"]) .kiki-line {
+        color: #0F172A !important;
+        background: rgba(255, 255, 255, 0.84) !important;
+        backdrop-filter: blur(20px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-word.kiki-active,
+      html:not([data-kiki-theme="dark"]) .kiki-word:hover {
+        background: rgba(234, 88, 12, 0.18) !important;
+        border-bottom-color: #EA580C !important;
+        color: #9A3412 !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-yomitan-card {
+        background: rgba(255, 255, 255, 0.88) !important;
+        backdrop-filter: blur(24px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+        box-shadow: 0 20px 50px rgba(15, 23, 42, 0.15), 0 4px 12px rgba(15, 23, 42, 0.05), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
+        color: #1E293B !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-term {
+        color: #0F172A !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-reading {
+        color: #475569 !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-audio-btn {
+        background: rgba(0, 0, 0, 0.06) !important;
+        border: 1px solid rgba(0, 0, 0, 0.1) !important;
+        color: #1E293B !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-audio-btn:hover,
+      html:not([data-kiki-theme="dark"]) .kiki-card-audio-btn:active {
+        background: rgba(0, 0, 0, 0.12) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-settings-btn,
+      html:not([data-kiki-theme="dark"]) .kiki-card-close-btn {
+        color: #64748B !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-settings-btn:hover,
+      html:not([data-kiki-theme="dark"]) .kiki-card-close-btn:hover {
+        color: #0F172A !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-ai-switch-btn {
+        background: rgba(99, 102, 241, 0.1) !important;
+        color: #4F46E5 !important;
+        border-color: rgba(99, 102, 241, 0.25) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-ai-switch-btn:hover {
+        background: rgba(99, 102, 241, 0.2) !important;
+        color: #3730A3 !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-badge-dict {
+        background: rgba(0, 0, 0, 0.05) !important;
+        color: #475569 !important;
+        border: 1px solid rgba(0, 0, 0, 0.08) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-badge-redirect {
+        color: #059669 !important;
+        background: rgba(16, 185, 129, 0.1) !important;
+        border: 1px solid rgba(16, 185, 129, 0.25) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-badge-pos {
+        color: #DC2626 !important;
+        background: rgba(239, 68, 68, 0.1) !important;
+        border: 1px solid rgba(239, 68, 68, 0.22) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-badge-level {
+        color: #2563EB !important;
+        background: rgba(37, 99, 235, 0.1) !important;
+        border: 1px solid rgba(37, 99, 235, 0.22) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-badge-vocab {
+        color: #7C3AED !important;
+        background: rgba(124, 58, 237, 0.1) !important;
+        border: 1px solid rgba(124, 58, 237, 0.22) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-body {
+        color: #1E293B !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-body strong,
+      html:not([data-kiki-theme="dark"]) .kiki-card-body b {
+        color: #0F172A !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-entry + .kiki-card-entry {
+        border-top-color: rgba(0, 0, 0, 0.08) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-cap-ai-btn {
+        background: rgba(99, 102, 241, 0.9) !important;
+        border-color: rgba(255, 255, 255, 0.95) !important;
+        box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-cap-ai-btn .kiki-ai-icon {
+        color: #EEF2FF !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-cap-ai-btn .kiki-ai-text {
+        color: #FFFFFF !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-toast {
+        background: rgba(255, 255, 255, 0.92) !important;
+        backdrop-filter: blur(24px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+        color: #0F172A !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.06) !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-hud {
+        background: rgba(255, 255, 255, 0.88) !important;
+        backdrop-filter: blur(20px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        color: #0F172A !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+        box-shadow: 0 10px 32px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.06) !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-hud:hover {
+        background: rgba(255, 255, 255, 0.96) !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-hud .kiki-hud-btn {
+        background: rgba(0, 0, 0, 0.06) !important;
+        border: 1px solid rgba(0, 0, 0, 0.08) !important;
+        color: #0F172A !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-hud .kiki-hud-btn:hover {
+        background: rgba(0, 0, 0, 0.12) !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-track-dropdown {
+        background: rgba(255, 255, 255, 0.95) !important;
+        backdrop-filter: blur(24px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+        box-shadow: 0 20px 48px rgba(15, 23, 42, 0.18) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-dropdown-header {
+        color: #64748B !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-dropdown-item {
+        color: #1E293B !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-dropdown-item:hover,
+      html:not([data-kiki-theme="dark"]) .kiki-dropdown-item:active {
+        background: rgba(0, 0, 0, 0.05) !important;
+        color: #0F172A !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-dropdown-item.active {
+        background: rgba(37, 99, 235, 0.1) !important;
+        color: #1D4ED8 !important;
+        border: 1px solid rgba(37, 99, 235, 0.25) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-dropdown-tag {
+        background: rgba(0, 0, 0, 0.06) !important;
+        color: #475569 !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-dropdown-sep {
+        background: rgba(0, 0, 0, 0.08) !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-settings-modal {
+        background: rgba(255, 255, 255, 0.94) !important;
+        backdrop-filter: blur(28px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18), 0 4px 14px rgba(15, 23, 42, 0.06), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
+        color: #0F172A !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-yomitan-card::-webkit-scrollbar-thumb,
+      html:not([data-kiki-theme="dark"]) #kiki-settings-modal::-webkit-scrollbar-thumb,
+      html:not([data-kiki-theme="dark"]) #kiki-track-dropdown::-webkit-scrollbar-thumb,
+      html:not([data-kiki-theme="dark"]) .kiki-ai-scroll-container::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.16) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-mode-select {
+        background: rgba(0, 0, 0, 0.06) !important;
+        color: #0F172A !important;
+        border: 1px solid rgba(0, 0, 0, 0.12) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-ai-quote-box {
+        background: rgba(0, 0, 0, 0.04) !important;
+        color: #334155 !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-ai-scroll-container {
+        color: #0F172A !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-ai-input-wrap {
+        border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-ai-followup-input {
+        background: rgba(255, 255, 255, 0.95) !important;
+        border: 1px solid rgba(0, 0, 0, 0.15) !important;
+        color: #0F172A !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-ai-followup-input::placeholder {
+        color: #94A3B8 !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-ai-thought-box {
+        background: rgba(0, 0, 0, 0.03) !important;
+        color: #475569 !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-ai-thought-text {
+        color: #334155 !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-ai-user-bubble {
+        background: rgba(99, 102, 241, 0.12) !important;
+        border: 1px solid rgba(99, 102, 241, 0.25) !important;
+        color: #3730A3 !important;
+      }
+    }
+
+    /* Light Theme Explicit Attribute Overrides */
+    html[data-kiki-theme="light"] .kiki-line {
+      color: #0F172A !important;
+      background: rgba(255, 255, 255, 0.84) !important;
+      backdrop-filter: blur(20px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-word.kiki-active,
+    html[data-kiki-theme="light"] .kiki-word:hover {
+      background: rgba(234, 88, 12, 0.18) !important;
+      border-bottom-color: #EA580C !important;
+      color: #9A3412 !important;
+    }
+    html[data-kiki-theme="light"] #kiki-yomitan-card {
+      background: rgba(255, 255, 255, 0.88) !important;
+      backdrop-filter: blur(24px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.15), 0 4px 12px rgba(15, 23, 42, 0.05), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
+      color: #1E293B !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-term {
+      color: #0F172A !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-reading {
+      color: #475569 !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-audio-btn {
+      background: rgba(0, 0, 0, 0.06) !important;
+      border: 1px solid rgba(0, 0, 0, 0.1) !important;
+      color: #1E293B !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-audio-btn:hover,
+    html[data-kiki-theme="light"] .kiki-card-audio-btn:active {
+      background: rgba(0, 0, 0, 0.12) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-settings-btn,
+    html[data-kiki-theme="light"] .kiki-card-close-btn {
+      color: #64748B !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-settings-btn:hover,
+    html[data-kiki-theme="light"] .kiki-card-close-btn:hover {
+      color: #0F172A !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-ai-switch-btn {
+      background: rgba(99, 102, 241, 0.1) !important;
+      color: #4F46E5 !important;
+      border-color: rgba(99, 102, 241, 0.25) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-ai-switch-btn:hover {
+      background: rgba(99, 102, 241, 0.2) !important;
+      color: #3730A3 !important;
+    }
+    html[data-kiki-theme="light"] .kiki-badge-dict {
+      background: rgba(0, 0, 0, 0.05) !important;
+      color: #475569 !important;
+      border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-badge-redirect {
+      color: #059669 !important;
+      background: rgba(16, 185, 129, 0.1) !important;
+      border: 1px solid rgba(16, 185, 129, 0.25) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-badge-pos {
+      color: #DC2626 !important;
+      background: rgba(239, 68, 68, 0.1) !important;
+      border: 1px solid rgba(239, 68, 68, 0.22) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-badge-level {
+      color: #2563EB !important;
+      background: rgba(37, 99, 235, 0.1) !important;
+      border: 1px solid rgba(37, 99, 235, 0.22) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-badge-vocab {
+      color: #7C3AED !important;
+      background: rgba(124, 58, 237, 0.1) !important;
+      border: 1px solid rgba(124, 58, 237, 0.22) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-body {
+      color: #1E293B !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-body strong,
+    html[data-kiki-theme="light"] .kiki-card-body b {
+      color: #0F172A !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-entry + .kiki-card-entry {
+      border-top-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-cap-ai-btn {
+      background: rgba(99, 102, 241, 0.9) !important;
+      border-color: rgba(255, 255, 255, 0.95) !important;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-cap-ai-btn .kiki-ai-icon {
+      color: #EEF2FF !important;
+    }
+    html[data-kiki-theme="light"] .kiki-cap-ai-btn .kiki-ai-text {
+      color: #FFFFFF !important;
+    }
+    html[data-kiki-theme="light"] #kiki-toast {
+      background: rgba(255, 255, 255, 0.92) !important;
+      backdrop-filter: blur(24px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+      color: #0F172A !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.06) !important;
+    }
+    html[data-kiki-theme="light"] #kiki-hud {
+      background: rgba(255, 255, 255, 0.88) !important;
+      backdrop-filter: blur(20px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+      color: #0F172A !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+      box-shadow: 0 10px 32px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.06) !important;
+    }
+    html[data-kiki-theme="light"] #kiki-hud:hover {
+      background: rgba(255, 255, 255, 0.96) !important;
+    }
+    html[data-kiki-theme="light"] #kiki-hud .kiki-hud-btn {
+      background: rgba(0, 0, 0, 0.06) !important;
+      border: 1px solid rgba(0, 0, 0, 0.08) !important;
+      color: #0F172A !important;
+    }
+    html[data-kiki-theme="light"] #kiki-hud .kiki-hud-btn:hover {
+      background: rgba(0, 0, 0, 0.12) !important;
+    }
+    html[data-kiki-theme="light"] #kiki-track-dropdown {
+      background: rgba(255, 255, 255, 0.95) !important;
+      backdrop-filter: blur(24px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+      box-shadow: 0 20px 48px rgba(15, 23, 42, 0.18) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-dropdown-header {
+      color: #64748B !important;
+    }
+    html[data-kiki-theme="light"] .kiki-dropdown-item {
+      color: #1E293B !important;
+    }
+    html[data-kiki-theme="light"] .kiki-dropdown-item:hover,
+    html[data-kiki-theme="light"] .kiki-dropdown-item:active {
+      background: rgba(0, 0, 0, 0.05) !important;
+      color: #0F172A !important;
+    }
+    html[data-kiki-theme="light"] .kiki-dropdown-item.active {
+      background: rgba(37, 99, 235, 0.1) !important;
+      color: #1D4ED8 !important;
+      border: 1px solid rgba(37, 99, 235, 0.25) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-dropdown-tag {
+      background: rgba(0, 0, 0, 0.06) !important;
+      color: #475569 !important;
+    }
+    html[data-kiki-theme="light"] .kiki-dropdown-sep {
+      background: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-kiki-theme="light"] #kiki-settings-modal {
+      background: rgba(255, 255, 255, 0.94) !important;
+      backdrop-filter: blur(28px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18), 0 4px 14px rgba(15, 23, 42, 0.06), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
+      color: #0F172A !important;
+    }
+    html[data-kiki-theme="light"] #kiki-yomitan-card::-webkit-scrollbar-thumb,
+    html[data-kiki-theme="light"] #kiki-settings-modal::-webkit-scrollbar-thumb,
+    html[data-kiki-theme="light"] #kiki-track-dropdown::-webkit-scrollbar-thumb,
+    html[data-kiki-theme="light"] .kiki-ai-scroll-container::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.16) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-mode-select {
+      background: rgba(0, 0, 0, 0.06) !important;
+      color: #0F172A !important;
+      border: 1px solid rgba(0, 0, 0, 0.12) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-ai-quote-box {
+      background: rgba(0, 0, 0, 0.04) !important;
+      color: #334155 !important;
+    }
+    html[data-kiki-theme="light"] .kiki-ai-scroll-container {
+      color: #0F172A !important;
+    }
+    html[data-kiki-theme="light"] .kiki-ai-input-wrap {
+      border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-ai-followup-input {
+      background: rgba(255, 255, 255, 0.95) !important;
+      border: 1px solid rgba(0, 0, 0, 0.15) !important;
+      color: #0F172A !important;
+    }
+    html[data-kiki-theme="light"] .kiki-ai-followup-input::placeholder {
+      color: #94A3B8 !important;
+    }
+    html[data-kiki-theme="light"] .kiki-ai-thought-box {
+      background: rgba(0, 0, 0, 0.03) !important;
+      color: #475569 !important;
+    }
+    html[data-kiki-theme="light"] .kiki-ai-thought-text {
+      color: #334155 !important;
+    }
+    html[data-kiki-theme="light"] .kiki-ai-user-bubble {
+      background: rgba(99, 102, 241, 0.12) !important;
+      border: 1px solid rgba(99, 102, 241, 0.25) !important;
+      color: #3730A3 !important;
     }
 
     #kiki-hub-iframe { display: none !important; width: 0 !important; height: 0 !important; }

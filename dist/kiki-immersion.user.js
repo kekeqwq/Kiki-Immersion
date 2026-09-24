@@ -75,6 +75,7 @@
   const STATE = window.STATE = {
     enabled: true,
     isYouTube: isYouTubeDomain,
+    theme: localStorage.getItem("kiki_theme") || "auto",
     subsVisible: localStorage.getItem("kiki_subs_visible") !== "0",
     webLookupKey: localStorage.getItem("kiki_web_lookup_key") || "ctrl",
     cues: [],
@@ -100,6 +101,53 @@
     capturedVideoId: "",
     engineVersion: "1.3.3"
   };
+
+  // -------------------------------------------------------------
+  // Theme Management (Liquid Glass Dark & Light Modes)
+  // -------------------------------------------------------------
+  function getResolvedTheme() {
+    const pref = (typeof STATE !== "undefined" && STATE.theme) ||
+                 localStorage.getItem("kiki_theme") || "auto";
+    if (pref === "dark") return "dark";
+    if (pref === "light") return "light";
+    return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+  }
+  window.getResolvedTheme = getResolvedTheme;
+
+  function applyTheme(theme) {
+    if (theme) {
+      STATE.theme = theme;
+      try { localStorage.setItem("kiki_theme", theme); } catch {}
+    }
+    const resolved = getResolvedTheme();
+    try {
+      if (document.documentElement) {
+        document.documentElement.setAttribute("data-kiki-theme", resolved);
+        document.documentElement.setAttribute("data-kiki-theme-pref", STATE.theme || "auto");
+      }
+    } catch {}
+    return resolved;
+  }
+  window.applyTheme = applyTheme;
+
+  // Initialize theme on script load
+  applyTheme();
+
+  // Listen to system color scheme changes in real-time (Windows & macOS)
+  if (typeof window !== "undefined" && window.matchMedia) {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onSchemeChange = () => {
+      const pref = (typeof STATE !== "undefined" && STATE.theme) || localStorage.getItem("kiki_theme") || "auto";
+      if (pref === "auto") {
+        applyTheme("auto");
+      }
+    };
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", onSchemeChange);
+    } else if (typeof mq.addListener === "function") {
+      mq.addListener(onSchemeChange);
+    }
+  }
 
   function currentVideoId() {
     try {
@@ -695,6 +743,49 @@
       50% { opacity: 1; }
     }
 
+    /* AI Card Base Styles */
+    .kiki-card-mode-select {
+      background: rgba(255, 255, 255, 0.12) !important;
+      color: #E2E8F0 !important;
+      font-size: 11.5px !important;
+      font-weight: 600 !important;
+      padding: 2px 6px !important;
+      border-radius: 6px !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      cursor: pointer !important;
+      outline: none !important;
+    }
+    .kiki-ai-quote-box {
+      background: rgba(255, 255, 255, 0.06) !important;
+      color: #CBD5E1 !important;
+    }
+    .kiki-ai-scroll-container {
+      color: #F1F5F9 !important;
+    }
+    .kiki-ai-input-wrap {
+      border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+    }
+    .kiki-ai-followup-input {
+      background: rgba(0, 0, 0, 0.35) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      color: #FFFFFF !important;
+    }
+    .kiki-ai-followup-input::placeholder {
+      color: rgba(255, 255, 255, 0.45) !important;
+    }
+    .kiki-ai-thought-box {
+      background: rgba(255, 255, 255, 0.05) !important;
+      color: #94A3B8 !important;
+    }
+    .kiki-ai-thought-text {
+      color: #CBD5E1 !important;
+    }
+    .kiki-ai-user-bubble {
+      background: rgba(99, 102, 241, 0.28) !important;
+      border: 1px solid rgba(165, 180, 252, 0.4) !important;
+      color: #E0E7FF !important;
+    }
+
     /* On-Screen Feedback Toast (Centered Glassmorphism) */
     #kiki-toast {
       position: fixed !important;
@@ -844,6 +935,491 @@
       height: 1px !important;
       background: rgba(255, 255, 255, 0.12) !important;
       margin: 4px 2px !important;
+    }
+
+    /* Settings Modal Base Style */
+    #kiki-settings-modal {
+      position: fixed !important;
+      top: 50% !important;
+      left: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      width: min(92vw, 500px) !important;
+      max-height: 88vh !important;
+      background: rgba(22, 22, 26, 0.96) !important;
+      backdrop-filter: blur(24px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      border-radius: 18px !important;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75) !important;
+      z-index: 2147483647 !important;
+      color: #FFFFFF !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+      padding: 20px !important;
+      box-sizing: border-box !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 14px !important;
+      touch-action: manipulation !important;
+      pointer-events: auto !important;
+    }
+
+    /* Sleek Frosted Glass Scrollbars */
+    #kiki-yomitan-card::-webkit-scrollbar,
+    #kiki-settings-modal::-webkit-scrollbar,
+    #kiki-track-dropdown::-webkit-scrollbar,
+    .kiki-ai-scroll-container::-webkit-scrollbar {
+      width: 6px !important;
+      height: 6px !important;
+    }
+    #kiki-yomitan-card::-webkit-scrollbar-track,
+    #kiki-settings-modal::-webkit-scrollbar-track,
+    #kiki-track-dropdown::-webkit-scrollbar-track,
+    .kiki-ai-scroll-container::-webkit-scrollbar-track {
+      background: transparent !important;
+    }
+    #kiki-yomitan-card::-webkit-scrollbar-thumb,
+    #kiki-settings-modal::-webkit-scrollbar-thumb,
+    #kiki-track-dropdown::-webkit-scrollbar-thumb,
+    .kiki-ai-scroll-container::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.22) !important;
+      border-radius: 4px !important;
+    }
+
+    /* Card buttons base */
+    .kiki-card-settings-btn, .kiki-card-close-btn {
+      background: transparent !important;
+      border: none !important;
+      color: #94A3B8 !important;
+      font-size: 16px !important;
+      cursor: pointer !important;
+      line-height: 1 !important;
+      padding: 0 4px !important;
+      transition: color 0.15s ease !important;
+    }
+    .kiki-card-close-btn { font-size: 20px !important; }
+    .kiki-card-settings-btn:hover, .kiki-card-close-btn:hover {
+      color: #FFFFFF !important;
+    }
+
+    /* ========================================================= */
+    /* Light Theme - White Translucent Liquid Glass              */
+    /* ========================================================= */
+    html[data-kiki-theme="light"] .kiki-line,
+    @media (prefers-color-scheme: light) {
+      html:not([data-kiki-theme="dark"]) .kiki-line {
+        color: #0F172A !important;
+        background: rgba(255, 255, 255, 0.84) !important;
+        backdrop-filter: blur(20px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-word.kiki-active,
+      html:not([data-kiki-theme="dark"]) .kiki-word:hover {
+        background: rgba(234, 88, 12, 0.18) !important;
+        border-bottom-color: #EA580C !important;
+        color: #9A3412 !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-yomitan-card {
+        background: rgba(255, 255, 255, 0.88) !important;
+        backdrop-filter: blur(24px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+        box-shadow: 0 20px 50px rgba(15, 23, 42, 0.15), 0 4px 12px rgba(15, 23, 42, 0.05), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
+        color: #1E293B !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-term {
+        color: #0F172A !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-reading {
+        color: #475569 !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-audio-btn {
+        background: rgba(0, 0, 0, 0.06) !important;
+        border: 1px solid rgba(0, 0, 0, 0.1) !important;
+        color: #1E293B !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-audio-btn:hover,
+      html:not([data-kiki-theme="dark"]) .kiki-card-audio-btn:active {
+        background: rgba(0, 0, 0, 0.12) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-settings-btn,
+      html:not([data-kiki-theme="dark"]) .kiki-card-close-btn {
+        color: #64748B !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-settings-btn:hover,
+      html:not([data-kiki-theme="dark"]) .kiki-card-close-btn:hover {
+        color: #0F172A !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-ai-switch-btn {
+        background: rgba(99, 102, 241, 0.1) !important;
+        color: #4F46E5 !important;
+        border-color: rgba(99, 102, 241, 0.25) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-ai-switch-btn:hover {
+        background: rgba(99, 102, 241, 0.2) !important;
+        color: #3730A3 !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-badge-dict {
+        background: rgba(0, 0, 0, 0.05) !important;
+        color: #475569 !important;
+        border: 1px solid rgba(0, 0, 0, 0.08) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-badge-redirect {
+        color: #059669 !important;
+        background: rgba(16, 185, 129, 0.1) !important;
+        border: 1px solid rgba(16, 185, 129, 0.25) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-badge-pos {
+        color: #DC2626 !important;
+        background: rgba(239, 68, 68, 0.1) !important;
+        border: 1px solid rgba(239, 68, 68, 0.22) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-badge-level {
+        color: #2563EB !important;
+        background: rgba(37, 99, 235, 0.1) !important;
+        border: 1px solid rgba(37, 99, 235, 0.22) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-badge-vocab {
+        color: #7C3AED !important;
+        background: rgba(124, 58, 237, 0.1) !important;
+        border: 1px solid rgba(124, 58, 237, 0.22) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-body {
+        color: #1E293B !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-body strong,
+      html:not([data-kiki-theme="dark"]) .kiki-card-body b {
+        color: #0F172A !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-entry + .kiki-card-entry {
+        border-top-color: rgba(0, 0, 0, 0.08) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-cap-ai-btn {
+        background: rgba(99, 102, 241, 0.9) !important;
+        border-color: rgba(255, 255, 255, 0.95) !important;
+        box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-cap-ai-btn .kiki-ai-icon {
+        color: #EEF2FF !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-cap-ai-btn .kiki-ai-text {
+        color: #FFFFFF !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-toast {
+        background: rgba(255, 255, 255, 0.92) !important;
+        backdrop-filter: blur(24px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+        color: #0F172A !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.06) !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-hud {
+        background: rgba(255, 255, 255, 0.88) !important;
+        backdrop-filter: blur(20px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        color: #0F172A !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+        box-shadow: 0 10px 32px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.06) !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-hud:hover {
+        background: rgba(255, 255, 255, 0.96) !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-hud .kiki-hud-btn {
+        background: rgba(0, 0, 0, 0.06) !important;
+        border: 1px solid rgba(0, 0, 0, 0.08) !important;
+        color: #0F172A !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-hud .kiki-hud-btn:hover {
+        background: rgba(0, 0, 0, 0.12) !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-track-dropdown {
+        background: rgba(255, 255, 255, 0.95) !important;
+        backdrop-filter: blur(24px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+        box-shadow: 0 20px 48px rgba(15, 23, 42, 0.18) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-dropdown-header {
+        color: #64748B !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-dropdown-item {
+        color: #1E293B !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-dropdown-item:hover,
+      html:not([data-kiki-theme="dark"]) .kiki-dropdown-item:active {
+        background: rgba(0, 0, 0, 0.05) !important;
+        color: #0F172A !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-dropdown-item.active {
+        background: rgba(37, 99, 235, 0.1) !important;
+        color: #1D4ED8 !important;
+        border: 1px solid rgba(37, 99, 235, 0.25) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-dropdown-tag {
+        background: rgba(0, 0, 0, 0.06) !important;
+        color: #475569 !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-dropdown-sep {
+        background: rgba(0, 0, 0, 0.08) !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-settings-modal {
+        background: rgba(255, 255, 255, 0.94) !important;
+        backdrop-filter: blur(28px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18), 0 4px 14px rgba(15, 23, 42, 0.06), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
+        color: #0F172A !important;
+      }
+      html:not([data-kiki-theme="dark"]) #kiki-yomitan-card::-webkit-scrollbar-thumb,
+      html:not([data-kiki-theme="dark"]) #kiki-settings-modal::-webkit-scrollbar-thumb,
+      html:not([data-kiki-theme="dark"]) #kiki-track-dropdown::-webkit-scrollbar-thumb,
+      html:not([data-kiki-theme="dark"]) .kiki-ai-scroll-container::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.16) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-card-mode-select {
+        background: rgba(0, 0, 0, 0.06) !important;
+        color: #0F172A !important;
+        border: 1px solid rgba(0, 0, 0, 0.12) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-ai-quote-box {
+        background: rgba(0, 0, 0, 0.04) !important;
+        color: #334155 !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-ai-scroll-container {
+        color: #0F172A !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-ai-input-wrap {
+        border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-ai-followup-input {
+        background: rgba(255, 255, 255, 0.95) !important;
+        border: 1px solid rgba(0, 0, 0, 0.15) !important;
+        color: #0F172A !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-ai-followup-input::placeholder {
+        color: #94A3B8 !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-ai-thought-box {
+        background: rgba(0, 0, 0, 0.03) !important;
+        color: #475569 !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-ai-thought-text {
+        color: #334155 !important;
+      }
+      html:not([data-kiki-theme="dark"]) .kiki-ai-user-bubble {
+        background: rgba(99, 102, 241, 0.12) !important;
+        border: 1px solid rgba(99, 102, 241, 0.25) !important;
+        color: #3730A3 !important;
+      }
+    }
+
+    /* Light Theme Explicit Attribute Overrides */
+    html[data-kiki-theme="light"] .kiki-line {
+      color: #0F172A !important;
+      background: rgba(255, 255, 255, 0.84) !important;
+      backdrop-filter: blur(20px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-word.kiki-active,
+    html[data-kiki-theme="light"] .kiki-word:hover {
+      background: rgba(234, 88, 12, 0.18) !important;
+      border-bottom-color: #EA580C !important;
+      color: #9A3412 !important;
+    }
+    html[data-kiki-theme="light"] #kiki-yomitan-card {
+      background: rgba(255, 255, 255, 0.88) !important;
+      backdrop-filter: blur(24px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.15), 0 4px 12px rgba(15, 23, 42, 0.05), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
+      color: #1E293B !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-term {
+      color: #0F172A !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-reading {
+      color: #475569 !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-audio-btn {
+      background: rgba(0, 0, 0, 0.06) !important;
+      border: 1px solid rgba(0, 0, 0, 0.1) !important;
+      color: #1E293B !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-audio-btn:hover,
+    html[data-kiki-theme="light"] .kiki-card-audio-btn:active {
+      background: rgba(0, 0, 0, 0.12) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-settings-btn,
+    html[data-kiki-theme="light"] .kiki-card-close-btn {
+      color: #64748B !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-settings-btn:hover,
+    html[data-kiki-theme="light"] .kiki-card-close-btn:hover {
+      color: #0F172A !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-ai-switch-btn {
+      background: rgba(99, 102, 241, 0.1) !important;
+      color: #4F46E5 !important;
+      border-color: rgba(99, 102, 241, 0.25) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-ai-switch-btn:hover {
+      background: rgba(99, 102, 241, 0.2) !important;
+      color: #3730A3 !important;
+    }
+    html[data-kiki-theme="light"] .kiki-badge-dict {
+      background: rgba(0, 0, 0, 0.05) !important;
+      color: #475569 !important;
+      border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-badge-redirect {
+      color: #059669 !important;
+      background: rgba(16, 185, 129, 0.1) !important;
+      border: 1px solid rgba(16, 185, 129, 0.25) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-badge-pos {
+      color: #DC2626 !important;
+      background: rgba(239, 68, 68, 0.1) !important;
+      border: 1px solid rgba(239, 68, 68, 0.22) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-badge-level {
+      color: #2563EB !important;
+      background: rgba(37, 99, 235, 0.1) !important;
+      border: 1px solid rgba(37, 99, 235, 0.22) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-badge-vocab {
+      color: #7C3AED !important;
+      background: rgba(124, 58, 237, 0.1) !important;
+      border: 1px solid rgba(124, 58, 237, 0.22) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-body {
+      color: #1E293B !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-body strong,
+    html[data-kiki-theme="light"] .kiki-card-body b {
+      color: #0F172A !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-entry + .kiki-card-entry {
+      border-top-color: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-cap-ai-btn {
+      background: rgba(99, 102, 241, 0.9) !important;
+      border-color: rgba(255, 255, 255, 0.95) !important;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-cap-ai-btn .kiki-ai-icon {
+      color: #EEF2FF !important;
+    }
+    html[data-kiki-theme="light"] .kiki-cap-ai-btn .kiki-ai-text {
+      color: #FFFFFF !important;
+    }
+    html[data-kiki-theme="light"] #kiki-toast {
+      background: rgba(255, 255, 255, 0.92) !important;
+      backdrop-filter: blur(24px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+      color: #0F172A !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.06) !important;
+    }
+    html[data-kiki-theme="light"] #kiki-hud {
+      background: rgba(255, 255, 255, 0.88) !important;
+      backdrop-filter: blur(20px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+      color: #0F172A !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+      box-shadow: 0 10px 32px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.06) !important;
+    }
+    html[data-kiki-theme="light"] #kiki-hud:hover {
+      background: rgba(255, 255, 255, 0.96) !important;
+    }
+    html[data-kiki-theme="light"] #kiki-hud .kiki-hud-btn {
+      background: rgba(0, 0, 0, 0.06) !important;
+      border: 1px solid rgba(0, 0, 0, 0.08) !important;
+      color: #0F172A !important;
+    }
+    html[data-kiki-theme="light"] #kiki-hud .kiki-hud-btn:hover {
+      background: rgba(0, 0, 0, 0.12) !important;
+    }
+    html[data-kiki-theme="light"] #kiki-track-dropdown {
+      background: rgba(255, 255, 255, 0.95) !important;
+      backdrop-filter: blur(24px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+      box-shadow: 0 20px 48px rgba(15, 23, 42, 0.18) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-dropdown-header {
+      color: #64748B !important;
+    }
+    html[data-kiki-theme="light"] .kiki-dropdown-item {
+      color: #1E293B !important;
+    }
+    html[data-kiki-theme="light"] .kiki-dropdown-item:hover,
+    html[data-kiki-theme="light"] .kiki-dropdown-item:active {
+      background: rgba(0, 0, 0, 0.05) !important;
+      color: #0F172A !important;
+    }
+    html[data-kiki-theme="light"] .kiki-dropdown-item.active {
+      background: rgba(37, 99, 235, 0.1) !important;
+      color: #1D4ED8 !important;
+      border: 1px solid rgba(37, 99, 235, 0.25) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-dropdown-tag {
+      background: rgba(0, 0, 0, 0.06) !important;
+      color: #475569 !important;
+    }
+    html[data-kiki-theme="light"] .kiki-dropdown-sep {
+      background: rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-kiki-theme="light"] #kiki-settings-modal {
+      background: rgba(255, 255, 255, 0.94) !important;
+      backdrop-filter: blur(28px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18), 0 4px 14px rgba(15, 23, 42, 0.06), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
+      color: #0F172A !important;
+    }
+    html[data-kiki-theme="light"] #kiki-yomitan-card::-webkit-scrollbar-thumb,
+    html[data-kiki-theme="light"] #kiki-settings-modal::-webkit-scrollbar-thumb,
+    html[data-kiki-theme="light"] #kiki-track-dropdown::-webkit-scrollbar-thumb,
+    html[data-kiki-theme="light"] .kiki-ai-scroll-container::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.16) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-card-mode-select {
+      background: rgba(0, 0, 0, 0.06) !important;
+      color: #0F172A !important;
+      border: 1px solid rgba(0, 0, 0, 0.12) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-ai-quote-box {
+      background: rgba(0, 0, 0, 0.04) !important;
+      color: #334155 !important;
+    }
+    html[data-kiki-theme="light"] .kiki-ai-scroll-container {
+      color: #0F172A !important;
+    }
+    html[data-kiki-theme="light"] .kiki-ai-input-wrap {
+      border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
+    }
+    html[data-kiki-theme="light"] .kiki-ai-followup-input {
+      background: rgba(255, 255, 255, 0.95) !important;
+      border: 1px solid rgba(0, 0, 0, 0.15) !important;
+      color: #0F172A !important;
+    }
+    html[data-kiki-theme="light"] .kiki-ai-followup-input::placeholder {
+      color: #94A3B8 !important;
+    }
+    html[data-kiki-theme="light"] .kiki-ai-thought-box {
+      background: rgba(0, 0, 0, 0.03) !important;
+      color: #475569 !important;
+    }
+    html[data-kiki-theme="light"] .kiki-ai-thought-text {
+      color: #334155 !important;
+    }
+    html[data-kiki-theme="light"] .kiki-ai-user-bubble {
+      background: rgba(99, 102, 241, 0.12) !important;
+      border: 1px solid rgba(99, 102, 241, 0.25) !important;
+      color: #3730A3 !important;
     }
 
     #kiki-hub-iframe { display: none !important; width: 0 !important; height: 0 !important; }
@@ -3408,9 +3984,9 @@ window.KikiAudioEngine = KikiAudioEngine;
       <div class="kiki-card-header">
         <div class="kiki-card-term-row" style="justify-content: space-between; align-items: center;">
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span class="kiki-card-term" style="font-size: 22px !important; font-weight: 800; color: #FFF; line-height: 1.2;">${escapeHtml(displayTerm)}</span>
+            <span class="kiki-card-term" style="font-size: 22px !important; font-weight: 800; line-height: 1.2;">${escapeHtml(displayTerm)}</span>
             <span style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; font-size: 11px; font-weight: 700; padding: 2.5px 8px; border-radius: 6px;">✦ AI Context</span>
-            <select class="kiki-card-mode-select" style="background: rgba(255,255,255,0.12); color: #E2E8F0; font-size: 11.5px; font-weight: 600; padding: 2px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); cursor: pointer; outline: none;">
+            <select class="kiki-card-mode-select">
               <option value="quick" ${curMode === "quick" ? "selected" : ""}>⚡ Quick</option>
               <option value="deep" ${curMode === "deep" ? "selected" : ""}>📚 Deep</option>
               <option value="custom" ${curMode === "custom" ? "selected" : ""}>⚙️ Custom</option>
@@ -3418,13 +3994,13 @@ window.KikiAudioEngine = KikiAudioEngine;
             <span style="background: rgba(255,255,255,0.08); color: #94A3B8; font-size: 11px; padding: 2px 6px; border-radius: 4px;">${escapeHtml(cfg.apiModel || 'gpt-4o-mini')}</span>
           </div>
           <div style="display: flex; align-items: center; gap: 4px;">
-            <button type="button" class="kiki-card-settings-btn" title="Settings (Dictionaries, AI, Modifiers)" style="background: transparent; border: none; color: #BBB; font-size: 16px; cursor: pointer; line-height: 1; padding: 0 4px;">⚙</button>
-            <button type="button" class="kiki-card-close-btn" style="background: transparent; border: none; color: #BBB; font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+            <button type="button" class="kiki-card-settings-btn" title="Settings (Dictionaries, AI, Modifiers)">⚙</button>
+            <button type="button" class="kiki-card-close-btn">&times;</button>
           </div>
         </div>
       </div>
 
-      <div style="background: rgba(255, 255, 255, 0.06); border-left: 3px solid #6366F1; padding: 8px 12px; border-radius: 0 8px 8px 0; margin-bottom: 12px; font-size: 13.5px; color: #CBD5E1; line-height: 1.45;">
+      <div class="kiki-ai-quote-box" style="border-left: 3px solid #6366F1; padding: 8px 12px; border-radius: 0 8px 8px 0; margin-bottom: 12px; font-size: 13.5px; line-height: 1.45;">
         <div style="font-style: italic;">
           “${formatContextHtml(sentence || "(no sentence context)", term)}”
         </div>
@@ -3441,7 +4017,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         ` : ''}
       </div>
 
-      <div class="kiki-ai-scroll-container" style="font-size: 15px; line-height: 1.65; color: #F1F5F9; max-height: 380px; overflow-y: auto; padding-right: 2px;">
+      <div class="kiki-ai-scroll-container" style="font-size: 15px; line-height: 1.65; max-height: 380px; overflow-y: auto; padding-right: 2px;">
         <div class="kiki-ai-chat-thread">
           <!-- Turns rendered here -->
         </div>
@@ -3451,9 +4027,9 @@ window.KikiAudioEngine = KikiAudioEngine;
       </div>
 
       <!-- Follow-up Interactive Input Bar -->
-      <div class="kiki-ai-input-wrap" style="border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 10px; margin-top: 10px;">
+      <div class="kiki-ai-input-wrap" style="padding-top: 10px; margin-top: 10px;">
         <div style="display: flex; gap: 8px; align-items: center;">
-          <input type="text" class="kiki-ai-followup-input" placeholder="Ask follow-up question or explore grammar…" style="flex: 1; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 8px 12px; color: #FFF; font-size: 13px; outline: none; box-sizing: border-box;">
+          <input type="text" class="kiki-ai-followup-input" placeholder="Ask follow-up question or explore grammar…" style="flex: 1; border-radius: 8px; padding: 8px 12px; font-size: 13px; outline: none; box-sizing: border-box;">
           <button type="button" class="kiki-ai-followup-send" style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; border: none; border-radius: 8px; padding: 8px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; user-select: none;">Send</button>
         </div>
       </div>
@@ -3659,7 +4235,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       const userMsgDiv = document.createElement("div");
       userMsgDiv.style.cssText = "margin: 14px 0 10px; display: flex; justify-content: flex-end;";
       userMsgDiv.innerHTML = `
-        <div style="background: rgba(99, 102, 241, 0.28); border: 1px solid rgba(165, 180, 252, 0.4); border-radius: 12px 12px 2px 12px; padding: 8px 13px; font-size: 13.5px; color: #E0E7FF; font-weight: 500; max-width: 86%;">
+        <div class="kiki-ai-user-bubble" style="border-radius: 12px 12px 2px 12px; padding: 8px 13px; font-size: 13.5px; font-weight: 500; max-width: 86%;">
           ${escapeHtml(query)}
         </div>
       `;
@@ -3669,17 +4245,17 @@ window.KikiAudioEngine = KikiAudioEngine;
       const turnDiv = document.createElement("div");
       turnDiv.style.cssText = "border-top: 1px dashed rgba(255, 255, 255, 0.15); padding-top: 12px; margin-top: 10px;";
       turnDiv.innerHTML = `
-        <div class="kiki-ai-thought-box" style="display: none; background: rgba(255, 255, 255, 0.05); border-left: 3px solid #8B5CF6; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 12.5px; color: #94A3B8; line-height: 1.5;">
+        <div class="kiki-ai-thought-box" style="display: none; border-left: 3px solid #8B5CF6; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 12.5px; line-height: 1.5;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; user-select: none;">
-            <span class="kiki-ai-thought-status" style="font-weight: 700; color: #C4B5FD; display: inline-flex; align-items: center; gap: 6px;">
+            <span class="kiki-ai-thought-status" style="font-weight: 700; color: #8B5CF6; display: inline-flex; align-items: center; gap: 6px;">
               <span>✦</span> Thinking…
             </span>
-            <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0 4px;">Collapse</button>
+            <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #6366F1; font-size: 11px; cursor: pointer; padding: 0 4px;">Collapse</button>
           </div>
-          <div class="kiki-ai-thought-text" style="max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, monospace; font-size: 12px; opacity: 0.88; color: #CBD5E1; line-height: 1.45;"></div>
+          <div class="kiki-ai-thought-text" style="max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, monospace; font-size: 12px; opacity: 0.88; line-height: 1.45;"></div>
         </div>
 
-        <div class="kiki-ai-answer" style="font-size: 15px; line-height: 1.65; color: #F1F5F9;">
+        <div class="kiki-ai-answer" style="font-size: 15px; line-height: 1.65;">
           <span class="kiki-ai-initial-status" style="color: #94A3B8; display: inline-flex; align-items: center; gap: 6px;">
             ✦ Generating…
           </span>
@@ -3707,17 +4283,17 @@ window.KikiAudioEngine = KikiAudioEngine;
     // Initial first turn container
     const initialTurnDiv = document.createElement("div");
     initialTurnDiv.innerHTML = `
-      <div class="kiki-ai-thought-box" style="display: none; background: rgba(255, 255, 255, 0.05); border-left: 3px solid #8B5CF6; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 12.5px; color: #94A3B8; line-height: 1.5;">
+      <div class="kiki-ai-thought-box" style="display: none; border-left: 3px solid #8B5CF6; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 12.5px; line-height: 1.5;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; user-select: none;">
-          <span class="kiki-ai-thought-status" style="font-weight: 700; color: #C4B5FD; display: inline-flex; align-items: center; gap: 6px;">
+          <span class="kiki-ai-thought-status" style="font-weight: 700; color: #8B5CF6; display: inline-flex; align-items: center; gap: 6px;">
             <span>✦</span> Thinking…
           </span>
-          <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0 4px;">Collapse</button>
+          <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #6366F1; font-size: 11px; cursor: pointer; padding: 0 4px;">Collapse</button>
         </div>
-        <div class="kiki-ai-thought-text" style="max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, monospace; font-size: 12px; opacity: 0.88; color: #CBD5E1; line-height: 1.45;"></div>
+        <div class="kiki-ai-thought-text" style="max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, monospace; font-size: 12px; opacity: 0.88; line-height: 1.45;"></div>
       </div>
 
-      <div class="kiki-ai-answer" style="font-size: 15px; line-height: 1.65; color: #F1F5F9;">
+      <div class="kiki-ai-answer" style="font-size: 15px; line-height: 1.65;">
         <span class="kiki-ai-initial-status" style="color: #94A3B8; display: inline-flex; align-items: center; gap: 6px;">
           ✦ Connecting to AI…
         </span>
@@ -4436,14 +5012,14 @@ window.KikiAudioEngine = KikiAudioEngine;
         <div class="kiki-card-term-row" style="justify-content: space-between; align-items: center;">
           <span class="kiki-card-term">${escapeHtml(term)}</span>
           <div style="display: flex; align-items: center; gap: 4px;">
-            <button type="button" class="kiki-card-settings-btn" title="Settings (Dictionaries, AI, Modifiers)" style="background: transparent; border: none; color: #BBB; font-size: 16px; cursor: pointer; line-height: 1; padding: 0 4px;">⚙</button>
-            <button type="button" class="kiki-card-close-btn" style="background: transparent; border: none; color: #BBB; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+            <button type="button" class="kiki-card-settings-btn" title="Settings (Dictionaries, AI, Modifiers)">⚙</button>
+            <button type="button" class="kiki-card-close-btn">&times;</button>
           </div>
         </div>
       </div>
       <div class="kiki-card-empty" style="padding: 10px 4px 6px;">
-        <div style="font-size: 14px; font-weight: 700; margin-bottom: 6px; color: #FFF;">No definition found in local dictionary.</div>
-        <div style="font-size: 12px; opacity: 0.85; margin-bottom: 14px; line-height: 1.4; color: #DDD;">
+        <div style="font-size: 14px; font-weight: 700; margin-bottom: 6px; color: inherit;">No definition found in local dictionary.</div>
+        <div style="font-size: 12px; opacity: 0.85; margin-bottom: 14px; line-height: 1.4; color: inherit;">
           Import an offline dictionary package or configure your AI API key for contextual fallback explanations:
         </div>
         <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -4616,7 +5192,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         settingsBtn.type = "button";
         settingsBtn.className = "kiki-card-settings-btn";
         settingsBtn.title = "Settings (Dictionaries, AI, Modifiers)";
-        settingsBtn.style.cssText = "margin-left: auto; background: transparent; border: none; color: #BBB; font-size: 16px; cursor: pointer; line-height: 1; padding: 0 4px;";
+        settingsBtn.style.cssText = "margin-left: auto; background: transparent; border: none; font-size: 16px; cursor: pointer; line-height: 1; padding: 0 4px;";
         settingsBtn.innerHTML = "⚙";
         settingsBtn.addEventListener("click", (e) => {
           e.stopPropagation();
@@ -4627,7 +5203,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         const closeBtn = document.createElement("button");
         closeBtn.type = "button";
         closeBtn.className = "kiki-card-close-btn";
-        closeBtn.style.cssText = "margin-left: 2px; background: transparent; border: none; color: #BBB; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px;";
+        closeBtn.style.cssText = "margin-left: 2px; background: transparent; border: none; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px;";
         closeBtn.innerHTML = "&times;";
         closeBtn.addEventListener("click", (e) => {
           e.stopPropagation();
@@ -4843,14 +5419,8 @@ window.KikiAudioEngine = KikiAudioEngine;
         transform: translate(-50%, -50%) !important;
         width: min(92vw, 500px) !important;
         max-height: 88vh !important;
-        background: rgba(22, 22, 26, 0.96) !important;
-        backdrop-filter: blur(24px) saturate(180%) !important;
-        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
         border-radius: 18px !important;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75) !important;
         z-index: 2147483647 !important;
-        color: #FFFFFF !important;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
         padding: 20px !important;
         box-sizing: border-box !important;
@@ -4874,21 +5444,38 @@ window.KikiAudioEngine = KikiAudioEngine;
     async function renderModal() {
       const dicts = await localDB.getDictionaries();
       const aiCfg = getAiConfig();
+      const isLight = (typeof getResolvedTheme === "function" ? getResolvedTheme() : (STATE.theme || "dark")) === "light";
+      const themePref = STATE.theme || localStorage.getItem("kiki_theme") || "auto";
+
+      const colors = {
+        cardBg: isLight ? "rgba(0, 0, 0, 0.03)" : "rgba(255, 255, 255, 0.06)",
+        cardBorder: isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.1)",
+        inputBg: isLight ? "rgba(0, 0, 0, 0.04)" : "rgba(0, 0, 0, 0.35)",
+        inputBorder: isLight ? "rgba(0, 0, 0, 0.14)" : "rgba(255, 255, 255, 0.2)",
+        inputText: isLight ? "#0F172A" : "#FFFFFF",
+        textPrimary: isLight ? "#0F172A" : "#FFFFFF",
+        textSecondary: isLight ? "#475569" : "#CBD5E1",
+        textMuted: isLight ? "#64748B" : "#94A3B8",
+        divider: isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.12)",
+        tabInactiveBg: isLight ? "rgba(0, 0, 0, 0.05)" : "rgba(255, 255, 255, 0.08)",
+        tabInactiveText: isLight ? "#475569" : "#FFF",
+        closeBtnText: isLight ? "#64748B" : "#FFF",
+      };
 
       let contentHtml = "";
 
       if (activeTab === "dict") {
         let listHtml = "";
         if (!dicts || !dicts.length) {
-          listHtml = `<div style="font-size: 13px; color: #AAA; padding: 16px 0; text-align: center;">No dictionaries installed yet in this site's offline storage.</div>`;
+          listHtml = `<div style="font-size: 13px; color: ${colors.textMuted}; padding: 16px 0; text-align: center;">No dictionaries installed yet in this site's offline storage.</div>`;
         } else {
           listHtml = dicts.map(d => `
-            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.08); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1);">
+            <div style="display: flex; align-items: center; justify-content: space-between; background: ${colors.cardBg}; padding: 10px 14px; border-radius: 10px; border: 1px solid ${colors.cardBorder};">
               <div style="display: flex; flex-direction: column; gap: 2px;">
-                <span style="font-size: 13px; font-weight: 600; color: #FFF;">${escapeHtml(d.title)}</span>
-                <span style="font-size: 11px; color: #AAA;">${(d.termCount || 0).toLocaleString()} entries</span>
+                <span style="font-size: 13px; font-weight: 600; color: ${colors.textPrimary};">${escapeHtml(d.title)}</span>
+                <span style="font-size: 11px; color: ${colors.textMuted};">${(d.termCount || 0).toLocaleString()} entries</span>
               </div>
-              <button type="button" class="kiki-del-dict-btn" data-id="${escapeHtml(d.id)}" style="background: rgba(239, 68, 68, 0.25); color: #FCA5A5; border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer;">Delete</button>
+              <button type="button" class="kiki-del-dict-btn" data-id="${escapeHtml(d.id)}" style="background: rgba(239, 68, 68, 0.2); color: ${isLight ? '#DC2626' : '#FCA5A5'}; border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer;">Delete</button>
             </div>
           `).join("");
         }
@@ -4898,7 +5485,7 @@ window.KikiAudioEngine = KikiAudioEngine;
             ${listHtml}
           </div>
 
-          <div style="display: flex; flex-direction: column; gap: 10px; border-top: 1px solid rgba(255, 255, 255, 0.15); padding-top: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 10px; border-top: 1px solid ${colors.divider}; padding-top: 12px;">
             <label style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #2563EB; color: #FFFFFF; padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; user-select: none;">
               <span>📥 Import Yomitan Dict (.zip)</span>
               <input type="file" class="kiki-modal-file-input" accept=".zip" style="display: none;">
@@ -4907,32 +5494,47 @@ window.KikiAudioEngine = KikiAudioEngine;
               <div style="background: rgba(255, 255, 255, 0.15); border-radius: 4px; overflow: hidden; height: 6px;">
                 <div class="kiki-modal-prog-fill" style="background: #10B981; height: 100%; width: 0%; transition: width 0.2s;"></div>
               </div>
-              <span class="kiki-modal-prog-text" style="font-size: 11px; opacity: 0.9; color: #EEE;">Preparing...</span>
+              <span class="kiki-modal-prog-text" style="font-size: 11px; opacity: 0.9; color: ${colors.textMuted};">Preparing...</span>
             </div>
 
-            <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 10px 12px; margin-top: 4px;">
-              <div style="font-size: 12px; font-weight: 700; color: #E2E8F0; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
-                <span>🌐 Web Word Lookup Trigger</span>
-                <span style="font-size: 11px; color: #94A3B8;">Modifier key for this site</span>
+            <!-- Appearance & Web Trigger Group -->
+            <div style="background: ${colors.cardBg}; border: 1px solid ${colors.cardBorder}; border-radius: 10px; padding: 10px 12px; margin-top: 4px; display: flex; flex-direction: column; gap: 10px;">
+              <div>
+                <div style="font-size: 12px; font-weight: 700; color: ${colors.textPrimary}; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+                  <span>🎨 Theme / Appearance</span>
+                  <span style="font-size: 11px; color: ${colors.textMuted};">Liquid glass styling</span>
+                </div>
+                <select id="kiki-theme-select" style="width: 100%; background: ${colors.inputBg}; color: ${colors.inputText}; border: 1px solid ${colors.inputBorder}; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none;">
+                  <option value="auto" ${themePref === "auto" ? "selected" : ""}>Auto (Follow System)</option>
+                  <option value="dark" ${themePref === "dark" ? "selected" : ""}>Dark (Translucent Liquid Glass)</option>
+                  <option value="light" ${themePref === "light" ? "selected" : ""}>Light (White Translucent Glass)</option>
+                </select>
               </div>
-              <select id="kiki-web-lookup-key-select" style="width: 100%; background: rgba(0, 0, 0, 0.4); color: #FFF; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none;">
-                <option value="none" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "none" ? "selected" : ""}>None (Direct Click / Tap)</option>
-                <option value="ctrl" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key") || "ctrl") === "ctrl" ? "selected" : ""}>Ctrl Key (Default)</option>
-                <option value="alt" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "alt" ? "selected" : ""}>Option / Alt Key</option>
-                <option value="meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "meta" ? "selected" : ""}>Command / Meta Key</option>
-                <option value="ctrl_or_meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "ctrl_or_meta" ? "selected" : ""}>Ctrl or Command Key</option>
-              </select>
+
+              <div style="border-top: 1px solid ${colors.divider}; padding-top: 8px;">
+                <div style="font-size: 12px; font-weight: 700; color: ${colors.textPrimary}; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+                  <span>🌐 Web Word Lookup Trigger</span>
+                  <span style="font-size: 11px; color: ${colors.textMuted};">Modifier key for this site</span>
+                </div>
+                <select id="kiki-web-lookup-key-select" style="width: 100%; background: ${colors.inputBg}; color: ${colors.inputText}; border: 1px solid ${colors.inputBorder}; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none;">
+                  <option value="none" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "none" ? "selected" : ""}>None (Direct Click / Tap)</option>
+                  <option value="ctrl" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key") || "ctrl") === "ctrl" ? "selected" : ""}>Ctrl Key (Default)</option>
+                  <option value="alt" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "alt" ? "selected" : ""}>Option / Alt Key</option>
+                  <option value="meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "meta" ? "selected" : ""}>Command / Meta Key</option>
+                  <option value="ctrl_or_meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "ctrl_or_meta" ? "selected" : ""}>Ctrl or Command Key</option>
+                </select>
+              </div>
             </div>
           </div>
         `;
-            } else if (activeTab === "about") {
+      } else if (activeTab === "about") {
         const cacheTime = localStorage.getItem("kiki_cache_time") || "Initial / Local";
-        const engineVer = window.__kiki_engine_version || localStorage.getItem("kiki_engine_version") || localStorage.getItem("kiki_cache_version") || "1.2.5";
+        const engineVer = window.__kiki_engine_version || localStorage.getItem("kiki_engine_version") || localStorage.getItem("kiki_cache_version") || "1.3.3";
         const loaderVer = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.1";
-        const modulesList = ["core", "yomitan", "ai", "ui", "youtube"];
+        const modulesList = ["core", "yomitan", "ai", "ui", "youtube", "web"];
         const modStatus = modulesList.map(m => {
           const has = !!localStorage.getItem("kiki_mod_" + m);
-          return `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;color:#CBD5E1;border-bottom:1px dashed rgba(255,255,255,0.08);">
+          return `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;color:${colors.textSecondary};border-bottom:1px dashed ${colors.divider};">
             <span>• ${m}.js</span>
             <span style="color:${has ? '#34D399' : '#818CF8'};font-weight:600;">${has ? 'Cached' : 'Active'}</span>
           </div>`;
@@ -4940,22 +5542,22 @@ window.KikiAudioEngine = KikiAudioEngine;
 
         contentHtml = `
           <div style="display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow-y: auto; padding-right: 4px;">
-            <div style="background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(165, 180, 252, 0.25); border-radius: 12px; padding: 12px 14px;">
-              <div style="font-size: 16px; font-weight: 800; color: #FFF; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <div style="background: rgba(99, 102, 241, ${isLight ? '0.08' : '0.12'}); border: 1px solid rgba(165, 180, 252, ${isLight ? '0.3' : '0.25'}); border-radius: 12px; padding: 12px 14px;">
+              <div style="font-size: 16px; font-weight: 800; color: ${colors.textPrimary}; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <span>✦ Kiki Immersion</span>
-                <span style="background: linear-gradient(135deg, #2563EB, #3B82F6); font-size: 11px; padding: 2px 7px; border-radius: 6px; font-weight: 700;">Engine v${engineVer}</span>
-                <span style="background: rgba(255, 255, 255, 0.12); font-size: 11px; padding: 2px 7px; border-radius: 6px; color: #CBD5E1; font-weight: 600;">Loader v${loaderVer}</span>
+                <span style="background: linear-gradient(135deg, #2563EB, #3B82F6); color: #FFF; font-size: 11px; padding: 2px 7px; border-radius: 6px; font-weight: 700;">Engine v${engineVer}</span>
+                <span style="background: ${isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255, 255, 255, 0.12)'}; font-size: 11px; padding: 2px 7px; border-radius: 6px; color: ${colors.textSecondary}; font-weight: 600;">Loader v${loaderVer}</span>
               </div>
-              <div style="font-size: 12px; color: #94A3B8; margin-top: 4px; line-height: 1.45;">
+              <div style="font-size: 12px; color: ${colors.textMuted}; margin-top: 4px; line-height: 1.45;">
                 Touch & Mouse YouTube Immersion with Offline Yomitan, High-DPI Subtitles, AI Context & Hot-Reload Engine.
               </div>
             </div>
 
-            <div style="background: rgba(255, 255, 255, 0.05); border-radius: 10px; padding: 10px 12px;">
-              <div style="font-size: 12px; font-weight: 700; color: #E2E8F0; margin-bottom: 6px;">📦 Core Modules Status</div>
+            <div style="background: ${colors.cardBg}; border: 1px solid ${colors.cardBorder}; border-radius: 10px; padding: 10px 12px;">
+              <div style="font-size: 12px; font-weight: 700; color: ${colors.textPrimary}; margin-bottom: 6px;">📦 Core Modules Status</div>
               ${modStatus}
-              <div style="font-size: 11px; color: #94A3B8; margin-top: 8px;">
-                Cache Status: <span style="color: #E2E8F0;">${escapeHtml(cacheTime)}</span>
+              <div style="font-size: 11px; color: ${colors.textMuted}; margin-top: 8px;">
+                Cache Status: <span style="color: ${colors.textPrimary};">${escapeHtml(cacheTime)}</span>
               </div>
             </div>
 
@@ -4963,39 +5565,39 @@ window.KikiAudioEngine = KikiAudioEngine;
               <button type="button" id="kiki-hot-reload-btn" style="background: linear-gradient(135deg, #2563EB, #6366F1); color: #FFF; border: none; border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 12px rgba(37,99,235,0.35);">
                 <span>⚡ Check & Update Modules from GitHub (Hot-Reload)</span>
               </button>
-              <button type="button" id="kiki-clear-cache-btn" style="background: rgba(255, 255, 255, 0.08); color: #CBD5E1; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">
+              <button type="button" id="kiki-clear-cache-btn" style="background: ${colors.cardBg}; color: ${colors.textSecondary}; border: 1px solid ${colors.cardBorder}; border-radius: 10px; padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">
                 🗑 Clear Local Module Cache
               </button>
-              <a href="https://github.com/kekeqwq/Kiki-Immersion" target="_blank" rel="noopener" style="text-align: center; font-size: 12px; color: #818CF8; text-decoration: none; padding-top: 4px;">
+              <a href="https://github.com/kekeqwq/Kiki-Immersion" target="_blank" rel="noopener" style="text-align: center; font-size: 12px; color: #6366F1; text-decoration: none; padding-top: 4px; font-weight: 600;">
                 🔗 GitHub Repository (kekeqwq/Kiki-Immersion)
               </a>
             </div>
           </div>
         `;
-} else if (activeTab === "ai") {
+      } else if (activeTab === "ai") {
         contentHtml = `
           <div style="display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow-y: auto; padding-right: 4px;">
             <div>
-              <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">API BASE URL</label>
-              <input type="text" id="kiki-ai-base-input" value="${escapeHtml(aiCfg.apiBase)}" placeholder="https://api.openai.com/v1" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 12px; color: #FFF; font-size: 13px;">
+              <label style="display: block; font-size: 11.5px; font-weight: 600; color: ${colors.textMuted}; margin-bottom: 4px;">API BASE URL</label>
+              <input type="text" id="kiki-ai-base-input" value="${escapeHtml(aiCfg.apiBase)}" placeholder="https://api.openai.com/v1" style="width: 100%; box-sizing: border-box; background: ${colors.inputBg}; border: 1px solid ${colors.inputBorder}; border-radius: 8px; padding: 8px 12px; color: ${colors.inputText}; font-size: 13px;">
             </div>
 
             <div>
-              <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">API KEY (OPENAI COMPATIBLE)</label>
+              <label style="display: block; font-size: 11.5px; font-weight: 600; color: ${colors.textMuted}; margin-bottom: 4px;">API KEY (OPENAI COMPATIBLE)</label>
               <div style="display: flex; gap: 6px;">
-                <input type="password" id="kiki-ai-key-input" value="${escapeHtml(aiCfg.apiKey)}" placeholder="sk-..." style="flex: 1; box-sizing: border-box; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 12px; color: #FFF; font-size: 13px;">
-                <button type="button" id="kiki-ai-key-toggle" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #FFF; border-radius: 8px; padding: 0 10px; font-size: 11px; cursor: pointer;">Show</button>
+                <input type="password" id="kiki-ai-key-input" value="${escapeHtml(aiCfg.apiKey)}" placeholder="sk-..." style="flex: 1; box-sizing: border-box; background: ${colors.inputBg}; border: 1px solid ${colors.inputBorder}; border-radius: 8px; padding: 8px 12px; color: ${colors.inputText}; font-size: 13px;">
+                <button type="button" id="kiki-ai-key-toggle" style="background: ${colors.cardBg}; border: 1px solid ${colors.inputBorder}; color: ${colors.textPrimary}; border-radius: 8px; padding: 0 10px; font-size: 11px; cursor: pointer;">Show</button>
               </div>
             </div>
 
             <div style="display: flex; gap: 10px;">
               <div style="flex: 1;">
-                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">MODEL</label>
-                <input type="text" id="kiki-ai-model-input" value="${escapeHtml(aiCfg.apiModel)}" placeholder="gpt-4o-mini" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 12px; color: #FFF; font-size: 13px;">
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: ${colors.textMuted}; margin-bottom: 4px;">MODEL</label>
+                <input type="text" id="kiki-ai-model-input" value="${escapeHtml(aiCfg.apiModel)}" placeholder="gpt-4o-mini" style="width: 100%; box-sizing: border-box; background: ${colors.inputBg}; border: 1px solid ${colors.inputBorder}; border-radius: 8px; padding: 8px 12px; color: ${colors.inputText}; font-size: 13px;">
               </div>
               <div style="width: 130px;">
-                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">LANGUAGE</label>
-                <select id="kiki-ai-lang-select" style="width: 100%; box-sizing: border-box; background: #18181B; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 10px; color: #FFF; font-size: 13px;">
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: ${colors.textMuted}; margin-bottom: 4px;">LANGUAGE</label>
+                <select id="kiki-ai-lang-select" style="width: 100%; box-sizing: border-box; background: ${colors.inputBg}; border: 1px solid ${colors.inputBorder}; border-radius: 8px; padding: 8px 10px; color: ${colors.inputText}; font-size: 13px;">
                   <option value="zh" ${aiCfg.aiLang === "zh" ? "selected" : ""}>中文 (Zh)</option>
                   <option value="en" ${aiCfg.aiLang === "en" ? "selected" : ""}>English (En)</option>
                 </select>
@@ -5004,16 +5606,16 @@ window.KikiAudioEngine = KikiAudioEngine;
 
             <div style="display: flex; gap: 10px;">
               <div style="flex: 1;">
-                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">AI EXPLANATION MODE</label>
-                <select id="kiki-ai-mode-select" style="width: 100%; box-sizing: border-box; background: #18181B; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 10px; color: #FFF; font-size: 13px;">
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: ${colors.textMuted}; margin-bottom: 4px;">AI EXPLANATION MODE</label>
+                <select id="kiki-ai-mode-select" style="width: 100%; box-sizing: border-box; background: ${colors.inputBg}; border: 1px solid ${colors.inputBorder}; border-radius: 8px; padding: 8px 10px; color: ${colors.inputText}; font-size: 13px;">
                   <option value="quick" ${aiCfg.aiMode === "quick" ? "selected" : ""}>⚡ Quick Glance (2-4 sentences, minimal distraction)</option>
                   <option value="deep" ${aiCfg.aiMode === "deep" ? "selected" : ""}>📚 Deep Study (Detailed syntax, collocations & examples)</option>
                   <option value="custom" ${aiCfg.aiMode === "custom" ? "selected" : ""}>⚙️ Custom Prompt Template</option>
                 </select>
               </div>
               <div style="width: 175px;">
-                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">MAX TOKENS LIMIT</label>
-                <select id="kiki-ai-tokens-select" style="width: 100%; box-sizing: border-box; background: #18181B; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 10px; color: #FFF; font-size: 13px;">
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: ${colors.textMuted}; margin-bottom: 4px;">MAX TOKENS LIMIT</label>
+                <select id="kiki-ai-tokens-select" style="width: 100%; box-sizing: border-box; background: ${colors.inputBg}; border: 1px solid ${colors.inputBorder}; border-radius: 8px; padding: 8px 10px; color: ${colors.inputText}; font-size: 13px;">
                   <option value="4096" ${String(aiCfg.maxTokens) === "4096" ? "selected" : ""}>Recommended (4096 Tokens)</option>
                   <option value="8192" ${String(aiCfg.maxTokens) === "8192" ? "selected" : ""}>Deep Reasoning (8192 Tokens)</option>
                   <option value="2048" ${String(aiCfg.maxTokens) === "2048" ? "selected" : ""}>Fast & Light (2048 Tokens)</option>
@@ -5022,24 +5624,24 @@ window.KikiAudioEngine = KikiAudioEngine;
               </div>
             </div>
             <div id="kiki-ai-tokens-custom-wrap" style="display: ${!["2048", "4096", "8192"].includes(String(aiCfg.maxTokens)) ? "block" : "none"};">
-              <label style="display: block; font-size: 11px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">CUSTOM MAX TOKENS VALUE</label>
-              <input type="number" id="kiki-ai-tokens-custom-input" value="${escapeHtml(aiCfg.maxTokens || '4096')}" placeholder="4096" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 7px 12px; color: #FFF; font-size: 13px;">
+              <label style="display: block; font-size: 11px; font-weight: 600; color: ${colors.textMuted}; margin-bottom: 4px;">CUSTOM MAX TOKENS VALUE</label>
+              <input type="number" id="kiki-ai-tokens-custom-input" value="${escapeHtml(aiCfg.maxTokens || '4096')}" placeholder="4096" style="width: 100%; box-sizing: border-box; background: ${colors.inputBg}; border: 1px solid ${colors.inputBorder}; border-radius: 8px; padding: 7px 12px; color: ${colors.inputText}; font-size: 13px;">
             </div>
 
             <div>
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                <label style="font-size: 11.5px; font-weight: 600; color: #94A3B8;">PROMPT TEMPLATE (<span id="kiki-ai-prompt-lang-label">${aiCfg.aiLang === "en" ? "EN" : "ZH"}</span>)</label>
-                <button type="button" id="kiki-ai-prompt-reset-btn" style="background: transparent; border: none; color: #A5B4FC; font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 0;">Reset Default</button>
+                <label style="font-size: 11.5px; font-weight: 600; color: ${colors.textMuted};">PROMPT TEMPLATE (<span id="kiki-ai-prompt-lang-label">${aiCfg.aiLang === "en" ? "EN" : "ZH"}</span>)</label>
+                <button type="button" id="kiki-ai-prompt-reset-btn" style="background: transparent; border: none; color: #6366F1; font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 0;">Reset Default</button>
               </div>
-              <textarea id="kiki-ai-prompt-input" rows="4" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 10px; color: #FFF; font-size: 12px; line-height: 1.45; resize: vertical; font-family: inherit;">${escapeHtml(aiCfg.aiLang === "en" ? aiCfg.promptEn : aiCfg.promptZh)}</textarea>
-              <div style="font-size: 10.5px; color: #94A3B8; margin-top: 3px;">
+              <textarea id="kiki-ai-prompt-input" rows="4" style="width: 100%; box-sizing: border-box; background: ${colors.inputBg}; border: 1px solid ${colors.inputBorder}; border-radius: 8px; padding: 8px 10px; color: ${colors.inputText}; font-size: 12px; line-height: 1.45; resize: vertical; font-family: inherit;">${escapeHtml(aiCfg.aiLang === "en" ? aiCfg.promptEn : aiCfg.promptZh)}</textarea>
+              <div style="font-size: 10.5px; color: ${colors.textMuted}; margin-top: 3px;">
                 Tags: <code>{{word}}</code> = tapped word, <code>{{sentence}}</code> = subtitle context.
               </div>
             </div>
 
             <div style="display: flex; gap: 8px; margin-top: 2px; align-items: center;">
               <button type="button" id="kiki-ai-save-btn" style="flex: 1; background: #6366F1; color: #FFFFFF; border: none; border-radius: 8px; padding: 9px 14px; font-size: 13px; font-weight: 600; cursor: pointer;">Save AI Config</button>
-              <button type="button" id="kiki-ai-ping-btn" style="background: rgba(255,255,255,0.12); color: #E0E7FF; border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; padding: 9px 12px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;">Ping AI</button>
+              <button type="button" id="kiki-ai-ping-btn" style="background: ${colors.cardBg}; color: ${colors.textPrimary}; border: 1px solid ${colors.inputBorder}; border-radius: 8px; padding: 9px 12px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;">Ping AI</button>
             </div>
             <div id="kiki-ai-ping-result" style="display: none; font-size: 11.5px; padding: 6px 10px; border-radius: 6px;"></div>
           </div>
@@ -5047,21 +5649,21 @@ window.KikiAudioEngine = KikiAudioEngine;
       }
 
       setHtml(modal, `
-        <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255, 255, 255, 0.15); padding-bottom: 12px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid ${colors.divider}; padding-bottom: 12px;">
           <div style="display: flex; gap: 6px;">
-            <button type="button" class="kiki-tab-btn" data-tab="dict" style="background: ${activeTab === 'dict' ? '#2563EB' : 'rgba(255,255,255,0.08)'}; color: #FFF; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">📖 Dictionaries</button>
-            <button type="button" class="kiki-tab-btn" data-tab="ai" style="background: ${activeTab === 'ai' ? '#6366F1' : 'rgba(255,255,255,0.08)'}; color: #FFF; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">🤖 AI Context</button>
-            <button type="button" class="kiki-tab-btn" data-tab="about" style="background: ${activeTab === 'about' ? '#10B981' : 'rgba(255,255,255,0.08)'}; color: #FFF; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">ℹ️ About & Updates</button>
+            <button type="button" class="kiki-tab-btn" data-tab="dict" style="background: ${activeTab === 'dict' ? '#2563EB' : colors.tabInactiveBg}; color: ${activeTab === 'dict' ? '#FFF' : colors.tabInactiveText}; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">📖 Dictionaries</button>
+            <button type="button" class="kiki-tab-btn" data-tab="ai" style="background: ${activeTab === 'ai' ? '#6366F1' : colors.tabInactiveBg}; color: ${activeTab === 'ai' ? '#FFF' : colors.tabInactiveText}; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">🤖 AI Context</button>
+            <button type="button" class="kiki-tab-btn" data-tab="about" style="background: ${activeTab === 'about' ? '#10B981' : colors.tabInactiveBg}; color: ${activeTab === 'about' ? '#FFF' : colors.tabInactiveText}; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">ℹ️ About & Updates</button>
           </div>
-          <button type="button" class="kiki-modal-close" style="background: transparent; border: none; color: #FFF; font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+          <button type="button" class="kiki-modal-close" style="background: transparent; border: none; color: ${colors.closeBtnText}; font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 10px;">
           ${contentHtml}
         </div>
 
-        <div style="border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 10px; display: flex; justify-content: flex-end;">
-          <button type="button" class="kiki-modal-clear-all" style="background: rgba(239, 68, 68, 0.18); color: #FCA5A5; border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 8px; padding: 7px 12px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
+        <div style="border-top: 1px solid ${colors.divider}; padding-top: 10px; display: flex; justify-content: flex-end;">
+          <button type="button" class="kiki-modal-clear-all" style="background: rgba(239, 68, 68, 0.18); color: ${isLight ? '#DC2626' : '#FCA5A5'}; border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 8px; padding: 7px 12px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
             🗑 Clear All (Dicts & AI Config)
           </button>
         </div>
@@ -5203,6 +5805,17 @@ window.KikiAudioEngine = KikiAudioEngine;
             STATE.webLookupKey = val;
             try { localStorage.setItem("kiki_web_lookup_key", val); } catch {}
             toast(`✦ Web lookup trigger: ${val === "none" ? "Direct Click / Tap" : val.toUpperCase()}`);
+          });
+        }
+
+        const themeSelect = modal.querySelector("#kiki-theme-select");
+        if (themeSelect) {
+          themeSelect.addEventListener("change", (e) => {
+            const val = e.target.value;
+            applyTheme(val);
+            const label = val === "auto" ? "Auto (Follow System)" : (val === "dark" ? "Dark Glass" : "Light Glass");
+            toast(`✦ Theme: ${label}`);
+            renderModal();
           });
         }
       } else {

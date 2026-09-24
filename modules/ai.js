@@ -275,9 +275,9 @@
       <div class="kiki-card-header">
         <div class="kiki-card-term-row" style="justify-content: space-between; align-items: center;">
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span class="kiki-card-term" style="font-size: 22px !important; font-weight: 800; color: #FFF; line-height: 1.2;">${escapeHtml(displayTerm)}</span>
+            <span class="kiki-card-term" style="font-size: 22px !important; font-weight: 800; line-height: 1.2;">${escapeHtml(displayTerm)}</span>
             <span style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; font-size: 11px; font-weight: 700; padding: 2.5px 8px; border-radius: 6px;">✦ AI Context</span>
-            <select class="kiki-card-mode-select" style="background: rgba(255,255,255,0.12); color: #E2E8F0; font-size: 11.5px; font-weight: 600; padding: 2px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); cursor: pointer; outline: none;">
+            <select class="kiki-card-mode-select">
               <option value="quick" ${curMode === "quick" ? "selected" : ""}>⚡ Quick</option>
               <option value="deep" ${curMode === "deep" ? "selected" : ""}>📚 Deep</option>
               <option value="custom" ${curMode === "custom" ? "selected" : ""}>⚙️ Custom</option>
@@ -285,13 +285,13 @@
             <span style="background: rgba(255,255,255,0.08); color: #94A3B8; font-size: 11px; padding: 2px 6px; border-radius: 4px;">${escapeHtml(cfg.apiModel || 'gpt-4o-mini')}</span>
           </div>
           <div style="display: flex; align-items: center; gap: 4px;">
-            <button type="button" class="kiki-card-settings-btn" title="Settings (Dictionaries, AI, Modifiers)" style="background: transparent; border: none; color: #BBB; font-size: 16px; cursor: pointer; line-height: 1; padding: 0 4px;">⚙</button>
-            <button type="button" class="kiki-card-close-btn" style="background: transparent; border: none; color: #BBB; font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+            <button type="button" class="kiki-card-settings-btn" title="Settings (Dictionaries, AI, Modifiers)">⚙</button>
+            <button type="button" class="kiki-card-close-btn">&times;</button>
           </div>
         </div>
       </div>
 
-      <div style="background: rgba(255, 255, 255, 0.06); border-left: 3px solid #6366F1; padding: 8px 12px; border-radius: 0 8px 8px 0; margin-bottom: 12px; font-size: 13.5px; color: #CBD5E1; line-height: 1.45;">
+      <div class="kiki-ai-quote-box" style="border-left: 3px solid #6366F1; padding: 8px 12px; border-radius: 0 8px 8px 0; margin-bottom: 12px; font-size: 13.5px; line-height: 1.45;">
         <div style="font-style: italic;">
           “${formatContextHtml(sentence || "(no sentence context)", term)}”
         </div>
@@ -308,7 +308,7 @@
         ` : ''}
       </div>
 
-      <div class="kiki-ai-scroll-container" style="font-size: 15px; line-height: 1.65; color: #F1F5F9; max-height: 380px; overflow-y: auto; padding-right: 2px;">
+      <div class="kiki-ai-scroll-container" style="font-size: 15px; line-height: 1.65; max-height: 380px; overflow-y: auto; padding-right: 2px;">
         <div class="kiki-ai-chat-thread">
           <!-- Turns rendered here -->
         </div>
@@ -318,9 +318,9 @@
       </div>
 
       <!-- Follow-up Interactive Input Bar -->
-      <div class="kiki-ai-input-wrap" style="border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 10px; margin-top: 10px;">
+      <div class="kiki-ai-input-wrap" style="padding-top: 10px; margin-top: 10px;">
         <div style="display: flex; gap: 8px; align-items: center;">
-          <input type="text" class="kiki-ai-followup-input" placeholder="Ask follow-up question or explore grammar…" style="flex: 1; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 8px 12px; color: #FFF; font-size: 13px; outline: none; box-sizing: border-box;">
+          <input type="text" class="kiki-ai-followup-input" placeholder="Ask follow-up question or explore grammar…" style="flex: 1; border-radius: 8px; padding: 8px 12px; font-size: 13px; outline: none; box-sizing: border-box;">
           <button type="button" class="kiki-ai-followup-send" style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; border: none; border-radius: 8px; padding: 8px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; user-select: none;">Send</button>
         </div>
       </div>
@@ -526,7 +526,7 @@
       const userMsgDiv = document.createElement("div");
       userMsgDiv.style.cssText = "margin: 14px 0 10px; display: flex; justify-content: flex-end;";
       userMsgDiv.innerHTML = `
-        <div style="background: rgba(99, 102, 241, 0.28); border: 1px solid rgba(165, 180, 252, 0.4); border-radius: 12px 12px 2px 12px; padding: 8px 13px; font-size: 13.5px; color: #E0E7FF; font-weight: 500; max-width: 86%;">
+        <div class="kiki-ai-user-bubble" style="border-radius: 12px 12px 2px 12px; padding: 8px 13px; font-size: 13.5px; font-weight: 500; max-width: 86%;">
           ${escapeHtml(query)}
         </div>
       `;
@@ -536,17 +536,17 @@
       const turnDiv = document.createElement("div");
       turnDiv.style.cssText = "border-top: 1px dashed rgba(255, 255, 255, 0.15); padding-top: 12px; margin-top: 10px;";
       turnDiv.innerHTML = `
-        <div class="kiki-ai-thought-box" style="display: none; background: rgba(255, 255, 255, 0.05); border-left: 3px solid #8B5CF6; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 12.5px; color: #94A3B8; line-height: 1.5;">
+        <div class="kiki-ai-thought-box" style="display: none; border-left: 3px solid #8B5CF6; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 12.5px; line-height: 1.5;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; user-select: none;">
-            <span class="kiki-ai-thought-status" style="font-weight: 700; color: #C4B5FD; display: inline-flex; align-items: center; gap: 6px;">
+            <span class="kiki-ai-thought-status" style="font-weight: 700; color: #8B5CF6; display: inline-flex; align-items: center; gap: 6px;">
               <span>✦</span> Thinking…
             </span>
-            <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0 4px;">Collapse</button>
+            <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #6366F1; font-size: 11px; cursor: pointer; padding: 0 4px;">Collapse</button>
           </div>
-          <div class="kiki-ai-thought-text" style="max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, monospace; font-size: 12px; opacity: 0.88; color: #CBD5E1; line-height: 1.45;"></div>
+          <div class="kiki-ai-thought-text" style="max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, monospace; font-size: 12px; opacity: 0.88; line-height: 1.45;"></div>
         </div>
 
-        <div class="kiki-ai-answer" style="font-size: 15px; line-height: 1.65; color: #F1F5F9;">
+        <div class="kiki-ai-answer" style="font-size: 15px; line-height: 1.65;">
           <span class="kiki-ai-initial-status" style="color: #94A3B8; display: inline-flex; align-items: center; gap: 6px;">
             ✦ Generating…
           </span>
@@ -574,17 +574,17 @@
     // Initial first turn container
     const initialTurnDiv = document.createElement("div");
     initialTurnDiv.innerHTML = `
-      <div class="kiki-ai-thought-box" style="display: none; background: rgba(255, 255, 255, 0.05); border-left: 3px solid #8B5CF6; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 12.5px; color: #94A3B8; line-height: 1.5;">
+      <div class="kiki-ai-thought-box" style="display: none; border-left: 3px solid #8B5CF6; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 12.5px; line-height: 1.5;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; user-select: none;">
-          <span class="kiki-ai-thought-status" style="font-weight: 700; color: #C4B5FD; display: inline-flex; align-items: center; gap: 6px;">
+          <span class="kiki-ai-thought-status" style="font-weight: 700; color: #8B5CF6; display: inline-flex; align-items: center; gap: 6px;">
             <span>✦</span> Thinking…
           </span>
-          <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0 4px;">Collapse</button>
+          <button type="button" class="kiki-ai-thought-toggle-btn" style="background: transparent; border: none; color: #6366F1; font-size: 11px; cursor: pointer; padding: 0 4px;">Collapse</button>
         </div>
-        <div class="kiki-ai-thought-text" style="max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, monospace; font-size: 12px; opacity: 0.88; color: #CBD5E1; line-height: 1.45;"></div>
+        <div class="kiki-ai-thought-text" style="max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, monospace; font-size: 12px; opacity: 0.88; line-height: 1.45;"></div>
       </div>
 
-      <div class="kiki-ai-answer" style="font-size: 15px; line-height: 1.65; color: #F1F5F9;">
+      <div class="kiki-ai-answer" style="font-size: 15px; line-height: 1.65;">
         <span class="kiki-ai-initial-status" style="color: #94A3B8; display: inline-flex; align-items: center; gap: 6px;">
           ✦ Connecting to AI…
         </span>
