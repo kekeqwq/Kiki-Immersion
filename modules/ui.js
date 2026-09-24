@@ -797,7 +797,7 @@
       positionCardAboveSubtitles(card);
     }
 
-    const results = await lookupWord(term, wordEl);
+    const results = await lookupWord(term, wordEl, sentenceOverride || STATE.sentenceContext);
     if (!card.classList.contains("show") || (STATE.lookupWord !== term && !results.some((r) => r.term.toLowerCase() === STATE.lookupWord.toLowerCase()))) return;
 
     if (!results || !results.length) {

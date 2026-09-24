@@ -2879,7 +2879,114 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 
 
-  async function lookupWord(term, wordEl) {
+  function generateCandidatePhrasesFromSentence(cleanTerm, sentence) {
+    if (!cleanTerm || !sentence) return [];
+    const termLower = cleanTerm.toLowerCase().trim();
+    if (!termLower) return [];
+
+    const candidates = [];
+    const seen = new Set([termLower]);
+
+    const addCandidate = (p, priority) => {
+      if (!p) return;
+      const clean = p.trim().replace(/^['"“‘”’\(\)\[\]{}—–\-]+|['"“‘”’\(\)\[\]{}—–\-]+$/g, "");
+      if (!clean || clean.length < 2) return;
+      const lower = clean.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        candidates.push({ phrase: clean, priority });
+      }
+    };
+
+    const isCJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/.test(cleanTerm);
+
+    if (isCJK) {
+      const sentLower = sentence;
+      let startIdx = 0;
+      while ((startIdx = sentLower.indexOf(cleanTerm, startIdx)) !== -1) {
+        for (let len = 8; len >= 2; len--) {
+          if (startIdx + len <= sentLower.length) {
+            addCandidate(sentence.slice(startIdx, startIdx + len), 30 + len);
+          }
+        }
+        for (let len = 8; len >= 2; len--) {
+          for (let s = Math.max(0, startIdx - len + 1); s < startIdx && s + len <= sentLower.length; s++) {
+            if (s + len >= startIdx + cleanTerm.length) {
+              addCandidate(sentence.slice(s, s + len), 15 + len);
+            }
+          }
+        }
+        startIdx += cleanTerm.length;
+      }
+    } else {
+      // 1. Direct hyphenated compound extraction from sentence
+      // Matches "anti-histamines", "high-risk", "state-of-the-art"
+      const hyphenRegex = /[a-zA-Z0-9_\u00C0-\u024F]+(?:-[a-zA-Z0-9_\u00C0-\u024F]+)+/g;
+      let hm;
+      while ((hm = hyphenRegex.exec(sentence)) !== null) {
+        const fullCompound = hm[0];
+        const parts = fullCompound.toLowerCase().split("-");
+        if (parts.includes(termLower) || fullCompound.toLowerCase().includes(termLower)) {
+          addCandidate(fullCompound, 50);
+          addCandidate(fullCompound.replace(/-/g, ""), 49);
+          addCandidate(fullCompound.replace(/-/g, " "), 48);
+        }
+      }
+
+      // 2. Tokenize sentence into word tokens
+      const tokenRegex = /[a-zA-Z0-9_\u00C0-\u024F]+(?:'[a-zA-Z0-9_\u00C0-\u024F]+)?/g;
+      const wordTokens = [];
+      let tm;
+      while ((tm = tokenRegex.exec(sentence)) !== null) {
+        wordTokens.push({ text: tm[0], index: tm.index });
+      }
+
+      const N = wordTokens.length;
+      if (N >= 2) {
+        const matchIndices = [];
+        for (let i = 0; i < N; i++) {
+          const tLow = wordTokens[i].text.toLowerCase();
+          if (tLow === termLower || tLow.includes(termLower) || termLower.includes(tLow)) {
+            matchIndices.push(i);
+          }
+        }
+
+        for (const C of matchIndices) {
+          // Forward multi-word phrases starting with C (2 to 5 words)
+          for (let len = Math.min(5, N - C); len >= 2; len--) {
+            const slice = wordTokens.slice(C, C + len).map(t => t.text);
+            const phrase = slice.join(" ");
+            addCandidate(phrase, 30 + len);
+            if (len === 2) {
+              addCandidate(slice.join("-"), 25);
+              addCandidate(slice.join(""), 24);
+            }
+          }
+
+          // Preceding & surrounding phrases containing C (2 to 5 words)
+          for (let len = Math.min(5, N); len >= 2; len--) {
+            for (let s = Math.max(0, C - len + 1); s < C && s + len - 1 < N; s++) {
+              const e = s + len - 1;
+              if (e >= C) {
+                const slice = wordTokens.slice(s, e + 1).map(t => t.text);
+                const phrase = slice.join(" ");
+                addCandidate(phrase, 10 + len);
+                if (len === 2) {
+                  addCandidate(slice.join("-"), 15);
+                  addCandidate(slice.join(""), 14);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    candidates.sort((a, b) => b.priority - a.priority);
+    return candidates;
+  }
+
+  async function lookupWord(term, wordEl, sentenceOverride = "") {
     try {
       const cleanTerm = (term || "").trim();
       if (!cleanTerm) return [];
@@ -2887,6 +2994,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       const candidatePhrases = [];
       const seenPhrases = new Set([cleanTerm.toLowerCase()]);
 
+      // 1. YouTube subtitle line words (if inside .kiki-line)
       if (wordEl && wordEl.closest) {
         const line = wordEl.closest(".kiki-line");
         if (line) {
@@ -2929,6 +3037,22 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
       }
 
+      // 2. Sentence-level compound & phrase absorption (for web text pages or supplementing subtitles)
+      const sent = (sentenceOverride || STATE.sentenceContext || "").trim();
+      if (sent) {
+        const sentCandidates = generateCandidatePhrasesFromSentence(cleanTerm, sent);
+        for (const sc of sentCandidates) {
+          if (!seenPhrases.has(sc.phrase.toLowerCase())) {
+            seenPhrases.add(sc.phrase.toLowerCase());
+            candidatePhrases.push({
+              phrase: sc.phrase,
+              priority: sc.priority,
+              wordEls: []
+            });
+          }
+        }
+      }
+
       async function execSearch(queryText) {
         if (!queryText) return [];
         if (localSearch && typeof localSearch.search === "function") {
@@ -2966,7 +3090,9 @@ window.KikiAudioEngine = KikiAudioEngine;
       // If a phrase matched in dictionary, highlight all words belonging to the top matched phrase
       if (matchedPhrases.length > 0) {
         const topPhrase = matchedPhrases[0];
-        topPhrase.meta.wordEls.forEach((el) => el.classList.add("kiki-active"));
+        if (topPhrase.meta && Array.isArray(topPhrase.meta.wordEls)) {
+          topPhrase.meta.wordEls.forEach((el) => el.classList.add("kiki-active"));
+        }
       }
 
       // Combine results: matched phrases first, then single word definitions
@@ -4409,7 +4535,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       positionCardAboveSubtitles(card);
     }
 
-    const results = await lookupWord(term, wordEl);
+    const results = await lookupWord(term, wordEl, sentenceOverride || STATE.sentenceContext);
     if (!card.classList.contains("show") || (STATE.lookupWord !== term && !results.some((r) => r.term.toLowerCase() === STATE.lookupWord.toLowerCase()))) return;
 
     if (!results || !results.length) {
