@@ -310,7 +310,7 @@
       (card && card.classList.contains("show")) ||
       STATE.lookupEl ||
       STATE.pausedForLookup ||
-      (modal && modal.style.display !== "none")
+      (modal && modal.classList.contains("show") && modal.style.display !== "none")
     );
   }
 

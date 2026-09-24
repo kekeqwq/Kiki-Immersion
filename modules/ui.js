@@ -1001,6 +1001,29 @@
     }
   }
 
+  function hideSettingsModal() {
+    const modal = document.getElementById("kiki-settings-modal");
+    if (modal) {
+      modal.classList.remove("show");
+      modal.style.setProperty("display", "none", "important");
+    }
+    const backdrop = document.getElementById("kiki-modal-backdrop");
+    if (backdrop) {
+      backdrop.classList.remove("show");
+      backdrop.style.setProperty("display", "none", "important");
+    }
+  }
+  window.hideSettingsModal = hideSettingsModal;
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      const modal = document.getElementById("kiki-settings-modal");
+      if (modal && (modal.classList.contains("show") || modal.style.display !== "none")) {
+        hideSettingsModal();
+      }
+    }
+  });
+
   function isAnyPopupOpen() {
     const card = document.getElementById("kiki-yomitan-card");
     const modal = document.getElementById("kiki-settings-modal");
@@ -1008,7 +1031,7 @@
       (card && card.classList.contains("show")) ||
       STATE.lookupEl ||
       STATE.pausedForLookup ||
-      (modal && modal.style.display !== "none")
+      (modal && modal.classList.contains("show") && modal.style.display !== "none")
     );
   }
   window.isAnyPopupOpen = isAnyPopupOpen;
@@ -1018,10 +1041,7 @@
     if (typeof window.__kiki_cancelSingleTap === "function") {
       window.__kiki_cancelSingleTap();
     }
-    const modal = document.getElementById("kiki-settings-modal");
-    if (modal && modal.style.display !== "none") {
-      modal.style.display = "none";
-    }
+    hideSettingsModal();
     closeLookup(resume);
   }
   window.dismissAllPopups = dismissAllPopups;
@@ -1094,36 +1114,38 @@
   }
 
   async function showSettingsModal(initialTab = "dict") {
+    let backdrop = document.getElementById("kiki-modal-backdrop");
+    if (!backdrop) {
+      backdrop = document.createElement("div");
+      backdrop.id = "kiki-modal-backdrop";
+      const onBackdrop = (e) => {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+        hideSettingsModal();
+      };
+      backdrop.addEventListener("pointerdown", onBackdrop);
+      backdrop.addEventListener("mousedown", onBackdrop);
+      backdrop.addEventListener("touchstart", onBackdrop);
+      backdrop.addEventListener("click", onBackdrop);
+      (document.body || document.documentElement).appendChild(backdrop);
+    }
+    backdrop.classList.add("show");
+    backdrop.style.setProperty("display", "block", "important");
+
     let modal = document.getElementById("kiki-settings-modal");
     if (!modal) {
       modal = document.createElement("div");
       modal.id = "kiki-settings-modal";
-      modal.style.cssText = `
-        position: fixed !important;
-        top: 50% !important;
-        left: 50% !important;
-        transform: translate(-50%, -50%) !important;
-        width: min(92vw, 500px) !important;
-        max-height: 88vh !important;
-        border-radius: 18px !important;
-        z-index: 2147483647 !important;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-        padding: 20px !important;
-        box-sizing: border-box !important;
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 14px !important;
-        touch-action: manipulation !important;
-        pointer-events: auto !important;
-      `;
       const stopProp = (e) => e.stopPropagation();
       modal.addEventListener("pointerdown", stopProp);
       modal.addEventListener("touchstart", stopProp);
       modal.addEventListener("mousedown", stopProp);
+      modal.addEventListener("click", stopProp);
       (document.body || document.documentElement).appendChild(modal);
     }
 
-    modal.style.display = "flex";
+    modal.classList.add("show");
+    modal.style.setProperty("display", "flex", "important");
     keepHudAlive(15000);
     let activeTab = initialTab;
 
@@ -1216,7 +1238,7 @@
       } else if (activeTab === "about") {
         const cacheTime = localStorage.getItem("kiki_cache_time") || "Initial / Local";
         const engineVer = window.__kiki_engine_version || localStorage.getItem("kiki_engine_version") || localStorage.getItem("kiki_cache_version") || "1.3.3";
-        const loaderVer = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.1";
+        const loaderVer = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.5";
         const modulesList = ["core", "yomitan", "ai", "ui", "youtube", "web"];
         const modStatus = modulesList.map(m => {
           const has = !!localStorage.getItem("kiki_mod_" + m);
@@ -1360,10 +1382,11 @@
         const doClose = (e) => {
           if (e.cancelable) e.preventDefault();
           e.stopPropagation();
-          modal.style.display = "none";
+          hideSettingsModal();
         };
         closeBtn.addEventListener("click", doClose);
         closeBtn.addEventListener("touchend", doClose);
+        closeBtn.addEventListener("pointerup", doClose);
       }
 
       modal.querySelectorAll(".kiki-tab-btn").forEach(btn => {

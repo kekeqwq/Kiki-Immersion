@@ -4,9 +4,11 @@
 // =============================================================
 
   window.__kiki_engine_version = "1.3.3";
+  window.__kiki_loader_version = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.5";
   try {
     localStorage.setItem("kiki_engine_version", "1.3.3");
     localStorage.setItem("kiki_cache_version", "1.3.3");
+    localStorage.setItem("kiki_loader_version", window.__kiki_loader_version);
   } catch (e) {}
 
   let savedPot = "";
@@ -927,11 +929,33 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
       padding: 20px !important;
       box-sizing: border-box !important;
-      display: flex !important;
+      display: none;
       flex-direction: column !important;
       gap: 14px !important;
       touch-action: manipulation !important;
       pointer-events: auto !important;
+    }
+    #kiki-settings-modal.show {
+      display: flex !important;
+    }
+
+    /* Modal Backdrop */
+    #kiki-modal-backdrop {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      background: rgba(0, 0, 0, 0.45) !important;
+      backdrop-filter: blur(4px) !important;
+      -webkit-backdrop-filter: blur(4px) !important;
+      z-index: 2147483646 !important;
+      display: none;
+      touch-action: manipulation !important;
+      pointer-events: auto !important;
+    }
+    #kiki-modal-backdrop.show {
+      display: block !important;
     }
 
     /* Sleek Frosted Glass Scrollbars */
