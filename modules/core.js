@@ -1,12 +1,12 @@
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.2.9
+// Version: 1.3.0
 // =============================================================
 
-  window.__kiki_engine_version = "1.2.9";
+  window.__kiki_engine_version = "1.3.0";
   try {
-    localStorage.setItem("kiki_engine_version", "1.2.9");
-    localStorage.setItem("kiki_cache_version", "1.2.9");
+    localStorage.setItem("kiki_engine_version", "1.3.0");
+    localStorage.setItem("kiki_cache_version", "1.3.0");
   } catch (e) {}
 
   let savedPot = "";
@@ -17,6 +17,7 @@
   const STATE = window.STATE = {
     enabled: true,
     subsVisible: localStorage.getItem("kiki_subs_visible") !== "0",
+    webLookupKey: localStorage.getItem("kiki_web_lookup_key") || "ctrl",
     cues: [],
     liveCues: [],
     tracks: [],
@@ -25,6 +26,7 @@
     pausedForLookup: false,
     lookupEl: null,
     lookupWord: "",
+    sentenceContext: "",
     lastLookupDismissTime: 0,
     fs: false,
     videoId: null,
@@ -37,7 +39,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.2.9"
+    engineVersion: "1.3.0"
   };
 
   // -------------------------------------------------------------
@@ -93,123 +95,124 @@
     }
   }
 
-  // Hook fetch early (strictly preserving window context to prevent Illegal invocation)
-  const origFetch = (window.fetch ? window.fetch.bind(window) : null);
-  window.origFetch = origFetch || window.fetch;
-  if (origFetch) {
-    window.fetch = function (...args) {
-      let reqUrl = "";
-      try {
-        const req = args[0];
-        reqUrl = typeof req === "string" ? req : (req?.url || req?.href || (req && typeof req.toString === "function" ? req.toString() : ""));
-        noteTimedtextUrl(reqUrl);
-      } catch {}
+  // Hook fetch & XMLHttpRequest early for YouTube timedtext capture (only on YouTube domains)
+  const isYouTubeDomain = /(?:^|\.)youtube\.com$/.test(location.hostname);
+  if (isYouTubeDomain) {
+    const origFetch = (window.fetch ? window.fetch.bind(window) : null);
+    window.origFetch = origFetch || window.fetch;
+    if (origFetch) {
+      window.fetch = function (...args) {
+        let reqUrl = "";
+        try {
+          const req = args[0];
+          reqUrl = typeof req === "string" ? req : (req?.url || req?.href || (req && typeof req.toString === "function" ? req.toString() : ""));
+          noteTimedtextUrl(reqUrl);
+        } catch {}
 
-      const promise = origFetch.apply(window, args);
-      try {
-        if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
-          promise.then((res) => {
-            try {
-              res.clone().text().then((text) => {
-                if (text && text.trim().length > 20) {
-                  handleCapturedWire(text, reqUrl);
-                }
-              }).catch(() => {
-                try {
-                  res.clone().arrayBuffer().then((buf) => {
-                    if (buf && buf.byteLength > 20) {
-                      const text = new TextDecoder("utf-8").decode(buf);
-                      if (text && text.trim().length > 20) handleCapturedWire(text, reqUrl);
-                    }
-                  }).catch(() => {});
-                } catch {}
-              });
-            } catch {}
-          }).catch(() => {});
-        }
-      } catch {}
-      return promise;
-    };
-  }
-
-  // Hook XMLHttpRequest early (strictly for timedtext capture, zero overhead on media buffers)
-  const origOpen = XMLHttpRequest.prototype.open;
-  const origSend = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.open = function (...args) {
-    try {
-      const url = args[1];
-      this.__kiki_url = typeof url === "string" ? url : (url?.href || String(url || ""));
-      noteTimedtextUrl(this.__kiki_url);
-    } catch {}
-    return origOpen.apply(this, args);
-  };
-  XMLHttpRequest.prototype.send = function (...args) {
-    try {
-      const reqUrl = this.__kiki_url;
-      if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
-        let captured = false;
-        const processResponse = () => {
-          if (captured) return;
-          try {
-            if (this.status && (this.status < 200 || this.status >= 400)) return;
-            let body = "";
-            try {
-              if (this.responseType === "" || this.responseType === "text") {
-                body = this.responseText || "";
-              } else if (this.responseType === "arraybuffer" && this.response) {
-                try {
-                  body = new TextDecoder("utf-8").decode(this.response);
-                } catch (e1) {
+        const promise = origFetch.apply(window, args);
+        try {
+          if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
+            promise.then((res) => {
+              try {
+                res.clone().text().then((text) => {
+                  if (text && text.trim().length > 20) {
+                    handleCapturedWire(text, reqUrl);
+                  }
+                }).catch(() => {
                   try {
-                    const bytes = new Uint8Array(this.response);
-                    let s = "";
-                    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-                    body = decodeURIComponent(escape(s));
-                  } catch (e2) {}
+                    res.clone().arrayBuffer().then((buf) => {
+                      if (buf && buf.byteLength > 20) {
+                        const text = new TextDecoder("utf-8").decode(buf);
+                        if (text && text.trim().length > 20) handleCapturedWire(text, reqUrl);
+                      }
+                    }).catch(() => {});
+                  } catch {}
+                });
+              } catch {}
+            }).catch(() => {});
+          }
+        } catch {}
+        return promise;
+      };
+    }
+
+    const origOpen = XMLHttpRequest.prototype.open;
+    const origSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function (...args) {
+      try {
+        const url = args[1];
+        this.__kiki_url = typeof url === "string" ? url : (url?.href || String(url || ""));
+        noteTimedtextUrl(this.__kiki_url);
+      } catch {}
+      return origOpen.apply(this, args);
+    };
+    XMLHttpRequest.prototype.send = function (...args) {
+      try {
+        const reqUrl = this.__kiki_url;
+        if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
+          let captured = false;
+          const processResponse = () => {
+            if (captured) return;
+            try {
+              if (this.status && (this.status < 200 || this.status >= 400)) return;
+              let body = "";
+              try {
+                if (this.responseType === "" || this.responseType === "text") {
+                  body = this.responseText || "";
+                } else if (this.responseType === "arraybuffer" && this.response) {
+                  try {
+                    body = new TextDecoder("utf-8").decode(this.response);
+                  } catch (e1) {
+                    try {
+                      const bytes = new Uint8Array(this.response);
+                      let s = "";
+                      for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+                      body = decodeURIComponent(escape(s));
+                    } catch (e2) {}
+                  }
+                } else if (this.responseType === "blob" && this.response instanceof Blob) {
+                  try {
+                    this.response.text().then(t => {
+                      if (t && t.trim().length > 20) {
+                        captured = true;
+                        handleCapturedWire(t, reqUrl);
+                      }
+                    }).catch(() => {});
+                  } catch {}
+                  return;
+                } else if (this.responseType === "json") {
+                  body = typeof this.response === "string" ? this.response : JSON.stringify(this.response || "");
+                } else if (this.responseType === "document" && this.responseXML) {
+                  body = new XMLSerializer().serializeToString(this.responseXML);
                 }
-              } else if (this.responseType === "blob" && this.response instanceof Blob) {
-                try {
-                  this.response.text().then(t => {
-                    if (t && t.trim().length > 20) {
-                      captured = true;
-                      handleCapturedWire(t, reqUrl);
-                    }
-                  }).catch(() => {});
-                } catch {}
-                return;
-              } else if (this.responseType === "json") {
-                body = typeof this.response === "string" ? this.response : JSON.stringify(this.response || "");
-              } else if (this.responseType === "document" && this.responseXML) {
-                body = new XMLSerializer().serializeToString(this.responseXML);
+              } catch {}
+              if (body && body.trim().length > 20) {
+                captured = true;
+                handleCapturedWire(body, reqUrl);
               }
             } catch {}
-            if (body && body.trim().length > 20) {
-              captured = true;
-              handleCapturedWire(body, reqUrl);
-            }
-          } catch {}
-        };
+          };
 
-        this.addEventListener("load", processResponse, { once: true });
-        this.addEventListener("readystatechange", () => {
-          if (this.readyState === 4) processResponse();
-        });
-      }
-    } catch {}
-    return origSend.apply(this, args);
-  };
-
-  // Early PerformanceObserver
-  try {
-    const obs = new PerformanceObserver((list) => {
-      for (const e of list.getEntries()) {
-        if (typeof e.name === "string" && e.name.includes(TIMEDTEXT_MARK)) {
-          noteTimedtextUrl(e.name);
+          this.addEventListener("load", processResponse, { once: true });
+          this.addEventListener("readystatechange", () => {
+            if (this.readyState === 4) processResponse();
+          });
         }
-      }
-    });
-    obs.observe({ type: "resource", buffered: true });
-  } catch {}
+      } catch {}
+      return origSend.apply(this, args);
+    };
+
+    try {
+      const obs = new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) {
+          if (typeof e.name === "string" && e.name.includes(TIMEDTEXT_MARK)) {
+            noteTimedtextUrl(e.name);
+          }
+        }
+      });
+      obs.observe({ type: "resource", buffered: true });
+    } catch {}
+  }
 
   // -------------------------------------------------------------
   // Trusted Types Policy & Safe HTML Setter

@@ -1,7 +1,7 @@
 {
   "name": "Kiki Immersion",
-  "version": "1.2.9",
-  "loaderVersion": "1.0.6",
+  "version": "1.3.0",
+  "loaderVersion": "1.1.0",
   "updated": "2026-09-24",
   "repository": "https://github.com/kekeqwq/Kiki-Immersion",
   "modules": [
@@ -29,6 +29,11 @@
       "name": "youtube",
       "path": "modules/youtube.js",
       "description": "YouTube player hooks, timedtext track scraper, fullscreen gestures, and SPA observer"
+    },
+    {
+      "name": "web",
+      "path": "modules/web.js",
+      "description": "Global modifier-key (Ctrl+Click) multilingual word lookup & contextual AI explanations for arbitrary web pages"
     }
   ]
 }

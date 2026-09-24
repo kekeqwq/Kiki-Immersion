@@ -1,17 +1,19 @@
 import os
 
-MODULE_ORDER = ['core', 'yomitan', 'ai', 'ui', 'youtube']
+MODULE_ORDER = ['core', 'yomitan', 'ai', 'ui', 'youtube', 'web']
 
-header = """// ==UserScript==
+header = r"""// ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.2.9
-// @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, and touch/mouse gestures.
+// @version      1.3.0
+// @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine, and global web lookup.
 // @author       keke
 // @match        *://*.youtube.com/*
 // @match        *://youtube.com/*
+// @match        *://*/*
 // @include      *://*.youtube.com/*
 // @include      *://youtube.com/*
+// @include      *
 // @run-at       document-start
 // @grant        none
 // @inject-into  page
@@ -23,31 +25,34 @@ header = """// ==UserScript==
   'use strict';
 
   // -------------------------------------------------------------
-  // 1. Force Desktop YouTube & Early Native Lockout
+  // 1. Force Desktop YouTube & Early Native Lockout (YouTube Only)
   // -------------------------------------------------------------
-  try {
-    document.cookie = "PREF=f6=40000000&f5=30000&app=desktop; domain=.youtube.com; path=/; max-age=31536000; SameSite=Lax";
-  } catch (e) {}
+  const isYouTubeSite = /(?:^|\.)youtube\.com$/.test(location.hostname);
+  if (isYouTubeSite) {
+    try {
+      document.cookie = "PREF=f6=40000000&f5=30000&app=desktop; domain=.youtube.com; path=/; max-age=31536000; SameSite=Lax";
+    } catch (e) {}
 
-  if (location.hostname === 'm.youtube.com' || location.host.includes('m.youtube.com')) {
-    const targetUrl = new URL(location.href);
-    targetUrl.hostname = 'www.youtube.com';
-    targetUrl.searchParams.set('app', 'desktop');
-    targetUrl.searchParams.set('persist_app', '1');
-    location.replace(targetUrl.toString());
-    return;
-  }
+    if (location.hostname === 'm.youtube.com' || location.host.includes('m.youtube.com')) {
+      const targetUrl = new URL(location.href);
+      targetUrl.hostname = 'www.youtube.com';
+      targetUrl.searchParams.set('app', 'desktop');
+      targetUrl.searchParams.set('persist_app', '1');
+      location.replace(targetUrl.toString());
+      return;
+    }
 
-  try {
-    Object.defineProperty(navigator, 'platform', { get: () => "MacIntel" });
-  } catch (e) {}
+    try {
+      Object.defineProperty(navigator, 'platform', { get: () => "MacIntel" });
+    } catch (e) {}
 
-  if (document.documentElement) {
-    document.documentElement.classList.add("kiki-lock-chrome");
-  } else {
-    document.addEventListener("DOMContentLoaded", () => {
+    if (document.documentElement) {
       document.documentElement.classList.add("kiki-lock-chrome");
-    }, { once: true });
+    } else {
+      document.addEventListener("DOMContentLoaded", () => {
+        document.documentElement.classList.add("kiki-lock-chrome");
+      }, { once: true });
+    }
   }
 """
 

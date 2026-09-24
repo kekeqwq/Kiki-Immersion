@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.2.9
+// Version: 1.3.0
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -631,7 +631,48 @@
     card.style.maxHeight = `${Math.min(620, Math.max(380, availHeight))}px`;
   }
 
+  window.positionFloatingCard = positionFloatingCard;
+  function positionFloatingCard(card, x, y) {
+    const pad = 14;
+    const cardWidth = Math.min(540, window.innerWidth - pad * 2);
+
+    let left = x - 40;
+    if (left + cardWidth > window.innerWidth - pad) {
+      left = window.innerWidth - cardWidth - pad;
+    }
+    if (left < pad) {
+      left = pad;
+    }
+
+    const spaceBelow = window.innerHeight - (y + 18) - pad;
+    const spaceAbove = y - 18 - pad;
+
+    let top = "auto";
+    let bottom = "auto";
+    let maxHeight = 420;
+
+    if (spaceBelow >= 240 || spaceBelow >= spaceAbove) {
+      top = `${Math.round(y + 18)}px`;
+      bottom = "auto";
+      maxHeight = Math.min(520, Math.max(220, spaceBelow));
+    } else {
+      bottom = `${Math.round(window.innerHeight - y + 14)}px`;
+      top = "auto";
+      maxHeight = Math.min(520, Math.max(220, spaceAbove));
+    }
+
+    card.style.setProperty("position", "fixed", "important");
+    card.style.setProperty("left", `${Math.round(left)}px`, "important");
+    card.style.setProperty("transform", "none", "important");
+    card.style.setProperty("top", top, "important");
+    card.style.setProperty("bottom", bottom, "important");
+    card.style.setProperty("width", `${Math.round(cardWidth)}px`, "important");
+    card.style.setProperty("max-width", `calc(100vw - 28px)`, "important");
+    card.style.setProperty("max-height", `${Math.round(maxHeight)}px`, "important");
+  }
+
   function getSentenceContext() {
+    if (STATE.sentenceContext) return STATE.sentenceContext;
     if (STATE.idx >= 0 && STATE.idx < STATE.cues.length) {
       return (STATE.cues[STATE.idx].text || "").trim();
     }
@@ -719,10 +760,11 @@
   }
 
 
-  async function showYomitanCard(wordEl, term) {
+  async function showYomitanCard(wordEl, term, coords = null, sentenceOverride = "") {
     window.showYomitanCard = showYomitanCard;
     STATE.lookupWord = term;
     STATE.lookupEl = wordEl;
+    STATE.sentenceContext = sentenceOverride || "";
     const card = ensureYomitanCard();
     setHtml(card, `
       <div class="kiki-card-header">
@@ -734,7 +776,11 @@
     `);
     card.classList.add("show");
 
-    positionCardAboveSubtitles(card);
+    if (coords && typeof coords.x === "number") {
+      positionFloatingCard(card, coords.x, coords.y);
+    } else {
+      positionCardAboveSubtitles(card);
+    }
 
     const results = await lookupWord(term, wordEl);
     if (!card.classList.contains("show") || (STATE.lookupWord !== term && !results.some((r) => r.term.toLowerCase() === STATE.lookupWord.toLowerCase()))) return;
@@ -908,6 +954,12 @@
     abortActiveAi();
     STATE.lookupEl = null;
     STATE.lookupWord = "";
+    STATE.sentenceContext = "";
+    try {
+      if (window.getSelection) {
+        window.getSelection().removeAllRanges();
+      }
+    } catch {}
     document.querySelectorAll(".kiki-word.kiki-active").forEach((n) => n.classList.remove("kiki-active"));
 
     const card = $("#kiki-yomitan-card");
@@ -1064,6 +1116,19 @@
                 <div class="kiki-modal-prog-fill" style="background: #10B981; height: 100%; width: 0%; transition: width 0.2s;"></div>
               </div>
               <span class="kiki-modal-prog-text" style="font-size: 11px; opacity: 0.9; color: #EEE;">Preparing...</span>
+            </div>
+
+            <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 10px 12px; margin-top: 4px;">
+              <div style="font-size: 12px; font-weight: 700; color: #E2E8F0; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+                <span>🌐 全局网页查词修饰键 (Web Lookup)</span>
+                <span style="font-size: 11px; color: #94A3B8;">按住修饰键点击即查</span>
+              </div>
+              <select id="kiki-web-lookup-key-select" style="width: 100%; background: rgba(0, 0, 0, 0.4); color: #FFF; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none;">
+                <option value="ctrl" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key") || "ctrl") === "ctrl" ? "selected" : ""}>Ctrl 键 (默认)</option>
+                <option value="alt" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "alt" ? "selected" : ""}>Option / Alt 键</option>
+                <option value="meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "meta" ? "selected" : ""}>Command / Meta 键</option>
+                <option value="ctrl_or_meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "ctrl_or_meta" ? "selected" : ""}>Ctrl 或 Command 键</option>
+              </select>
             </div>
           </div>
         `;
@@ -1335,6 +1400,16 @@
               toast("Import error: " + err.message);
               if (progText) progText.textContent = "Error: " + err.message;
             }
+          });
+        }
+
+        const keySelect = modal.querySelector("#kiki-web-lookup-key-select");
+        if (keySelect) {
+          keySelect.addEventListener("change", (e) => {
+            const val = e.target.value;
+            STATE.webLookupKey = val;
+            try { localStorage.setItem("kiki_web_lookup_key", val); } catch {}
+            toast(`✦ 全局查词修饰键: ${val}`);
           });
         }
       } else {

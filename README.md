@@ -2,11 +2,29 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Frosted Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.2.9-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.0.6-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.3.0-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.1.0-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
 ## 📢 Release Overview
+
+**v1.3.0 (Global Web Universal Lookup & Domain-Based Modular Engine)**:
+- **Zero-DOM-Mutation Global Word Lookup (`modules/web.js`)**:
+  - Hold the modifier key (`Ctrl` by default, or configurable `Option/Alt` / `Command/Meta`) and click ANY word on ANY webpage to immediately query Yomitan offline dictionaries and contextual AI explanations!
+  - **Zero DOM Mutation & Zero Node Splitting**: Unlike video subtitles that pre-wrap tokens into spans, web pages use WebKit/Blink's native `document.caretRangeFromPoint(clientX, clientY)`. Zero DOM overhead, 0% CPU consumption during regular web browsing.
+  - **Multilingual Intelligence**:
+    - **Japanese / CJK**: Scans candidate prefixes forward (up to 12 chars) with longest-prefix dictionary matching. Intelligent script block (Kanji / Katakana / Hiragana) boundary extraction with particle exclusion (`[をにがのはでともへや]`) for perfect AI fallback.
+    - **English / Latin**: Precise word boundary extraction (`\w+` + hyphens/apostrophes) and phrasal verb candidates.
+  - **Sentence Context Extraction**: Automatically extracts surrounding sentence or paragraph context (bounded by `[.!?。\n\r！？]`), feeding rich context directly to AI explanations and MarginNote pills.
+  - **Smart Viewport-Aware Floating Card**: Automatically positions floating cards right beside the clicked point, with smart top/bottom flipping and viewport bounding.
+- **Domain-Based On-Demand Loader Architecture (`loader.user.js` v1.1.0)**:
+  - Global userscript match (`@match *://*/*`).
+  - **Domain Routing**: YouTube pages load YouTube-specific subtitle & player pipeline (`youtube.js`). Non-YouTube pages completely skip `youtube.js` (no player hooks, no desktop UA cookies, zero interference).
+  - Web lookup modifier key can be customized inside Settings modal (`Ctrl`, `Alt/Option`, `Cmd/Meta`, or `Ctrl or Cmd`).
+
+**Loader v1.1.0 (Global Multi-Domain Support & Cache Invalidation)**:
+- **Universal Match**: Enabled `@match *://*/*` to support universal web page lookup.
+- **Instant Cache Upgrade**: Bumped `EXPECTED_CACHE_VERSION` to `1.3.0`.
 
 **v1.2.9 (Unified Popup Dismissal & Playback Restoration Fix)**:
 - **Clean Popup Dismissal with Guaranteed Playback Resume**:

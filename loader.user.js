@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.0.6
+// @version      1.1.0
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine & dynamic hot-reload.
 // @author       keke
 // @match        *://*.youtube.com/*
 // @match        *://youtube.com/*
+// @match        *://*/*
 // @include      *://*.youtube.com/*
 // @include      *://youtube.com/*
+// @include      *
 // @run-at       document-start
 // @grant        none
 // @inject-into  page
@@ -18,8 +20,12 @@
 (() => {
   "use strict";
 
-  const KIKI_LOADER_VERSION = "1.0.6";
-  const MODULES = ["core", "yomitan", "ai", "ui", "youtube"];
+  const KIKI_LOADER_VERSION = "1.1.0";
+  const ALL_MODULES = ["core", "yomitan", "ai", "ui", "youtube", "web"];
+  const isYouTube = /(?:^|\.)youtube\.com$/.test(location.hostname);
+  const MODULES = isYouTube
+    ? ["core", "yomitan", "ai", "ui", "youtube", "web"]
+    : ["core", "yomitan", "ai", "ui", "web"];
   const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/modules/";
 
   // -------------------------------------------------------------
@@ -237,7 +243,7 @@
     } catch (e) {}
   }
 
-  const EXPECTED_CACHE_VERSION = "1.2.9";
+  const EXPECTED_CACHE_VERSION = "1.3.0";
 
   function hasAllCachedModules() {
     if (localStorage.getItem("kiki_cache_version") !== EXPECTED_CACHE_VERSION) return false;
@@ -340,11 +346,11 @@
 
     try {
       let detectedVersion = EXPECTED_CACHE_VERSION;
-      const results = await Promise.all(MODULES.map(m => fetchModule(m)));
+      const results = await Promise.all(ALL_MODULES.map(m => fetchModule(m)));
 
       // Pre-validate module syntax before committing to localStorage
       const p = getPolicy();
-      for (let i = 0; i < MODULES.length; i++) {
+      for (let i = 0; i < ALL_MODULES.length; i++) {
         let src = results[i];
         if (p && typeof p.createScript === "function") {
           try { src = p.createScript(src); } catch (e) {}
@@ -356,13 +362,13 @@
             // Trusted Types policy restricts new Function, safe to continue
             break;
           }
-          throw new Error(`Syntax error in ${MODULES[i]}.js: ${syntaxErr.message}`);
+          throw new Error(`Syntax error in ${ALL_MODULES[i]}.js: ${syntaxErr.message}`);
         }
       }
 
       results.forEach((code, idx) => {
-        setCachedModule(MODULES[idx], code);
-        if (MODULES[idx] === "core") {
+        setCachedModule(ALL_MODULES[idx], code);
+        if (ALL_MODULES[idx] === "core") {
           const mVer = code.match(/window\.__kiki_engine_version\s*=\s*["']([^"']+)["']/);
           if (mVer && mVer[1]) detectedVersion = mVer[1];
         }

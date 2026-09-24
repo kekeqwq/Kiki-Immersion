@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.2.9
-// @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, and touch/mouse gestures.
+// @version      1.3.0
+// @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine, and global web lookup.
 // @author       keke
 // @match        *://*.youtube.com/*
 // @match        *://youtube.com/*
+// @match        *://*/*
 // @include      *://*.youtube.com/*
 // @include      *://youtube.com/*
+// @include      *
 // @run-at       document-start
 // @grant        none
 // @inject-into  page
@@ -19,31 +21,34 @@
   'use strict';
 
   // -------------------------------------------------------------
-  // 1. Force Desktop YouTube & Early Native Lockout
+  // 1. Force Desktop YouTube & Early Native Lockout (YouTube Only)
   // -------------------------------------------------------------
-  try {
-    document.cookie = "PREF=f6=40000000&f5=30000&app=desktop; domain=.youtube.com; path=/; max-age=31536000; SameSite=Lax";
-  } catch (e) {}
+  const isYouTubeSite = /(?:^|\.)youtube\.com$/.test(location.hostname);
+  if (isYouTubeSite) {
+    try {
+      document.cookie = "PREF=f6=40000000&f5=30000&app=desktop; domain=.youtube.com; path=/; max-age=31536000; SameSite=Lax";
+    } catch (e) {}
 
-  if (location.hostname === 'm.youtube.com' || location.host.includes('m.youtube.com')) {
-    const targetUrl = new URL(location.href);
-    targetUrl.hostname = 'www.youtube.com';
-    targetUrl.searchParams.set('app', 'desktop');
-    targetUrl.searchParams.set('persist_app', '1');
-    location.replace(targetUrl.toString());
-    return;
-  }
+    if (location.hostname === 'm.youtube.com' || location.host.includes('m.youtube.com')) {
+      const targetUrl = new URL(location.href);
+      targetUrl.hostname = 'www.youtube.com';
+      targetUrl.searchParams.set('app', 'desktop');
+      targetUrl.searchParams.set('persist_app', '1');
+      location.replace(targetUrl.toString());
+      return;
+    }
 
-  try {
-    Object.defineProperty(navigator, 'platform', { get: () => "MacIntel" });
-  } catch (e) {}
+    try {
+      Object.defineProperty(navigator, 'platform', { get: () => "MacIntel" });
+    } catch (e) {}
 
-  if (document.documentElement) {
-    document.documentElement.classList.add("kiki-lock-chrome");
-  } else {
-    document.addEventListener("DOMContentLoaded", () => {
+    if (document.documentElement) {
       document.documentElement.classList.add("kiki-lock-chrome");
-    }, { once: true });
+    } else {
+      document.addEventListener("DOMContentLoaded", () => {
+        document.documentElement.classList.add("kiki-lock-chrome");
+      }, { once: true });
+    }
   }
 
 
@@ -51,13 +56,13 @@
 
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.2.9
+// Version: 1.3.0
 // =============================================================
 
-  window.__kiki_engine_version = "1.2.9";
+  window.__kiki_engine_version = "1.3.0";
   try {
-    localStorage.setItem("kiki_engine_version", "1.2.9");
-    localStorage.setItem("kiki_cache_version", "1.2.9");
+    localStorage.setItem("kiki_engine_version", "1.3.0");
+    localStorage.setItem("kiki_cache_version", "1.3.0");
   } catch (e) {}
 
   let savedPot = "";
@@ -68,6 +73,7 @@
   const STATE = window.STATE = {
     enabled: true,
     subsVisible: localStorage.getItem("kiki_subs_visible") !== "0",
+    webLookupKey: localStorage.getItem("kiki_web_lookup_key") || "ctrl",
     cues: [],
     liveCues: [],
     tracks: [],
@@ -76,6 +82,7 @@
     pausedForLookup: false,
     lookupEl: null,
     lookupWord: "",
+    sentenceContext: "",
     lastLookupDismissTime: 0,
     fs: false,
     videoId: null,
@@ -88,7 +95,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.2.9"
+    engineVersion: "1.3.0"
   };
 
   // -------------------------------------------------------------
@@ -144,123 +151,124 @@
     }
   }
 
-  // Hook fetch early (strictly preserving window context to prevent Illegal invocation)
-  const origFetch = (window.fetch ? window.fetch.bind(window) : null);
-  window.origFetch = origFetch || window.fetch;
-  if (origFetch) {
-    window.fetch = function (...args) {
-      let reqUrl = "";
-      try {
-        const req = args[0];
-        reqUrl = typeof req === "string" ? req : (req?.url || req?.href || (req && typeof req.toString === "function" ? req.toString() : ""));
-        noteTimedtextUrl(reqUrl);
-      } catch {}
+  // Hook fetch & XMLHttpRequest early for YouTube timedtext capture (only on YouTube domains)
+  const isYouTubeDomain = /(?:^|\.)youtube\.com$/.test(location.hostname);
+  if (isYouTubeDomain) {
+    const origFetch = (window.fetch ? window.fetch.bind(window) : null);
+    window.origFetch = origFetch || window.fetch;
+    if (origFetch) {
+      window.fetch = function (...args) {
+        let reqUrl = "";
+        try {
+          const req = args[0];
+          reqUrl = typeof req === "string" ? req : (req?.url || req?.href || (req && typeof req.toString === "function" ? req.toString() : ""));
+          noteTimedtextUrl(reqUrl);
+        } catch {}
 
-      const promise = origFetch.apply(window, args);
-      try {
-        if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
-          promise.then((res) => {
-            try {
-              res.clone().text().then((text) => {
-                if (text && text.trim().length > 20) {
-                  handleCapturedWire(text, reqUrl);
-                }
-              }).catch(() => {
-                try {
-                  res.clone().arrayBuffer().then((buf) => {
-                    if (buf && buf.byteLength > 20) {
-                      const text = new TextDecoder("utf-8").decode(buf);
-                      if (text && text.trim().length > 20) handleCapturedWire(text, reqUrl);
-                    }
-                  }).catch(() => {});
-                } catch {}
-              });
-            } catch {}
-          }).catch(() => {});
-        }
-      } catch {}
-      return promise;
-    };
-  }
-
-  // Hook XMLHttpRequest early (strictly for timedtext capture, zero overhead on media buffers)
-  const origOpen = XMLHttpRequest.prototype.open;
-  const origSend = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.open = function (...args) {
-    try {
-      const url = args[1];
-      this.__kiki_url = typeof url === "string" ? url : (url?.href || String(url || ""));
-      noteTimedtextUrl(this.__kiki_url);
-    } catch {}
-    return origOpen.apply(this, args);
-  };
-  XMLHttpRequest.prototype.send = function (...args) {
-    try {
-      const reqUrl = this.__kiki_url;
-      if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
-        let captured = false;
-        const processResponse = () => {
-          if (captured) return;
-          try {
-            if (this.status && (this.status < 200 || this.status >= 400)) return;
-            let body = "";
-            try {
-              if (this.responseType === "" || this.responseType === "text") {
-                body = this.responseText || "";
-              } else if (this.responseType === "arraybuffer" && this.response) {
-                try {
-                  body = new TextDecoder("utf-8").decode(this.response);
-                } catch (e1) {
+        const promise = origFetch.apply(window, args);
+        try {
+          if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
+            promise.then((res) => {
+              try {
+                res.clone().text().then((text) => {
+                  if (text && text.trim().length > 20) {
+                    handleCapturedWire(text, reqUrl);
+                  }
+                }).catch(() => {
                   try {
-                    const bytes = new Uint8Array(this.response);
-                    let s = "";
-                    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-                    body = decodeURIComponent(escape(s));
-                  } catch (e2) {}
+                    res.clone().arrayBuffer().then((buf) => {
+                      if (buf && buf.byteLength > 20) {
+                        const text = new TextDecoder("utf-8").decode(buf);
+                        if (text && text.trim().length > 20) handleCapturedWire(text, reqUrl);
+                      }
+                    }).catch(() => {});
+                  } catch {}
+                });
+              } catch {}
+            }).catch(() => {});
+          }
+        } catch {}
+        return promise;
+      };
+    }
+
+    const origOpen = XMLHttpRequest.prototype.open;
+    const origSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function (...args) {
+      try {
+        const url = args[1];
+        this.__kiki_url = typeof url === "string" ? url : (url?.href || String(url || ""));
+        noteTimedtextUrl(this.__kiki_url);
+      } catch {}
+      return origOpen.apply(this, args);
+    };
+    XMLHttpRequest.prototype.send = function (...args) {
+      try {
+        const reqUrl = this.__kiki_url;
+        if (typeof reqUrl === "string" && reqUrl.includes(TIMEDTEXT_MARK)) {
+          let captured = false;
+          const processResponse = () => {
+            if (captured) return;
+            try {
+              if (this.status && (this.status < 200 || this.status >= 400)) return;
+              let body = "";
+              try {
+                if (this.responseType === "" || this.responseType === "text") {
+                  body = this.responseText || "";
+                } else if (this.responseType === "arraybuffer" && this.response) {
+                  try {
+                    body = new TextDecoder("utf-8").decode(this.response);
+                  } catch (e1) {
+                    try {
+                      const bytes = new Uint8Array(this.response);
+                      let s = "";
+                      for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+                      body = decodeURIComponent(escape(s));
+                    } catch (e2) {}
+                  }
+                } else if (this.responseType === "blob" && this.response instanceof Blob) {
+                  try {
+                    this.response.text().then(t => {
+                      if (t && t.trim().length > 20) {
+                        captured = true;
+                        handleCapturedWire(t, reqUrl);
+                      }
+                    }).catch(() => {});
+                  } catch {}
+                  return;
+                } else if (this.responseType === "json") {
+                  body = typeof this.response === "string" ? this.response : JSON.stringify(this.response || "");
+                } else if (this.responseType === "document" && this.responseXML) {
+                  body = new XMLSerializer().serializeToString(this.responseXML);
                 }
-              } else if (this.responseType === "blob" && this.response instanceof Blob) {
-                try {
-                  this.response.text().then(t => {
-                    if (t && t.trim().length > 20) {
-                      captured = true;
-                      handleCapturedWire(t, reqUrl);
-                    }
-                  }).catch(() => {});
-                } catch {}
-                return;
-              } else if (this.responseType === "json") {
-                body = typeof this.response === "string" ? this.response : JSON.stringify(this.response || "");
-              } else if (this.responseType === "document" && this.responseXML) {
-                body = new XMLSerializer().serializeToString(this.responseXML);
+              } catch {}
+              if (body && body.trim().length > 20) {
+                captured = true;
+                handleCapturedWire(body, reqUrl);
               }
             } catch {}
-            if (body && body.trim().length > 20) {
-              captured = true;
-              handleCapturedWire(body, reqUrl);
-            }
-          } catch {}
-        };
+          };
 
-        this.addEventListener("load", processResponse, { once: true });
-        this.addEventListener("readystatechange", () => {
-          if (this.readyState === 4) processResponse();
-        });
-      }
-    } catch {}
-    return origSend.apply(this, args);
-  };
-
-  // Early PerformanceObserver
-  try {
-    const obs = new PerformanceObserver((list) => {
-      for (const e of list.getEntries()) {
-        if (typeof e.name === "string" && e.name.includes(TIMEDTEXT_MARK)) {
-          noteTimedtextUrl(e.name);
+          this.addEventListener("load", processResponse, { once: true });
+          this.addEventListener("readystatechange", () => {
+            if (this.readyState === 4) processResponse();
+          });
         }
-      }
-    });
-    obs.observe({ type: "resource", buffered: true });
-  } catch {}
+      } catch {}
+      return origSend.apply(this, args);
+    };
+
+    try {
+      const obs = new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) {
+          if (typeof e.name === "string" && e.name.includes(TIMEDTEXT_MARK)) {
+            noteTimedtextUrl(e.name);
+          }
+        }
+      });
+      obs.observe({ type: "resource", buffered: true });
+    } catch {}
+  }
 
   // -------------------------------------------------------------
   // Trusted Types Policy & Safe HTML Setter
@@ -3503,7 +3511,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.2.9
+// Version: 1.3.0
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -4134,7 +4142,48 @@ window.KikiAudioEngine = KikiAudioEngine;
     card.style.maxHeight = `${Math.min(620, Math.max(380, availHeight))}px`;
   }
 
+  window.positionFloatingCard = positionFloatingCard;
+  function positionFloatingCard(card, x, y) {
+    const pad = 14;
+    const cardWidth = Math.min(540, window.innerWidth - pad * 2);
+
+    let left = x - 40;
+    if (left + cardWidth > window.innerWidth - pad) {
+      left = window.innerWidth - cardWidth - pad;
+    }
+    if (left < pad) {
+      left = pad;
+    }
+
+    const spaceBelow = window.innerHeight - (y + 18) - pad;
+    const spaceAbove = y - 18 - pad;
+
+    let top = "auto";
+    let bottom = "auto";
+    let maxHeight = 420;
+
+    if (spaceBelow >= 240 || spaceBelow >= spaceAbove) {
+      top = `${Math.round(y + 18)}px`;
+      bottom = "auto";
+      maxHeight = Math.min(520, Math.max(220, spaceBelow));
+    } else {
+      bottom = `${Math.round(window.innerHeight - y + 14)}px`;
+      top = "auto";
+      maxHeight = Math.min(520, Math.max(220, spaceAbove));
+    }
+
+    card.style.setProperty("position", "fixed", "important");
+    card.style.setProperty("left", `${Math.round(left)}px`, "important");
+    card.style.setProperty("transform", "none", "important");
+    card.style.setProperty("top", top, "important");
+    card.style.setProperty("bottom", bottom, "important");
+    card.style.setProperty("width", `${Math.round(cardWidth)}px`, "important");
+    card.style.setProperty("max-width", `calc(100vw - 28px)`, "important");
+    card.style.setProperty("max-height", `${Math.round(maxHeight)}px`, "important");
+  }
+
   function getSentenceContext() {
+    if (STATE.sentenceContext) return STATE.sentenceContext;
     if (STATE.idx >= 0 && STATE.idx < STATE.cues.length) {
       return (STATE.cues[STATE.idx].text || "").trim();
     }
@@ -4222,10 +4271,11 @@ window.KikiAudioEngine = KikiAudioEngine;
   }
 
 
-  async function showYomitanCard(wordEl, term) {
+  async function showYomitanCard(wordEl, term, coords = null, sentenceOverride = "") {
     window.showYomitanCard = showYomitanCard;
     STATE.lookupWord = term;
     STATE.lookupEl = wordEl;
+    STATE.sentenceContext = sentenceOverride || "";
     const card = ensureYomitanCard();
     setHtml(card, `
       <div class="kiki-card-header">
@@ -4237,7 +4287,11 @@ window.KikiAudioEngine = KikiAudioEngine;
     `);
     card.classList.add("show");
 
-    positionCardAboveSubtitles(card);
+    if (coords && typeof coords.x === "number") {
+      positionFloatingCard(card, coords.x, coords.y);
+    } else {
+      positionCardAboveSubtitles(card);
+    }
 
     const results = await lookupWord(term, wordEl);
     if (!card.classList.contains("show") || (STATE.lookupWord !== term && !results.some((r) => r.term.toLowerCase() === STATE.lookupWord.toLowerCase()))) return;
@@ -4411,6 +4465,12 @@ window.KikiAudioEngine = KikiAudioEngine;
     abortActiveAi();
     STATE.lookupEl = null;
     STATE.lookupWord = "";
+    STATE.sentenceContext = "";
+    try {
+      if (window.getSelection) {
+        window.getSelection().removeAllRanges();
+      }
+    } catch {}
     document.querySelectorAll(".kiki-word.kiki-active").forEach((n) => n.classList.remove("kiki-active"));
 
     const card = $("#kiki-yomitan-card");
@@ -4567,6 +4627,19 @@ window.KikiAudioEngine = KikiAudioEngine;
                 <div class="kiki-modal-prog-fill" style="background: #10B981; height: 100%; width: 0%; transition: width 0.2s;"></div>
               </div>
               <span class="kiki-modal-prog-text" style="font-size: 11px; opacity: 0.9; color: #EEE;">Preparing...</span>
+            </div>
+
+            <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 10px 12px; margin-top: 4px;">
+              <div style="font-size: 12px; font-weight: 700; color: #E2E8F0; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+                <span>🌐 全局网页查词修饰键 (Web Lookup)</span>
+                <span style="font-size: 11px; color: #94A3B8;">按住修饰键点击即查</span>
+              </div>
+              <select id="kiki-web-lookup-key-select" style="width: 100%; background: rgba(0, 0, 0, 0.4); color: #FFF; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none;">
+                <option value="ctrl" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key") || "ctrl") === "ctrl" ? "selected" : ""}>Ctrl 键 (默认)</option>
+                <option value="alt" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "alt" ? "selected" : ""}>Option / Alt 键</option>
+                <option value="meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "meta" ? "selected" : ""}>Command / Meta 键</option>
+                <option value="ctrl_or_meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "ctrl_or_meta" ? "selected" : ""}>Ctrl 或 Command 键</option>
+              </select>
             </div>
           </div>
         `;
@@ -4838,6 +4911,16 @@ window.KikiAudioEngine = KikiAudioEngine;
               toast("Import error: " + err.message);
               if (progText) progText.textContent = "Error: " + err.message;
             }
+          });
+        }
+
+        const keySelect = modal.querySelector("#kiki-web-lookup-key-select");
+        if (keySelect) {
+          keySelect.addEventListener("change", (e) => {
+            const val = e.target.value;
+            STATE.webLookupKey = val;
+            try { localStorage.setItem("kiki_web_lookup_key", val); } catch {}
+            toast(`✦ 全局查词修饰键: ${val}`);
           });
         }
       } else {
@@ -5159,8 +5242,12 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - YouTube Adapter & Subtitle Pipeline
-// Version: 1.2.9
+// Version: 1.3.0
 // =============================================================
+
+  if (!/(?:^|\.)youtube\.com$/.test(location.hostname)) {
+    return;
+  }
 
   // -------------------------------------------------------------
   // 2. High-Fidelity TimedText Wire Sniffer
@@ -7138,6 +7225,252 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 
 // >>> END MODULE: youtube <<<
+
+
+// >>> BEGIN MODULE: web <<<
+
+// =============================================================
+// Kiki Immersion - Web Universal Lookup Module
+// Version: 1.3.0
+// Description: Global modifier-key word lookup for arbitrary web pages
+// =============================================================
+
+(() => {
+  "use strict";
+
+  // -------------------------------------------------------------
+  // 1. Modifier Key Settings
+  // -------------------------------------------------------------
+  // Supported modes: 'ctrl' (default), 'alt', 'meta', 'ctrl_or_meta'
+  function getTriggerKey() {
+    return (typeof STATE !== "undefined" && STATE.webLookupKey) ||
+           localStorage.getItem("kiki_web_lookup_key") || "ctrl";
+  }
+
+  function isTriggerKeyPressed(e) {
+    const mode = getTriggerKey();
+    if (mode === "ctrl") return e.ctrlKey;
+    if (mode === "alt") return e.altKey;
+    if (mode === "meta") return e.metaKey;
+    return e.ctrlKey || e.metaKey;
+  }
+
+  // -------------------------------------------------------------
+  // 2. High-Performance Zero-DOM-Mutation Caret Resolution
+  // -------------------------------------------------------------
+  function getCaretPoint(x, y) {
+    try {
+      if (document.caretRangeFromPoint) {
+        const range = document.caretRangeFromPoint(x, y);
+        if (range && range.startContainer) {
+          return { node: range.startContainer, offset: range.startOffset, range };
+        }
+      }
+      if (document.caretPositionFromPoint) {
+        const pos = document.caretPositionFromPoint(x, y);
+        if (pos && pos.offsetNode) {
+          const r = document.createRange();
+          r.setStart(pos.offsetNode, pos.offset);
+          r.setEnd(pos.offsetNode, pos.offset);
+          return { node: pos.offsetNode, offset: pos.offset, range: r };
+        }
+      }
+    } catch {}
+    return null;
+  }
+
+  // -------------------------------------------------------------
+  // 3. Multilingual Word & Sentence Context Extraction
+  // -------------------------------------------------------------
+  async function resolveTargetWordAndContext(node, offset) {
+    if (!node || node.nodeType !== Node.TEXT_NODE) return null;
+    const text = node.textContent || "";
+    if (!text.trim()) return null;
+
+    let idx = Math.max(0, Math.min(offset, text.length - 1));
+    let ch = text[idx];
+
+    // If clicked on whitespace or boundary, adjust to neighboring non-space character
+    if (!ch || /\s/.test(ch)) {
+      if (idx > 0 && !/\s/.test(text[idx - 1])) {
+        idx--;
+        ch = text[idx];
+      } else if (idx < text.length - 1 && !/\s/.test(text[idx + 1])) {
+        idx++;
+        ch = text[idx];
+      } else {
+        return null;
+      }
+    }
+
+    // Sentence context extraction (bounded by sentence punctuation or line breaks)
+    let sentStart = idx;
+    while (sentStart > 0 && !/[.!?。\n\r！？]/.test(text[sentStart - 1])) {
+      sentStart--;
+    }
+    let sentEnd = idx;
+    while (sentEnd < text.length && !/[.!?。\n\r！？]/.test(text[sentEnd])) {
+      sentEnd++;
+    }
+    if (sentEnd < text.length && /[.!?。\n\r！？]/.test(text[sentEnd])) {
+      sentEnd++;
+    }
+    let sentence = text.slice(sentStart, sentEnd).trim();
+
+    if (sentence.length < 15 && node.parentElement) {
+      const pText = (node.parentElement.innerText || node.parentElement.textContent || "").trim();
+      if (pText.length >= sentence.length && pText.length < 400) {
+        sentence = pText;
+      }
+    }
+
+    const isJpOrCjk = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/.test(ch);
+
+    if (isJpOrCjk) {
+      // For Japanese/CJK, scan forward up to 16 characters and query candidate prefixes
+      const forwardSlice = text.slice(idx, idx + 16);
+      if (window.localSearch && typeof window.localSearch.search === "function") {
+        const maxLen = Math.min(12, forwardSlice.length);
+        const prefixSearches = [];
+        for (let l = maxLen; l >= 1; l--) {
+          prefixSearches.push(
+            window.localSearch.search(forwardSlice.slice(0, l)).then(res => ({ len: l, res }))
+          );
+        }
+        const searchResults = await Promise.all(prefixSearches);
+        const best = searchResults.find(item => item.res && item.res.length > 0);
+        if (best) {
+          const matchedTerm = forwardSlice.slice(0, best.len);
+          // Highlight matched range
+          const hlRange = document.createRange();
+          try {
+            hlRange.setStart(node, idx);
+            hlRange.setEnd(node, idx + best.len);
+          } catch {}
+          return {
+            term: matchedTerm,
+            sentence,
+            isJp: true,
+            range: hlRange
+          };
+        }
+      }
+      // Fallback if not matched in dictionary: intelligently extract script block (Kanji / Katakana / Hiragana)
+      let regex = /[\u4e00-\u9fff]/; // Kanji default
+      if (/[\u30a0-\u30ff\u31f0-\u31ff\u30fc]/.test(ch)) {
+        regex = /[\u30a0-\u30ff\u31f0-\u31ff\u30fc]/; // Katakana
+      } else if (/[\u3040-\u309f]/.test(ch)) {
+        regex = /[\u3040-\u309f]/; // Hiragana
+      }
+      let start = idx;
+      while (start > 0 && regex.test(text[start - 1])) start--;
+      let end = idx;
+      while (end < text.length && regex.test(text[end])) end++;
+      // If Kanji followed by Hiragana (okurigana like 食べる, 美味しい), include trailing Hiragana (unless it's a particle)
+      if (regex.source.includes('4e00') && end < text.length && /[\u3040-\u309f]/.test(text[end])) {
+        const nextChar = text[end];
+        if (!/^[をにがのはでともへや]/.test(nextChar)) {
+          let okuriEnd = end;
+          while (okuriEnd < text.length && /[\u3040-\u309f]/.test(text[okuriEnd]) && !/^[をにがのはでともへや]/.test(text[okuriEnd]) && okuriEnd - end < 3) {
+            okuriEnd++;
+          }
+          end = okuriEnd;
+        }
+      }
+      const term = text.slice(start, end);
+      const hlRange = document.createRange();
+      try {
+        hlRange.setStart(node, start);
+        hlRange.setEnd(node, end);
+      } catch {}
+      return { term, sentence, isJp: true, range: hlRange };
+    } else {
+      // Latin / English word extraction
+      let start = idx;
+      while (start > 0 && /[\w'-]/.test(text[start - 1])) start--;
+      let end = idx;
+      while (end < text.length && /[\w'-]/.test(text[end])) end++;
+      const term = text.slice(start, end).replace(/^['-]+|['-]+$/g, "");
+      if (!term || term.length < 1) return null;
+
+      const hlRange = document.createRange();
+      try {
+        hlRange.setStart(node, start);
+        hlRange.setEnd(node, end);
+      } catch {}
+      return { term, sentence, isJp: false, range: hlRange };
+    }
+  }
+
+  // -------------------------------------------------------------
+  // 4. Modifier + Click Event Interceptor
+  // -------------------------------------------------------------
+  let lastTriggerTime = 0;
+
+  async function onGlobalPointerDown(e) {
+    // 0. Performance: early bailout if modifier key is not held (zero overhead)
+    if (!isTriggerKeyPressed(e)) return;
+
+    // Do not trigger on Kiki's own UI elements
+    if (e.target && typeof e.target.closest === "function" &&
+        e.target.closest("#kiki-yomitan-card, #kiki-settings-modal, #kiki-hud, .kiki-toast")) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastTriggerTime < 350) return;
+
+    const caret = getCaretPoint(e.clientX, e.clientY);
+    if (!caret || !caret.node) return;
+
+    const resolved = await resolveTargetWordAndContext(caret.node, caret.offset);
+    if (!resolved || !resolved.term) return;
+
+    lastTriggerTime = now;
+
+    // Prevent default browser behavior (e.g. following link, double click selection)
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    // Visual selection feedback
+    try {
+      const sel = window.getSelection();
+      if (sel && resolved.range) {
+        sel.removeAllRanges();
+        sel.addRange(resolved.range);
+      }
+    } catch {}
+
+    // Ensure styles are injected
+    if (typeof injectStyles === "function") {
+      try { injectStyles(); } catch {}
+    }
+
+    // Show floating Yomitan card with sentence context
+    if (typeof showYomitanCard === "function") {
+      showYomitanCard(null, resolved.term, { x: e.clientX, y: e.clientY }, resolved.sentence);
+    }
+  }
+
+  function onGlobalClick(e) {
+    if (isTriggerKeyPressed(e)) {
+      if (Date.now() - lastTriggerTime < 600) {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    }
+  }
+
+  window.addEventListener("pointerdown", onGlobalPointerDown, { capture: true, passive: false });
+  window.addEventListener("click", onGlobalClick, { capture: true, passive: false });
+
+  console.log('[Kiki Immersion] Web Universal Lookup Module Loaded (Trigger: ' + getTriggerKey() + '+Click)');
+})();
+
+
+// >>> END MODULE: web <<<
 
 
 })();

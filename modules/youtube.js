@@ -1,7 +1,11 @@
 // =============================================================
 // Kiki Immersion - YouTube Adapter & Subtitle Pipeline
-// Version: 1.2.9
+// Version: 1.3.0
 // =============================================================
+
+  if (!/(?:^|\.)youtube\.com$/.test(location.hostname)) {
+    return;
+  }
 
   // -------------------------------------------------------------
   // 2. High-Fidelity TimedText Wire Sniffer
