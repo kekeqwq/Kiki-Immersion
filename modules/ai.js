@@ -243,7 +243,10 @@
             </select>
             <span style="background: rgba(255,255,255,0.08); color: #94A3B8; font-size: 11px; padding: 2px 6px; border-radius: 4px;">${escapeHtml(cfg.apiModel || 'gpt-4o-mini')}</span>
           </div>
-          <button type="button" class="kiki-card-close-btn" style="background: transparent; border: none; color: #BBB; font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <button type="button" class="kiki-card-settings-btn" title="Settings (Dictionaries, AI, Modifiers)" style="background: transparent; border: none; color: #BBB; font-size: 16px; cursor: pointer; line-height: 1; padding: 0 4px;">⚙</button>
+            <button type="button" class="kiki-card-close-btn" style="background: transparent; border: none; color: #BBB; font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+          </div>
         </div>
       </div>
 
@@ -268,6 +271,11 @@
         </div>
       </div>
     `);
+
+    card.querySelector(".kiki-card-settings-btn")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showSettingsModal("ai");
+    });
 
     card.querySelector(".kiki-card-close-btn")?.addEventListener("click", (e) => {
       e.stopPropagation();

@@ -241,6 +241,19 @@
   window.addEventListener("click", suppressIfModifier, { capture: true, passive: false });
   window.addEventListener("contextmenu", suppressIfModifier, { capture: true, passive: false });
 
+  // -------------------------------------------------------------
+  // 5. Global Keyboard Shortcut for Settings Modal (Option+K / Alt+K)
+  // -------------------------------------------------------------
+  window.addEventListener("keydown", (e) => {
+    if (e.altKey && (e.key === "k" || e.key === "K" || e.code === "KeyK")) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof showSettingsModal === "function") {
+        showSettingsModal("dict");
+      }
+    }
+  }, { capture: true });
+
   // Ensure styles are injected on any webpage
   if (document.head || document.documentElement) {
     try { if (typeof injectStyles === "function") injectStyles(); } catch {}
