@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.3.2
+// Version: 1.3.3
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -1203,6 +1203,21 @@
 } else if (activeTab === "ai") {
         contentHtml = `
           <div style="display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow-y: auto; padding-right: 4px;">
+            <div style="background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(165, 180, 252, 0.25); border-radius: 10px; padding: 10px 12px;">
+              <div style="font-size: 12px; font-weight: 700; color: #E2E8F0; margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between;">
+                <span>🌐 全局一键同步 (Cross-Domain Sync)</span>
+                <span style="font-size: 11px; color: #94A3B8;">跨网站无需重复输入</span>
+              </div>
+              <div style="font-size: 11px; color: #CBD5E1; margin-bottom: 8px; line-height: 1.4;">
+                在任意网站打开一键同步链接或导入同步码，即可共享当前 AI 配置及查词偏好。
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <button type="button" id="kiki-ai-copy-sync-link-btn" style="flex: 1; background: rgba(99, 102, 241, 0.25); color: #C7D2FE; border: 1px solid rgba(165, 180, 252, 0.4); border-radius: 6px; padding: 6px 8px; font-size: 11px; font-weight: 600; cursor: pointer;">📋 复制同步链接</button>
+                <button type="button" id="kiki-ai-copy-code-btn" style="background: rgba(255, 255, 255, 0.08); color: #CBD5E1; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; padding: 6px 8px; font-size: 11px; font-weight: 600; cursor: pointer;">📋 复制码</button>
+                <button type="button" id="kiki-ai-import-code-btn" style="background: rgba(16, 185, 129, 0.2); color: #A7F3D0; border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 6px; padding: 6px 8px; font-size: 11px; font-weight: 600; cursor: pointer;">📥 导入码</button>
+              </div>
+            </div>
+
             <div>
               <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">API BASE URL</label>
               <input type="text" id="kiki-ai-base-input" value="${escapeHtml(aiCfg.apiBase)}" placeholder="https://api.openai.com/v1" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 12px; color: #FFF; font-size: 13px;">
@@ -1434,6 +1449,59 @@
           });
         }
       } else {
+        const copyLinkBtn = modal.querySelector("#kiki-ai-copy-sync-link-btn");
+        if (copyLinkBtn) {
+          copyLinkBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const code = typeof generateSyncCode === "function" ? generateSyncCode() : window.generateSyncCode?.();
+            if (!code) {
+              toast("Please enter and save your AI API Key first.");
+              return;
+            }
+            const syncUrl = location.href.replace(/#.*$/, "") + "#kiki_sync=" + code;
+            try {
+              await navigator.clipboard.writeText(syncUrl);
+              toast("✦ Sync link copied! Open on any site to sync.");
+            } catch {
+              prompt("Copy this sync link:", syncUrl);
+            }
+          });
+        }
+
+        const copyCodeBtn = modal.querySelector("#kiki-ai-copy-code-btn");
+        if (copyCodeBtn) {
+          copyCodeBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const code = typeof generateSyncCode === "function" ? generateSyncCode() : window.generateSyncCode?.();
+            if (!code) {
+              toast("Please enter and save your AI API Key first.");
+              return;
+            }
+            try {
+              await navigator.clipboard.writeText(code);
+              toast("✦ AI Sync code copied to clipboard!");
+            } catch {
+              prompt("Copy this sync code:", code);
+            }
+          });
+        }
+
+        const importCodeBtn = modal.querySelector("#kiki-ai-import-code-btn");
+        if (importCodeBtn) {
+          importCodeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const input = prompt("Paste your Kiki AI Sync Code or Sync URL:");
+            if (!input) return;
+            const fn = typeof importSyncCode === "function" ? importSyncCode : window.importSyncCode;
+            if (fn && fn(input.trim())) {
+              toast("✦ AI configuration synchronized!");
+              renderModal();
+            } else {
+              toast("❌ Invalid sync code or link.");
+            }
+          });
+        }
+
         const keyInput = modal.querySelector("#kiki-ai-key-input");
         const toggleBtn = modal.querySelector("#kiki-ai-key-toggle");
         if (toggleBtn && keyInput) {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.3.2
+// @version      1.3.3
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine, and global web lookup.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -24,7 +24,8 @@
   // 1. Force Desktop YouTube & Early Native Lockout (YouTube Only)
   // -------------------------------------------------------------
   const isYouTubeSite = /(?:^|\.)youtube\.com$/.test(location.hostname);
-  if (isYouTubeSite) {
+  const isIframe = window.self !== window.top;
+  if (isYouTubeSite && !isIframe) {
     try {
       document.cookie = "PREF=f6=40000000&f5=30000&app=desktop; domain=.youtube.com; path=/; max-age=31536000; SameSite=Lax";
     } catch (e) {}
@@ -56,13 +57,13 @@
 
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.3.2
+// Version: 1.3.3
 // =============================================================
 
-  window.__kiki_engine_version = "1.3.2";
+  window.__kiki_engine_version = "1.3.3";
   try {
-    localStorage.setItem("kiki_engine_version", "1.3.2");
-    localStorage.setItem("kiki_cache_version", "1.3.2");
+    localStorage.setItem("kiki_engine_version", "1.3.3");
+    localStorage.setItem("kiki_cache_version", "1.3.3");
   } catch (e) {}
 
   let savedPot = "";
@@ -95,7 +96,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.3.2"
+    engineVersion: "1.3.3"
   };
 
   function currentVideoId() {
@@ -110,6 +111,84 @@
     }
   }
   window.currentVideoId = currentVideoId;
+
+  // -------------------------------------------------------------
+  // Cross-Domain AI Configuration Sync Engine
+  // -------------------------------------------------------------
+  function generateSyncCode() {
+    try {
+      const cfg = {
+        base: localStorage.getItem("kiki_ai_base") || "",
+        key: localStorage.getItem("kiki_ai_key") || "",
+        model: localStorage.getItem("kiki_ai_model") || "",
+        lang: localStorage.getItem("kiki_ai_lang") || "zh",
+        mode: localStorage.getItem("kiki_ai_mode") || "quick",
+        maxTokens: localStorage.getItem("kiki_ai_max_tokens") || "4096",
+        promptZh: localStorage.getItem("kiki_ai_prompt_zh") || "",
+        promptEn: localStorage.getItem("kiki_ai_prompt_en") || "",
+        webLookupKey: localStorage.getItem("kiki_web_lookup_key") || "ctrl"
+      };
+      return btoa(unescape(encodeURIComponent(JSON.stringify(cfg))))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+    } catch {
+      return "";
+    }
+  }
+  window.generateSyncCode = generateSyncCode;
+
+  function importSyncCode(code) {
+    try {
+      if (!code) return false;
+      const clean = String(code).trim().replace(/^.*kiki_sync=/, "");
+      const raw = clean.replace(/-/g, "+").replace(/_/g, "/");
+      const jsonStr = decodeURIComponent(escape(atob(raw)));
+      const decoded = JSON.parse(jsonStr);
+      if (decoded && typeof decoded === "object") {
+        if (decoded.base !== undefined) localStorage.setItem("kiki_ai_base", decoded.base);
+        if (decoded.key !== undefined) localStorage.setItem("kiki_ai_key", decoded.key);
+        if (decoded.model !== undefined) localStorage.setItem("kiki_ai_model", decoded.model);
+        if (decoded.lang !== undefined) localStorage.setItem("kiki_ai_lang", decoded.lang);
+        if (decoded.mode !== undefined) localStorage.setItem("kiki_ai_mode", decoded.mode);
+        if (decoded.maxTokens !== undefined) localStorage.setItem("kiki_ai_max_tokens", String(decoded.maxTokens));
+        if (decoded.promptZh !== undefined) localStorage.setItem("kiki_ai_prompt_zh", decoded.promptZh);
+        if (decoded.promptEn !== undefined) localStorage.setItem("kiki_ai_prompt_en", decoded.promptEn);
+        if (decoded.webLookupKey !== undefined) {
+          localStorage.setItem("kiki_web_lookup_key", decoded.webLookupKey);
+          if (window.STATE) window.STATE.webLookupKey = decoded.webLookupKey;
+        }
+        return true;
+      }
+    } catch (e) {
+      console.warn("[Kiki importSyncCode error]", e);
+    }
+    return false;
+  }
+  window.importSyncCode = importSyncCode;
+
+  function checkUrlSyncParams() {
+    try {
+      const hash = location.hash || "";
+      if (hash.includes("kiki_sync=")) {
+        const m = hash.match(/kiki_sync=([A-Za-z0-9+/=_-]+)/);
+        if (m && m[1]) {
+          const success = importSyncCode(m[1]);
+          if (success) {
+            history.replaceState(null, "", location.href.replace(/#.*$/, ""));
+            setTimeout(() => {
+              if (typeof updateHud === "function") updateHud();
+              if (typeof toast === "function") toast("✦ AI configuration synchronized!");
+            }, 300);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[Kiki URL Sync Error]", e);
+    }
+  }
+  checkUrlSyncParams();
+  window.addEventListener("hashchange", checkUrlSyncParams);
 
   // -------------------------------------------------------------
   // Early TimedText Wire Sniffer & Dynamic URL Capture
@@ -2926,9 +3005,20 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
       }
 
+      async function execSearch(queryText) {
+        if (!queryText) return [];
+        if (localSearch && typeof localSearch.search === "function") {
+          try {
+            const res = await localSearch.search(queryText);
+            if (res && res.length > 0) return res;
+          } catch {}
+        }
+        return [];
+      }
+
       // Query candidate phrases and single word in parallel
-      const phrasePromises = candidatePhrases.map((cp) => localSearch.search(cp.phrase));
-      const singleWordPromise = localSearch.search(cleanTerm);
+      const phrasePromises = candidatePhrases.map((cp) => execSearch(cp.phrase));
+      const singleWordPromise = execSearch(cleanTerm);
 
       const [phraseResultsArr, singleWordResults] = await Promise.all([
         Promise.all(phrasePromises),
@@ -3525,7 +3615,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.3.2
+// Version: 1.3.3
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -4728,6 +4818,21 @@ window.KikiAudioEngine = KikiAudioEngine;
 } else if (activeTab === "ai") {
         contentHtml = `
           <div style="display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow-y: auto; padding-right: 4px;">
+            <div style="background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(165, 180, 252, 0.25); border-radius: 10px; padding: 10px 12px;">
+              <div style="font-size: 12px; font-weight: 700; color: #E2E8F0; margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between;">
+                <span>🌐 全局一键同步 (Cross-Domain Sync)</span>
+                <span style="font-size: 11px; color: #94A3B8;">跨网站无需重复输入</span>
+              </div>
+              <div style="font-size: 11px; color: #CBD5E1; margin-bottom: 8px; line-height: 1.4;">
+                在任意网站打开一键同步链接或导入同步码，即可共享当前 AI 配置及查词偏好。
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <button type="button" id="kiki-ai-copy-sync-link-btn" style="flex: 1; background: rgba(99, 102, 241, 0.25); color: #C7D2FE; border: 1px solid rgba(165, 180, 252, 0.4); border-radius: 6px; padding: 6px 8px; font-size: 11px; font-weight: 600; cursor: pointer;">📋 复制同步链接</button>
+                <button type="button" id="kiki-ai-copy-code-btn" style="background: rgba(255, 255, 255, 0.08); color: #CBD5E1; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; padding: 6px 8px; font-size: 11px; font-weight: 600; cursor: pointer;">📋 复制码</button>
+                <button type="button" id="kiki-ai-import-code-btn" style="background: rgba(16, 185, 129, 0.2); color: #A7F3D0; border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 6px; padding: 6px 8px; font-size: 11px; font-weight: 600; cursor: pointer;">📥 导入码</button>
+              </div>
+            </div>
+
             <div>
               <label style="display: block; font-size: 11.5px; font-weight: 600; color: #94A3B8; margin-bottom: 4px;">API BASE URL</label>
               <input type="text" id="kiki-ai-base-input" value="${escapeHtml(aiCfg.apiBase)}" placeholder="https://api.openai.com/v1" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 12px; color: #FFF; font-size: 13px;">
@@ -4959,6 +5064,59 @@ window.KikiAudioEngine = KikiAudioEngine;
           });
         }
       } else {
+        const copyLinkBtn = modal.querySelector("#kiki-ai-copy-sync-link-btn");
+        if (copyLinkBtn) {
+          copyLinkBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const code = typeof generateSyncCode === "function" ? generateSyncCode() : window.generateSyncCode?.();
+            if (!code) {
+              toast("Please enter and save your AI API Key first.");
+              return;
+            }
+            const syncUrl = location.href.replace(/#.*$/, "") + "#kiki_sync=" + code;
+            try {
+              await navigator.clipboard.writeText(syncUrl);
+              toast("✦ Sync link copied! Open on any site to sync.");
+            } catch {
+              prompt("Copy this sync link:", syncUrl);
+            }
+          });
+        }
+
+        const copyCodeBtn = modal.querySelector("#kiki-ai-copy-code-btn");
+        if (copyCodeBtn) {
+          copyCodeBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const code = typeof generateSyncCode === "function" ? generateSyncCode() : window.generateSyncCode?.();
+            if (!code) {
+              toast("Please enter and save your AI API Key first.");
+              return;
+            }
+            try {
+              await navigator.clipboard.writeText(code);
+              toast("✦ AI Sync code copied to clipboard!");
+            } catch {
+              prompt("Copy this sync code:", code);
+            }
+          });
+        }
+
+        const importCodeBtn = modal.querySelector("#kiki-ai-import-code-btn");
+        if (importCodeBtn) {
+          importCodeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const input = prompt("Paste your Kiki AI Sync Code or Sync URL:");
+            if (!input) return;
+            const fn = typeof importSyncCode === "function" ? importSyncCode : window.importSyncCode;
+            if (fn && fn(input.trim())) {
+              toast("✦ AI configuration synchronized!");
+              renderModal();
+            } else {
+              toast("❌ Invalid sync code or link.");
+            }
+          });
+        }
+
         const keyInput = modal.querySelector("#kiki-ai-key-input");
         const toggleBtn = modal.querySelector("#kiki-ai-key-toggle");
         if (toggleBtn && keyInput) {
@@ -5277,7 +5435,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - Web Universal Lookup Module
-// Version: 1.3.2
+// Version: 1.3.3
 // Description: Global modifier-key word lookup for arbitrary web pages
 // =============================================================
 
@@ -5375,12 +5533,15 @@ window.KikiAudioEngine = KikiAudioEngine;
     if (isJpOrCjk) {
       // For Japanese/CJK, scan forward up to 16 characters and query candidate prefixes
       const forwardSlice = text.slice(idx, idx + 16);
-      if (window.localSearch && typeof window.localSearch.search === "function") {
+      const searchFn = (window.localSearch && typeof window.localSearch.search === "function")
+        ? (t) => window.localSearch.search(t)
+        : null;
+      if (searchFn) {
         const maxLen = Math.min(12, forwardSlice.length);
         const prefixSearches = [];
         for (let l = maxLen; l >= 1; l--) {
           prefixSearches.push(
-            window.localSearch.search(forwardSlice.slice(0, l)).then(res => ({ len: l, res }))
+            searchFn(forwardSlice.slice(0, l)).then(res => ({ len: l, res }))
           );
         }
         const searchResults = await Promise.all(prefixSearches);
@@ -5535,11 +5696,11 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - YouTube Adapter & Subtitle Pipeline
-// Version: 1.3.2
+// Version: 1.3.3
 // =============================================================
 
 (() => {
-  if (!/(?:^|\.)youtube\.com$/.test(location.hostname)) {
+  if (!/(?:^|\.)youtube\.com$/.test(location.hostname) || window.__kiki_is_bridge || window.self !== window.top) {
     return;
   }
 
@@ -7515,7 +7676,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 
 
-  console.log('[Kiki Immersion] v1.3.2 Modular Engine Loaded on:', location.href);
+  console.log('[Kiki Immersion] v1.3.3 Modular Engine Loaded on:', location.href);
 })();
 
 

@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - Web Universal Lookup Module
-// Version: 1.3.2
+// Version: 1.3.3
 // Description: Global modifier-key word lookup for arbitrary web pages
 // =============================================================
 
@@ -98,12 +98,15 @@
     if (isJpOrCjk) {
       // For Japanese/CJK, scan forward up to 16 characters and query candidate prefixes
       const forwardSlice = text.slice(idx, idx + 16);
-      if (window.localSearch && typeof window.localSearch.search === "function") {
+      const searchFn = (window.localSearch && typeof window.localSearch.search === "function")
+        ? (t) => window.localSearch.search(t)
+        : null;
+      if (searchFn) {
         const maxLen = Math.min(12, forwardSlice.length);
         const prefixSearches = [];
         for (let l = maxLen; l >= 1; l--) {
           prefixSearches.push(
-            window.localSearch.search(forwardSlice.slice(0, l)).then(res => ({ len: l, res }))
+            searchFn(forwardSlice.slice(0, l)).then(res => ({ len: l, res }))
           );
         }
         const searchResults = await Promise.all(prefixSearches);

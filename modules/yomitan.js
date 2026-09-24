@@ -1778,9 +1778,20 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
       }
 
+      async function execSearch(queryText) {
+        if (!queryText) return [];
+        if (localSearch && typeof localSearch.search === "function") {
+          try {
+            const res = await localSearch.search(queryText);
+            if (res && res.length > 0) return res;
+          } catch {}
+        }
+        return [];
+      }
+
       // Query candidate phrases and single word in parallel
-      const phrasePromises = candidatePhrases.map((cp) => localSearch.search(cp.phrase));
-      const singleWordPromise = localSearch.search(cleanTerm);
+      const phrasePromises = candidatePhrases.map((cp) => execSearch(cp.phrase));
+      const singleWordPromise = execSearch(cleanTerm);
 
       const [phraseResultsArr, singleWordResults] = await Promise.all([
         Promise.all(phrasePromises),

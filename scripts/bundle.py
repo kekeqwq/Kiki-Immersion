@@ -5,7 +5,7 @@ MODULE_ORDER = ['core', 'yomitan', 'ai', 'ui', 'web', 'youtube']
 header = r"""// ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.3.2
+// @version      1.3.3
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine, and global web lookup.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -28,7 +28,8 @@ header = r"""// ==UserScript==
   // 1. Force Desktop YouTube & Early Native Lockout (YouTube Only)
   // -------------------------------------------------------------
   const isYouTubeSite = /(?:^|\.)youtube\.com$/.test(location.hostname);
-  if (isYouTubeSite) {
+  const isIframe = window.self !== window.top;
+  if (isYouTubeSite && !isIframe) {
     try {
       document.cookie = "PREF=f6=40000000&f5=30000&app=desktop; domain=.youtube.com; path=/; max-age=31536000; SameSite=Lax";
     } catch (e) {}

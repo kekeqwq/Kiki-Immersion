@@ -1,12 +1,12 @@
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.3.2
+// Version: 1.3.3
 // =============================================================
 
-  window.__kiki_engine_version = "1.3.2";
+  window.__kiki_engine_version = "1.3.3";
   try {
-    localStorage.setItem("kiki_engine_version", "1.3.2");
-    localStorage.setItem("kiki_cache_version", "1.3.2");
+    localStorage.setItem("kiki_engine_version", "1.3.3");
+    localStorage.setItem("kiki_cache_version", "1.3.3");
   } catch (e) {}
 
   let savedPot = "";
@@ -39,7 +39,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.3.2"
+    engineVersion: "1.3.3"
   };
 
   function currentVideoId() {
@@ -54,6 +54,84 @@
     }
   }
   window.currentVideoId = currentVideoId;
+
+  // -------------------------------------------------------------
+  // Cross-Domain AI Configuration Sync Engine
+  // -------------------------------------------------------------
+  function generateSyncCode() {
+    try {
+      const cfg = {
+        base: localStorage.getItem("kiki_ai_base") || "",
+        key: localStorage.getItem("kiki_ai_key") || "",
+        model: localStorage.getItem("kiki_ai_model") || "",
+        lang: localStorage.getItem("kiki_ai_lang") || "zh",
+        mode: localStorage.getItem("kiki_ai_mode") || "quick",
+        maxTokens: localStorage.getItem("kiki_ai_max_tokens") || "4096",
+        promptZh: localStorage.getItem("kiki_ai_prompt_zh") || "",
+        promptEn: localStorage.getItem("kiki_ai_prompt_en") || "",
+        webLookupKey: localStorage.getItem("kiki_web_lookup_key") || "ctrl"
+      };
+      return btoa(unescape(encodeURIComponent(JSON.stringify(cfg))))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+    } catch {
+      return "";
+    }
+  }
+  window.generateSyncCode = generateSyncCode;
+
+  function importSyncCode(code) {
+    try {
+      if (!code) return false;
+      const clean = String(code).trim().replace(/^.*kiki_sync=/, "");
+      const raw = clean.replace(/-/g, "+").replace(/_/g, "/");
+      const jsonStr = decodeURIComponent(escape(atob(raw)));
+      const decoded = JSON.parse(jsonStr);
+      if (decoded && typeof decoded === "object") {
+        if (decoded.base !== undefined) localStorage.setItem("kiki_ai_base", decoded.base);
+        if (decoded.key !== undefined) localStorage.setItem("kiki_ai_key", decoded.key);
+        if (decoded.model !== undefined) localStorage.setItem("kiki_ai_model", decoded.model);
+        if (decoded.lang !== undefined) localStorage.setItem("kiki_ai_lang", decoded.lang);
+        if (decoded.mode !== undefined) localStorage.setItem("kiki_ai_mode", decoded.mode);
+        if (decoded.maxTokens !== undefined) localStorage.setItem("kiki_ai_max_tokens", String(decoded.maxTokens));
+        if (decoded.promptZh !== undefined) localStorage.setItem("kiki_ai_prompt_zh", decoded.promptZh);
+        if (decoded.promptEn !== undefined) localStorage.setItem("kiki_ai_prompt_en", decoded.promptEn);
+        if (decoded.webLookupKey !== undefined) {
+          localStorage.setItem("kiki_web_lookup_key", decoded.webLookupKey);
+          if (window.STATE) window.STATE.webLookupKey = decoded.webLookupKey;
+        }
+        return true;
+      }
+    } catch (e) {
+      console.warn("[Kiki importSyncCode error]", e);
+    }
+    return false;
+  }
+  window.importSyncCode = importSyncCode;
+
+  function checkUrlSyncParams() {
+    try {
+      const hash = location.hash || "";
+      if (hash.includes("kiki_sync=")) {
+        const m = hash.match(/kiki_sync=([A-Za-z0-9+/=_-]+)/);
+        if (m && m[1]) {
+          const success = importSyncCode(m[1]);
+          if (success) {
+            history.replaceState(null, "", location.href.replace(/#.*$/, ""));
+            setTimeout(() => {
+              if (typeof updateHud === "function") updateHud();
+              if (typeof toast === "function") toast("✦ AI configuration synchronized!");
+            }, 300);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[Kiki URL Sync Error]", e);
+    }
+  }
+  checkUrlSyncParams();
+  window.addEventListener("hashchange", checkUrlSyncParams);
 
   // -------------------------------------------------------------
   // Early TimedText Wire Sniffer & Dynamic URL Capture
