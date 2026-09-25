@@ -1474,6 +1474,19 @@
     }
 
     #kiki-hub-iframe { display: none !important; width: 0 !important; height: 0 !important; }
+
+    /* Suppress transcript panel 3-dots action menu when panel is not expanded, and suppressed elements */
+    ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-searchable-transcript"]:not([visibility="ENGAGEMENT_PANEL_VISIBILITY_EXPANDED"]) #menu {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+    [data-kiki-suppressed="true"] {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
   `;
 
   function injectStyles() {

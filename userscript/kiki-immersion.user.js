@@ -1531,6 +1531,19 @@
     }
 
     #kiki-hub-iframe { display: none !important; width: 0 !important; height: 0 !important; }
+
+    /* Suppress transcript panel 3-dots action menu when panel is not expanded, and suppressed elements */
+    ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-searchable-transcript"]:not([visibility="ENGAGEMENT_PANEL_VISIBILITY_EXPANDED"]) #menu {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+    [data-kiki-suppressed="true"] {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
   `;
 
   function injectStyles() {
@@ -8021,18 +8034,52 @@ window.KikiAudioEngine = KikiAudioEngine;
   let transcriptFetchInProgress = false;
   let lastTranscriptAttemptTime = 0;
 
+  function cleanupLeakedTranscriptPopups() {
+    try {
+      const items = Array.from(document.querySelectorAll("ytd-menu-service-item-renderer, tp-yt-paper-item, ytd-menu-popup-renderer"));
+      for (const el of items) {
+        if (el.textContent && el.textContent.includes("Toggle timestamps")) {
+          const dropdown = el.closest("tp-yt-iron-dropdown") || (el.tagName === "TP-YT-IRON-DROPDOWN" ? el : null);
+          if (dropdown) {
+            try { if (typeof dropdown.close === "function") dropdown.close(); } catch {}
+            dropdown.opened = false;
+            dropdown.style.setProperty("display", "none", "important");
+            dropdown.style.setProperty("visibility", "hidden", "important");
+            dropdown.setAttribute("hidden", "");
+            dropdown.setAttribute("aria-hidden", "true");
+            dropdown.setAttribute("data-kiki-suppressed", "true");
+          }
+          const popup = el.closest("ytd-menu-popup-renderer") || (el.tagName === "YTD-MENU-POPUP-RENDERER" ? el : null);
+          if (popup) {
+            try { if (typeof popup.close === "function") popup.close(); } catch {}
+            popup.style.setProperty("display", "none", "important");
+            popup.style.setProperty("visibility", "hidden", "important");
+            popup.setAttribute("hidden", "");
+            popup.setAttribute("data-kiki-suppressed", "true");
+          }
+        }
+      }
+    } catch {}
+  }
+
   function closeTranscriptPanelSilently() {
     try {
       const panel = document.querySelector('[target-id="engagement-panel-searchable-transcript"]');
       if (panel) {
-        const closeBtn = panel.querySelector('button[aria-label*="lose"], button[aria-label*="关闭"], button[aria-label*="閉じる"], yt-icon-button button');
+        // Specifically find the visibility / close button of the engagement panel.
+        // NEVER select generic yt-icon-button button as that clicks the 3-dots "More actions" menu button and spawns "Toggle timestamps"!
+        const closeBtn = panel.querySelector('#visibility-button button, yt-button-shape button[aria-label*="Close" i], button[aria-label*="Close" i], button[aria-label*="关闭"], button[aria-label*="閉じる"]');
         if (closeBtn) {
           closeBtn.click();
         } else {
           panel.setAttribute("visibility", "ENGAGEMENT_PANEL_VISIBILITY_HIDDEN");
         }
       }
+      if (panel && panel.getAttribute("visibility") === "ENGAGEMENT_PANEL_VISIBILITY_EXPANDED") {
+        panel.setAttribute("visibility", "ENGAGEMENT_PANEL_VISIBILITY_HIDDEN");
+      }
     } catch {}
+    cleanupLeakedTranscriptPopups();
   }
 
   async function tryLoadTranscriptPanel(vid, track = null) {
@@ -8101,10 +8148,12 @@ window.KikiAudioEngine = KikiAudioEngine;
         p.removeAttribute("hidden");
       }
 
-      // Also trigger transcript button if present
-      const allBtns = Array.from(document.querySelectorAll("button, ytd-button-renderer"));
+      // Also trigger transcript button if present (strictly avoid internal buttons of the engagement panel)
+      const allBtns = Array.from(document.querySelectorAll("ytd-video-description-transcript-section-renderer button, #description button, ytd-structured-description-content-renderer button, ytd-button-renderer button, button"));
       const transcriptBtn = allBtns.find(b => {
+        if (b.closest('[target-id="engagement-panel-searchable-transcript"]')) return false;
         const txt = (b.innerText || b.getAttribute("aria-label") || "").toLowerCase();
+        if (txt.includes("close") || txt.includes("关闭") || txt.includes("閉じる") || txt.includes("action") || txt.includes("toggle")) return false;
         return txt.includes("transcript") || txt.includes("字幕文稿") || txt.includes("文字起こし");
       });
       if (transcriptBtn) {
@@ -8131,6 +8180,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       return false;
     } finally {
       transcriptFetchInProgress = false;
+      cleanupLeakedTranscriptPopups();
     }
   }
 
@@ -8498,6 +8548,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
   let lastTimelineSyncTime = 0;
   let lastThemeSyncTime = 0;
+  let lastLeakedPopupCleanupTime = 0;
   function syncNativeTimeline(v) {
     if (!v || v.paused) return;
     const now = Date.now();
@@ -8519,6 +8570,11 @@ window.KikiAudioEngine = KikiAudioEngine;
       try { updateHud(); } catch {}
       try { updateCaptionPosition(); } catch {}
       if (!STATE.enabled) return;
+
+      if (Date.now() - lastLeakedPopupCleanupTime > 2000) {
+        lastLeakedPopupCleanupTime = Date.now();
+        cleanupLeakedTranscriptPopups();
+      }
 
       // Sync theme periodically if auto mode is on
       if (typeof applyTheme === "function" && (!STATE.theme || STATE.theme === "auto")) {
