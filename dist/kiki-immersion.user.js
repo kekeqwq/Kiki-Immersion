@@ -80,6 +80,7 @@
     theme: localStorage.getItem("kiki_theme") || "auto",
     subsVisible: localStorage.getItem("kiki_subs_visible") !== "0",
     webLookupKey: localStorage.getItem("kiki_web_lookup_key") || "ctrl",
+    studyMode: localStorage.getItem("kiki_study_mode") === "1",
     cues: [],
     liveCues: [],
     tracks: [],
@@ -5747,6 +5748,20 @@ window.KikiAudioEngine = KikiAudioEngine;
                   <option value="ctrl_or_meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "ctrl_or_meta" ? "selected" : ""}>Ctrl or Command Key</option>
                 </select>
               </div>
+
+              <div style="border-top: 1px solid ${colors.divider}; padding-top: 8px;">
+                <div style="font-size: 12px; font-weight: 700; color: ${colors.textPrimary}; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+                  <span>📖 Exclusive Study Mode</span>
+                  <span style="font-size: 11px; color: ${colors.textMuted};">Lookup vs Page Action</span>
+                </div>
+                <select id="kiki-study-mode-select" style="width: 100%; background: ${colors.inputBg}; color: ${colors.inputText}; border: 1px solid ${colors.inputBorder}; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none;">
+                  <option value="0" ${!STATE.studyMode ? "selected" : ""}>Disabled (Lookup & Native Clicks Concurrent) [Default]</option>
+                  <option value="1" ${STATE.studyMode ? "selected" : ""}>Enabled (Lookup Only, Suppress Page Clicks)</option>
+                </select>
+                <div style="font-size: 11px; line-height: 1.4; color: ${colors.textMuted}; margin-top: 4px;">
+                  When enabled, clicking words or links only triggers dictionary lookup and blocks native page actions. When disabled (default), dictionary lookups and native click actions (e.g. LingQ note sidebars, links) execute concurrently.
+                </div>
+              </div>
             </div>
           </div>
         `;
@@ -6029,6 +6044,16 @@ window.KikiAudioEngine = KikiAudioEngine;
             STATE.webLookupKey = val;
             try { localStorage.setItem("kiki_web_lookup_key", val); } catch {}
             toast(`✦ Web lookup trigger: ${val === "none" ? "Direct Click / Tap" : val.toUpperCase()}`);
+          });
+        }
+
+        const studySelect = modal.querySelector("#kiki-study-mode-select");
+        if (studySelect) {
+          studySelect.addEventListener("change", (e) => {
+            const isEnabled = e.target.value === "1";
+            STATE.studyMode = isEnabled;
+            try { localStorage.setItem("kiki_study_mode", isEnabled ? "1" : "0"); } catch {}
+            toast(`✦ Exclusive Study Mode: ${isEnabled ? "Enabled (Lookup Only)" : "Disabled (Native Clicks Allowed)"}`);
           });
         }
 
@@ -6386,6 +6411,48 @@ window.KikiAudioEngine = KikiAudioEngine;
     return e.ctrlKey || e.metaKey;
   }
 
+  function isStudyMode() {
+    return (typeof STATE !== "undefined" && !!STATE.studyMode) ||
+           localStorage.getItem("kiki_study_mode") === "1";
+  }
+
+  function dispatchNativeClick(target, clientX, clientY) {
+    if (!target) return;
+    try {
+      const opts = {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: clientX || 0,
+        clientY: clientY || 0,
+        button: 0,
+        buttons: 1,
+        detail: 1,
+        ctrlKey: false,
+        altKey: false,
+        metaKey: false,
+        shiftKey: false
+      };
+      target.dispatchEvent(new PointerEvent("pointerdown", opts));
+      target.dispatchEvent(new MouseEvent("mousedown", opts));
+      target.dispatchEvent(new PointerEvent("pointerup", opts));
+      target.dispatchEvent(new MouseEvent("mouseup", opts));
+      target.dispatchEvent(new MouseEvent("click", opts));
+
+      const link = target.closest("a");
+      if (link && link.href) {
+        link.click();
+      } else {
+        const btn = target.closest("button, [role='button']");
+        if (btn && btn !== target && typeof btn.click === "function") {
+          btn.click();
+        }
+      }
+    } catch (err) {
+      try { target.click(); } catch {}
+    }
+  }
+
   // -------------------------------------------------------------
   // 2. High-Performance Zero-DOM-Mutation Caret Resolution
   // -------------------------------------------------------------
@@ -6656,19 +6723,45 @@ window.KikiAudioEngine = KikiAudioEngine;
     const resolved = await resolveTargetWordAndContext(caret.node, caret.offset);
     if (!resolved || !resolved.term) return;
 
-    // DO NOT preventDefault or stopPropagation on word clicks!
-    // This allows the website's native click handlers (e.g. LingQ's sidebar, reader controls)
-    // to execute concurrently without being blocked by Kiki.
-    if (mode !== "none" && e.ctrlKey) {
-      if (e.cancelable) e.preventDefault();
-    }
-
     lastTriggerTime = now;
 
-    // Visual selection feedback (apply only in modifier mode so we do not clear reader focus outlines)
+    const studyModeActive = isStudyMode();
+
+    if (studyModeActive) {
+      // Exclusive Study Mode: Suppress all native page actions (links, sidebars, buttons)
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      const suppressGesture = (ev) => {
+        if (ev.cancelable) ev.preventDefault();
+        ev.stopPropagation();
+        ev.stopImmediatePropagation();
+      };
+      window.addEventListener("click", suppressGesture, { capture: true, once: true });
+      window.addEventListener("mouseup", suppressGesture, { capture: true, once: true });
+      window.addEventListener("contextmenu", suppressGesture, { capture: true, once: true });
+    } else {
+      // Study Mode OFF (Concurrent Mode, Default):
+      // When modifier keys (Ctrl/Alt/Meta) are used, standard primary clicks are often
+      // converted to secondary/right-clicks by macOS (e.g. Ctrl+Click) or ignored by reader frameworks.
+      // We synthesize a clean primary click on the target element so the native website action
+      // (LingQ sidebar, link navigation, button click) executes in sync with dictionary lookup!
+      if (mode !== "none") {
+        const targetEl = (caret && caret.node)
+          ? (caret.node.nodeType === Node.ELEMENT_NODE ? caret.node : caret.node.parentElement)
+          : e.target;
+        if (targetEl) {
+          setTimeout(() => {
+            dispatchNativeClick(targetEl, e.clientX, e.clientY);
+          }, 10);
+        }
+      }
+    }
+
+    // Visual selection feedback (apply only in exclusive study mode so reader focus outlines aren't cleared)
     try {
       const sel = window.getSelection();
-      if (sel && resolved.range && mode !== "none") {
+      if (sel && resolved.range && studyModeActive) {
         sel.removeAllRanges();
         sel.addRange(resolved.range);
       }
@@ -6687,7 +6780,14 @@ window.KikiAudioEngine = KikiAudioEngine;
 
   function suppressIfModifier(e) {
     const mode = getTriggerKey();
-    if (mode === "none") return;
+    if (mode === "none") {
+      if (isStudyMode() && Date.now() - lastTriggerTime < 500) {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+      return;
+    }
 
     // In modifier mode, suppress native contextmenu when Ctrl is held to avoid Safari's context menu
     if (e.type === "contextmenu" && (e.ctrlKey || mode === "ctrl")) {

@@ -23,6 +23,7 @@
     theme: localStorage.getItem("kiki_theme") || "auto",
     subsVisible: localStorage.getItem("kiki_subs_visible") !== "0",
     webLookupKey: localStorage.getItem("kiki_web_lookup_key") || "ctrl",
+    studyMode: localStorage.getItem("kiki_study_mode") === "1",
     cues: [],
     liveCues: [],
     tracks: [],

@@ -1264,6 +1264,20 @@
                   <option value="ctrl_or_meta" ${(STATE.webLookupKey || localStorage.getItem("kiki_web_lookup_key")) === "ctrl_or_meta" ? "selected" : ""}>Ctrl or Command Key</option>
                 </select>
               </div>
+
+              <div style="border-top: 1px solid ${colors.divider}; padding-top: 8px;">
+                <div style="font-size: 12px; font-weight: 700; color: ${colors.textPrimary}; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+                  <span>📖 Exclusive Study Mode</span>
+                  <span style="font-size: 11px; color: ${colors.textMuted};">Lookup vs Page Action</span>
+                </div>
+                <select id="kiki-study-mode-select" style="width: 100%; background: ${colors.inputBg}; color: ${colors.inputText}; border: 1px solid ${colors.inputBorder}; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none;">
+                  <option value="0" ${!STATE.studyMode ? "selected" : ""}>Disabled (Lookup & Native Clicks Concurrent) [Default]</option>
+                  <option value="1" ${STATE.studyMode ? "selected" : ""}>Enabled (Lookup Only, Suppress Page Clicks)</option>
+                </select>
+                <div style="font-size: 11px; line-height: 1.4; color: ${colors.textMuted}; margin-top: 4px;">
+                  When enabled, clicking words or links only triggers dictionary lookup and blocks native page actions. When disabled (default), dictionary lookups and native click actions (e.g. LingQ note sidebars, links) execute concurrently.
+                </div>
+              </div>
             </div>
           </div>
         `;
@@ -1546,6 +1560,16 @@
             STATE.webLookupKey = val;
             try { localStorage.setItem("kiki_web_lookup_key", val); } catch {}
             toast(`✦ Web lookup trigger: ${val === "none" ? "Direct Click / Tap" : val.toUpperCase()}`);
+          });
+        }
+
+        const studySelect = modal.querySelector("#kiki-study-mode-select");
+        if (studySelect) {
+          studySelect.addEventListener("change", (e) => {
+            const isEnabled = e.target.value === "1";
+            STATE.studyMode = isEnabled;
+            try { localStorage.setItem("kiki_study_mode", isEnabled ? "1" : "0"); } catch {}
+            toast(`✦ Exclusive Study Mode: ${isEnabled ? "Enabled (Lookup Only)" : "Disabled (Native Clicks Allowed)"}`);
           });
         }
 

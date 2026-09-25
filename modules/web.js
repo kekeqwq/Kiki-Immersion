@@ -25,6 +25,48 @@
     return e.ctrlKey || e.metaKey;
   }
 
+  function isStudyMode() {
+    return (typeof STATE !== "undefined" && !!STATE.studyMode) ||
+           localStorage.getItem("kiki_study_mode") === "1";
+  }
+
+  function dispatchNativeClick(target, clientX, clientY) {
+    if (!target) return;
+    try {
+      const opts = {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: clientX || 0,
+        clientY: clientY || 0,
+        button: 0,
+        buttons: 1,
+        detail: 1,
+        ctrlKey: false,
+        altKey: false,
+        metaKey: false,
+        shiftKey: false
+      };
+      target.dispatchEvent(new PointerEvent("pointerdown", opts));
+      target.dispatchEvent(new MouseEvent("mousedown", opts));
+      target.dispatchEvent(new PointerEvent("pointerup", opts));
+      target.dispatchEvent(new MouseEvent("mouseup", opts));
+      target.dispatchEvent(new MouseEvent("click", opts));
+
+      const link = target.closest("a");
+      if (link && link.href) {
+        link.click();
+      } else {
+        const btn = target.closest("button, [role='button']");
+        if (btn && btn !== target && typeof btn.click === "function") {
+          btn.click();
+        }
+      }
+    } catch (err) {
+      try { target.click(); } catch {}
+    }
+  }
+
   // -------------------------------------------------------------
   // 2. High-Performance Zero-DOM-Mutation Caret Resolution
   // -------------------------------------------------------------
@@ -295,19 +337,45 @@
     const resolved = await resolveTargetWordAndContext(caret.node, caret.offset);
     if (!resolved || !resolved.term) return;
 
-    // DO NOT preventDefault or stopPropagation on word clicks!
-    // This allows the website's native click handlers (e.g. LingQ's sidebar, reader controls)
-    // to execute concurrently without being blocked by Kiki.
-    if (mode !== "none" && e.ctrlKey) {
-      if (e.cancelable) e.preventDefault();
-    }
-
     lastTriggerTime = now;
 
-    // Visual selection feedback (apply only in modifier mode so we do not clear reader focus outlines)
+    const studyModeActive = isStudyMode();
+
+    if (studyModeActive) {
+      // Exclusive Study Mode: Suppress all native page actions (links, sidebars, buttons)
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      const suppressGesture = (ev) => {
+        if (ev.cancelable) ev.preventDefault();
+        ev.stopPropagation();
+        ev.stopImmediatePropagation();
+      };
+      window.addEventListener("click", suppressGesture, { capture: true, once: true });
+      window.addEventListener("mouseup", suppressGesture, { capture: true, once: true });
+      window.addEventListener("contextmenu", suppressGesture, { capture: true, once: true });
+    } else {
+      // Study Mode OFF (Concurrent Mode, Default):
+      // When modifier keys (Ctrl/Alt/Meta) are used, standard primary clicks are often
+      // converted to secondary/right-clicks by macOS (e.g. Ctrl+Click) or ignored by reader frameworks.
+      // We synthesize a clean primary click on the target element so the native website action
+      // (LingQ sidebar, link navigation, button click) executes in sync with dictionary lookup!
+      if (mode !== "none") {
+        const targetEl = (caret && caret.node)
+          ? (caret.node.nodeType === Node.ELEMENT_NODE ? caret.node : caret.node.parentElement)
+          : e.target;
+        if (targetEl) {
+          setTimeout(() => {
+            dispatchNativeClick(targetEl, e.clientX, e.clientY);
+          }, 10);
+        }
+      }
+    }
+
+    // Visual selection feedback (apply only in exclusive study mode so reader focus outlines aren't cleared)
     try {
       const sel = window.getSelection();
-      if (sel && resolved.range && mode !== "none") {
+      if (sel && resolved.range && studyModeActive) {
         sel.removeAllRanges();
         sel.addRange(resolved.range);
       }
@@ -326,7 +394,14 @@
 
   function suppressIfModifier(e) {
     const mode = getTriggerKey();
-    if (mode === "none") return;
+    if (mode === "none") {
+      if (isStudyMode() && Date.now() - lastTriggerTime < 500) {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+      return;
+    }
 
     // In modifier mode, suppress native contextmenu when Ctrl is held to avoid Safari's context menu
     if (e.type === "contextmenu" && (e.ctrlKey || mode === "ctrl")) {
