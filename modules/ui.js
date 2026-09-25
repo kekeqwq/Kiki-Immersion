@@ -184,6 +184,15 @@
   }
 
   function ensureHud() {
+    const isYT = (typeof isYouTubeDomain !== "undefined" && isYouTubeDomain) ||
+                 (typeof STATE !== "undefined" && STATE.isYouTube) ||
+                 /(?:^|\.)youtube\.com$/.test(location.hostname);
+    if (!isYT) {
+      const rogue = document.getElementById("kiki-hud");
+      if (rogue) rogue.remove();
+      return null;
+    }
+
     const targetHost = document.body || document.documentElement;
     if (!targetHost) return null;
     let hud = document.getElementById("kiki-hud");
@@ -193,18 +202,32 @@
       }
       // Strictly respect STATE.hudVisible - do not force visible when hidden
       if (!STATE.hudVisible) {
-        if (hud.style.display !== "none") hud.style.setProperty("display", "none", "important");
-        if (hud.style.visibility !== "hidden") hud.style.setProperty("visibility", "hidden", "important");
-        if (hud.style.opacity !== "0") hud.style.setProperty("opacity", "0", "important");
+        hud.classList.remove("show");
+        hud.style.setProperty("display", "none", "important");
+        hud.style.setProperty("visibility", "hidden", "important");
+        hud.style.setProperty("opacity", "0", "important");
+      } else {
+        hud.classList.add("show");
+        hud.style.setProperty("display", "flex", "important");
+        hud.style.setProperty("visibility", "visible", "important");
+        hud.style.setProperty("opacity", "1", "important");
       }
     }
     if (!hud) {
       hud = document.createElement("div");
       hud.id = "kiki-hud";
       const isVis = !!STATE.hudVisible;
-      hud.style.display = isVis ? "flex" : "none";
-      hud.style.visibility = isVis ? "visible" : "hidden";
-      hud.style.opacity = isVis ? "1" : "0";
+      if (isVis) {
+        hud.classList.add("show");
+        hud.style.setProperty("display", "flex", "important");
+        hud.style.setProperty("visibility", "visible", "important");
+        hud.style.setProperty("opacity", "1", "important");
+      } else {
+        hud.classList.remove("show");
+        hud.style.setProperty("display", "none", "important");
+        hud.style.setProperty("visibility", "hidden", "important");
+        hud.style.setProperty("opacity", "0", "important");
+      }
       setHtml(hud, `
         <div class="kiki-hud-dot" title="Click to hide bar"></div>
         <button type="button" class="kiki-hud-btn kiki-hud-settings" title="Open Settings (Dictionary & AI)">
@@ -219,28 +242,31 @@
       targetHost.appendChild(hud);
       makeDraggable(hud);
 
+      const doHide = () => {
+        if (typeof hideHud === "function") {
+          hideHud();
+        } else if (typeof toggleHud === "function") {
+          toggleHud(false);
+        } else {
+          STATE.hudVisible = false;
+          hud.classList.remove("show");
+          hud.style.setProperty("display", "none", "important");
+          hud.style.setProperty("visibility", "hidden", "important");
+          hud.style.setProperty("opacity", "0", "important");
+        }
+      };
+
       const dot = hud.querySelector(".kiki-hud-dot");
       if (dot) {
-        dot.addEventListener("click", (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          if (typeof hideHud === "function") hideHud();
-          else if (typeof toggleHud === "function") toggleHud(false);
-        });
-        dot.addEventListener("touchend", (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          if (typeof hideHud === "function") hideHud();
-          else if (typeof toggleHud === "function") toggleHud(false);
-        });
+        dot.addEventListener("click", (e) => { e.stopPropagation(); e.preventDefault(); doHide(); });
+        dot.addEventListener("touchend", (e) => { e.stopPropagation(); e.preventDefault(); doHide(); });
       }
 
       const closeBtn = hud.querySelector(".kiki-hud-close");
       if (closeBtn) {
-        bindHudButton(closeBtn, () => {
-          if (typeof hideHud === "function") hideHud();
-          else if (typeof toggleHud === "function") toggleHud(false);
-        });
+        bindHudButton(closeBtn, doHide);
+        closeBtn.addEventListener("click", (e) => { e.stopPropagation(); e.preventDefault(); doHide(); });
+        closeBtn.addEventListener("touchend", (e) => { e.stopPropagation(); e.preventDefault(); doHide(); });
       }
 
       hud.addEventListener("pointerenter", () => {
@@ -412,6 +438,10 @@
   }
 
   function updateHud(statusText) {
+    const isYT = (typeof isYouTubeDomain !== "undefined" && isYouTubeDomain) ||
+                 (typeof STATE !== "undefined" && STATE.isYouTube) ||
+                 /(?:^|\.)youtube\.com$/.test(location.hostname);
+    if (!isYT) return;
     const hud = ensureHud();
     if (!hud) return;
     const subBtn = hud.querySelector(".kiki-hud-sub");

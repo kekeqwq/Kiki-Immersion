@@ -362,5 +362,14 @@
     }, { once: true });
   }
 
+  // Strictly purge any rogue #kiki-hud element on non-YouTube sites
+  try {
+    const isYT = window.location.hostname.includes("youtube.com") || window.location.hostname.includes("youtu.be");
+    if (!isYT) {
+      const rogueHud = document.getElementById("kiki-hud");
+      if (rogueHud) rogueHud.remove();
+    }
+  } catch {}
+
   console.log('[Kiki Immersion] Web Universal Lookup Module Loaded (Trigger: ' + getTriggerKey() + '+Click)');
 })();

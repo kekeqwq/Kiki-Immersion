@@ -839,7 +839,10 @@
       bottom: auto !important;
       right: auto !important;
       z-index: 2147483647 !important;
-      display: flex !important; align-items: center !important; gap: 8px !important;
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      align-items: center !important; gap: 8px !important;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
       font-size: 13px !important; font-weight: 600 !important;
       background: #141418 !important; color: #FFFFFF !important;
@@ -848,8 +851,13 @@
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.95) !important;
       user-select: none !important; -webkit-user-select: none !important;
       pointer-events: auto !important; cursor: grab !important;
-      visibility: visible !important; opacity: 1 !important;
       touch-action: none !important;
+      transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+    #kiki-hud.show {
+      display: flex !important;
+      visibility: visible !important;
+      opacity: 1 !important;
     }
     #kiki-hud:hover { background: rgba(32, 32, 36, 0.98) !important; }
     #kiki-hud .kiki-hud-dot {

@@ -896,7 +896,10 @@
       bottom: auto !important;
       right: auto !important;
       z-index: 2147483647 !important;
-      display: flex !important; align-items: center !important; gap: 8px !important;
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      align-items: center !important; gap: 8px !important;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
       font-size: 13px !important; font-weight: 600 !important;
       background: #141418 !important; color: #FFFFFF !important;
@@ -905,8 +908,13 @@
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.95) !important;
       user-select: none !important; -webkit-user-select: none !important;
       pointer-events: auto !important; cursor: grab !important;
-      visibility: visible !important; opacity: 1 !important;
       touch-action: none !important;
+      transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+    #kiki-hud.show {
+      display: flex !important;
+      visibility: visible !important;
+      opacity: 1 !important;
     }
     #kiki-hud:hover { background: rgba(32, 32, 36, 0.98) !important; }
     #kiki-hud .kiki-hud-dot {
@@ -4659,6 +4667,15 @@ window.KikiAudioEngine = KikiAudioEngine;
   }
 
   function ensureHud() {
+    const isYT = (typeof isYouTubeDomain !== "undefined" && isYouTubeDomain) ||
+                 (typeof STATE !== "undefined" && STATE.isYouTube) ||
+                 /(?:^|\.)youtube\.com$/.test(location.hostname);
+    if (!isYT) {
+      const rogue = document.getElementById("kiki-hud");
+      if (rogue) rogue.remove();
+      return null;
+    }
+
     const targetHost = document.body || document.documentElement;
     if (!targetHost) return null;
     let hud = document.getElementById("kiki-hud");
@@ -4668,18 +4685,32 @@ window.KikiAudioEngine = KikiAudioEngine;
       }
       // Strictly respect STATE.hudVisible - do not force visible when hidden
       if (!STATE.hudVisible) {
-        if (hud.style.display !== "none") hud.style.setProperty("display", "none", "important");
-        if (hud.style.visibility !== "hidden") hud.style.setProperty("visibility", "hidden", "important");
-        if (hud.style.opacity !== "0") hud.style.setProperty("opacity", "0", "important");
+        hud.classList.remove("show");
+        hud.style.setProperty("display", "none", "important");
+        hud.style.setProperty("visibility", "hidden", "important");
+        hud.style.setProperty("opacity", "0", "important");
+      } else {
+        hud.classList.add("show");
+        hud.style.setProperty("display", "flex", "important");
+        hud.style.setProperty("visibility", "visible", "important");
+        hud.style.setProperty("opacity", "1", "important");
       }
     }
     if (!hud) {
       hud = document.createElement("div");
       hud.id = "kiki-hud";
       const isVis = !!STATE.hudVisible;
-      hud.style.display = isVis ? "flex" : "none";
-      hud.style.visibility = isVis ? "visible" : "hidden";
-      hud.style.opacity = isVis ? "1" : "0";
+      if (isVis) {
+        hud.classList.add("show");
+        hud.style.setProperty("display", "flex", "important");
+        hud.style.setProperty("visibility", "visible", "important");
+        hud.style.setProperty("opacity", "1", "important");
+      } else {
+        hud.classList.remove("show");
+        hud.style.setProperty("display", "none", "important");
+        hud.style.setProperty("visibility", "hidden", "important");
+        hud.style.setProperty("opacity", "0", "important");
+      }
       setHtml(hud, `
         <div class="kiki-hud-dot" title="Click to hide bar"></div>
         <button type="button" class="kiki-hud-btn kiki-hud-settings" title="Open Settings (Dictionary & AI)">
@@ -4694,28 +4725,31 @@ window.KikiAudioEngine = KikiAudioEngine;
       targetHost.appendChild(hud);
       makeDraggable(hud);
 
+      const doHide = () => {
+        if (typeof hideHud === "function") {
+          hideHud();
+        } else if (typeof toggleHud === "function") {
+          toggleHud(false);
+        } else {
+          STATE.hudVisible = false;
+          hud.classList.remove("show");
+          hud.style.setProperty("display", "none", "important");
+          hud.style.setProperty("visibility", "hidden", "important");
+          hud.style.setProperty("opacity", "0", "important");
+        }
+      };
+
       const dot = hud.querySelector(".kiki-hud-dot");
       if (dot) {
-        dot.addEventListener("click", (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          if (typeof hideHud === "function") hideHud();
-          else if (typeof toggleHud === "function") toggleHud(false);
-        });
-        dot.addEventListener("touchend", (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          if (typeof hideHud === "function") hideHud();
-          else if (typeof toggleHud === "function") toggleHud(false);
-        });
+        dot.addEventListener("click", (e) => { e.stopPropagation(); e.preventDefault(); doHide(); });
+        dot.addEventListener("touchend", (e) => { e.stopPropagation(); e.preventDefault(); doHide(); });
       }
 
       const closeBtn = hud.querySelector(".kiki-hud-close");
       if (closeBtn) {
-        bindHudButton(closeBtn, () => {
-          if (typeof hideHud === "function") hideHud();
-          else if (typeof toggleHud === "function") toggleHud(false);
-        });
+        bindHudButton(closeBtn, doHide);
+        closeBtn.addEventListener("click", (e) => { e.stopPropagation(); e.preventDefault(); doHide(); });
+        closeBtn.addEventListener("touchend", (e) => { e.stopPropagation(); e.preventDefault(); doHide(); });
       }
 
       hud.addEventListener("pointerenter", () => {
@@ -4887,6 +4921,10 @@ window.KikiAudioEngine = KikiAudioEngine;
   }
 
   function updateHud(statusText) {
+    const isYT = (typeof isYouTubeDomain !== "undefined" && isYouTubeDomain) ||
+                 (typeof STATE !== "undefined" && STATE.isYouTube) ||
+                 /(?:^|\.)youtube\.com$/.test(location.hostname);
+    if (!isYT) return;
     const hud = ensureHud();
     if (!hud) return;
     const subBtn = hud.querySelector(".kiki-hud-sub");
@@ -6685,6 +6723,15 @@ window.KikiAudioEngine = KikiAudioEngine;
     }, { once: true });
   }
 
+  // Strictly purge any rogue #kiki-hud element on non-YouTube sites
+  try {
+    const isYT = window.location.hostname.includes("youtube.com") || window.location.hostname.includes("youtu.be");
+    if (!isYT) {
+      const rogueHud = document.getElementById("kiki-hud");
+      if (rogueHud) rogueHud.remove();
+    }
+  } catch {}
+
   console.log('[Kiki Immersion] Web Universal Lookup Module Loaded (Trigger: ' + getTriggerKey() + '+Click)');
 })();
 
@@ -7203,6 +7250,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     const hud = ensureHud();
     if (!hud) return;
     if (STATE.hudVisible) {
+      hud.classList.add("show");
       hud.style.setProperty("display", "flex", "important");
       requestAnimationFrame(() => {
         hud.style.setProperty("visibility", "visible", "important");
@@ -7214,17 +7262,34 @@ window.KikiAudioEngine = KikiAudioEngine;
     } else {
       if (typeof closeTrackDropdown === "function") closeTrackDropdown();
       clearTimeout(toggleHud._t);
+      hud.classList.remove("show");
       hud.style.setProperty("opacity", "0", "important");
       hud.style.setProperty("visibility", "hidden", "important");
       setTimeout(() => {
-        if (!STATE.hudVisible && hud) hud.style.setProperty("display", "none", "important");
+        if (!STATE.hudVisible && hud) {
+          hud.classList.remove("show");
+          hud.style.setProperty("display", "none", "important");
+        }
       }, 200);
       toast("Kiki Bar: Hidden");
     }
   }
 
   function hideHud() {
-    if (STATE.hudVisible) toggleHud(false);
+    STATE.hudVisible = false;
+    const hud = document.getElementById("kiki-hud");
+    if (hud) {
+      hud.classList.remove("show");
+      hud.style.setProperty("opacity", "0", "important");
+      hud.style.setProperty("visibility", "hidden", "important");
+      setTimeout(() => {
+        if (!STATE.hudVisible && hud) {
+          hud.classList.remove("show");
+          hud.style.setProperty("display", "none", "important");
+        }
+      }, 200);
+    }
+    if (typeof closeTrackDropdown === "function") closeTrackDropdown();
   }
 
   let lastFsToggleTime = 0;

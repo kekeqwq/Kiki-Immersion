@@ -507,6 +507,7 @@
     const hud = ensureHud();
     if (!hud) return;
     if (STATE.hudVisible) {
+      hud.classList.add("show");
       hud.style.setProperty("display", "flex", "important");
       requestAnimationFrame(() => {
         hud.style.setProperty("visibility", "visible", "important");
@@ -518,17 +519,34 @@
     } else {
       if (typeof closeTrackDropdown === "function") closeTrackDropdown();
       clearTimeout(toggleHud._t);
+      hud.classList.remove("show");
       hud.style.setProperty("opacity", "0", "important");
       hud.style.setProperty("visibility", "hidden", "important");
       setTimeout(() => {
-        if (!STATE.hudVisible && hud) hud.style.setProperty("display", "none", "important");
+        if (!STATE.hudVisible && hud) {
+          hud.classList.remove("show");
+          hud.style.setProperty("display", "none", "important");
+        }
       }, 200);
       toast("Kiki Bar: Hidden");
     }
   }
 
   function hideHud() {
-    if (STATE.hudVisible) toggleHud(false);
+    STATE.hudVisible = false;
+    const hud = document.getElementById("kiki-hud");
+    if (hud) {
+      hud.classList.remove("show");
+      hud.style.setProperty("opacity", "0", "important");
+      hud.style.setProperty("visibility", "hidden", "important");
+      setTimeout(() => {
+        if (!STATE.hudVisible && hud) {
+          hud.classList.remove("show");
+          hud.style.setProperty("display", "none", "important");
+        }
+      }, 200);
+    }
+    if (typeof closeTrackDropdown === "function") closeTrackDropdown();
   }
 
   let lastFsToggleTime = 0;
