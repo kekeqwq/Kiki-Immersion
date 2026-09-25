@@ -52,23 +52,28 @@
   // -------------------------------------------------------------
   function isPageDark() {
     try {
-      if (typeof STATE !== "undefined" && STATE.isYouTube) return true;
       const docEl = document.documentElement;
-      if (docEl && (docEl.classList.contains("dark") || docEl.getAttribute("data-theme") === "dark")) return true;
-      if (document.body) {
-        const bColor = window.getComputedStyle(document.body).backgroundColor;
+      if (docEl) {
+        if (docEl.hasAttribute("dark") && docEl.getAttribute("dark") !== "false") return true;
+        if (docEl.classList.contains("dark") || docEl.getAttribute("data-theme") === "dark") return true;
+      }
+      // Check YouTube ytd-app or main containers if body is transparent
+      const checkEl = (document.body && window.getComputedStyle(document.body).backgroundColor !== "rgba(0, 0, 0, 0)")
+        ? document.body
+        : (document.querySelector("ytd-app, #content, main") || document.body);
+      if (checkEl) {
+        const bColor = window.getComputedStyle(checkEl).backgroundColor;
         const rgb = bColor ? bColor.match(/\d+/g) : null;
         if (rgb && rgb.length >= 3) {
           const r = +rgb[0], g = +rgb[1], b = +rgb[2];
-          // Check if not transparent
           if (rgb.length < 4 || +rgb[3] > 0.1) {
             const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-            if (lum < 115) return true;
+            return lum < 128;
           }
         }
       }
     } catch {}
-    return false;
+    return Boolean(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
   }
 
   function getResolvedTheme() {
@@ -76,9 +81,8 @@
                  localStorage.getItem("kiki_theme") || "auto";
     if (pref === "dark") return "dark";
     if (pref === "light") return "light";
-    // In "auto" mode: follow dark webpage environment (e.g. LingQ dark mode, YouTube)
-    if (isPageDark()) return "dark";
-    return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+    // In "auto" mode: follow page environment or system theme
+    return isPageDark() ? "dark" : "light";
   }
   window.getResolvedTheme = getResolvedTheme;
 
@@ -116,6 +120,23 @@
       mq.addListener(onSchemeChange);
     }
   }
+
+  // Observe page theme attribute mutations (e.g. YouTube dark/light toggle, LingQ mode switch)
+  try {
+    const themeMo = new MutationObserver(() => {
+      const pref = (typeof STATE !== "undefined" && STATE.theme) || localStorage.getItem("kiki_theme") || "auto";
+      if (pref === "auto") {
+        applyTheme("auto");
+      }
+    });
+    const attachThemeMo = () => {
+      if (document.documentElement) {
+        themeMo.observe(document.documentElement, { attributes: true, attributeFilter: ["dark", "data-theme", "class"] });
+      }
+    };
+    if (document.documentElement) attachThemeMo();
+    else document.addEventListener("DOMContentLoaded", attachThemeMo, { once: true });
+  } catch {}
 
   function currentVideoId() {
     try {

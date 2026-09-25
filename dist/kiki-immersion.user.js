@@ -109,23 +109,28 @@
   // -------------------------------------------------------------
   function isPageDark() {
     try {
-      if (typeof STATE !== "undefined" && STATE.isYouTube) return true;
       const docEl = document.documentElement;
-      if (docEl && (docEl.classList.contains("dark") || docEl.getAttribute("data-theme") === "dark")) return true;
-      if (document.body) {
-        const bColor = window.getComputedStyle(document.body).backgroundColor;
+      if (docEl) {
+        if (docEl.hasAttribute("dark") && docEl.getAttribute("dark") !== "false") return true;
+        if (docEl.classList.contains("dark") || docEl.getAttribute("data-theme") === "dark") return true;
+      }
+      // Check YouTube ytd-app or main containers if body is transparent
+      const checkEl = (document.body && window.getComputedStyle(document.body).backgroundColor !== "rgba(0, 0, 0, 0)")
+        ? document.body
+        : (document.querySelector("ytd-app, #content, main") || document.body);
+      if (checkEl) {
+        const bColor = window.getComputedStyle(checkEl).backgroundColor;
         const rgb = bColor ? bColor.match(/\d+/g) : null;
         if (rgb && rgb.length >= 3) {
           const r = +rgb[0], g = +rgb[1], b = +rgb[2];
-          // Check if not transparent
           if (rgb.length < 4 || +rgb[3] > 0.1) {
             const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-            if (lum < 115) return true;
+            return lum < 128;
           }
         }
       }
     } catch {}
-    return false;
+    return Boolean(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
   }
 
   function getResolvedTheme() {
@@ -133,9 +138,8 @@
                  localStorage.getItem("kiki_theme") || "auto";
     if (pref === "dark") return "dark";
     if (pref === "light") return "light";
-    // In "auto" mode: follow dark webpage environment (e.g. LingQ dark mode, YouTube)
-    if (isPageDark()) return "dark";
-    return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+    // In "auto" mode: follow page environment or system theme
+    return isPageDark() ? "dark" : "light";
   }
   window.getResolvedTheme = getResolvedTheme;
 
@@ -173,6 +177,23 @@
       mq.addListener(onSchemeChange);
     }
   }
+
+  // Observe page theme attribute mutations (e.g. YouTube dark/light toggle, LingQ mode switch)
+  try {
+    const themeMo = new MutationObserver(() => {
+      const pref = (typeof STATE !== "undefined" && STATE.theme) || localStorage.getItem("kiki_theme") || "auto";
+      if (pref === "auto") {
+        applyTheme("auto");
+      }
+    });
+    const attachThemeMo = () => {
+      if (document.documentElement) {
+        themeMo.observe(document.documentElement, { attributes: true, attributeFilter: ["dark", "data-theme", "class"] });
+      }
+    };
+    if (document.documentElement) attachThemeMo();
+    else document.addEventListener("DOMContentLoaded", attachThemeMo, { once: true });
+  } catch {}
 
   function currentVideoId() {
     try {
@@ -4603,17 +4624,19 @@ window.KikiAudioEngine = KikiAudioEngine;
       hud = document.createElement("div");
       hud.id = "kiki-hud";
       const isVis = !!STATE.hudVisible;
-      hud.style.cssText = `position: fixed !important; top: 64px !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 2147483647 !important; display: ${isVis ? 'flex' : 'none'} !important; align-items: center !important; gap: 8px !important; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important; font-size: 13px !important; font-weight: 600 !important; background: rgba(20, 20, 24, 0.95) !important; backdrop-filter: blur(20px) saturate(180%) !important; -webkit-backdrop-filter: blur(20px) saturate(180%) !important; color: #FFFFFF !important; padding: 7px 15px !important; border-radius: 22px !important; border: 1.5px solid rgba(255, 255, 255, 0.4) !important; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.85) !important; pointer-events: auto !important; cursor: grab !important; visibility: ${isVis ? 'visible' : 'hidden'} !important; opacity: ${isVis ? '1' : '0'} !important; transition: opacity 0.2s ease, visibility 0.2s ease !important; user-select: none !important; -webkit-user-select: none !important; touch-action: none !important;`;
+      hud.style.display = isVis ? "flex" : "none";
+      hud.style.visibility = isVis ? "visible" : "hidden";
+      hud.style.opacity = isVis ? "1" : "0";
       setHtml(hud, `
-        <div class="kiki-hud-dot" style="width: 10px !important; height: 10px !important; border-radius: 50% !important; background: #10B981 !important; flex-shrink: 0 !important; box-shadow: 0 0 10px #10B981 !important; cursor: pointer !important;" title="Click to hide bar"></div>
-        <button type="button" class="kiki-hud-btn kiki-hud-settings" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important; display: inline-flex !important; align-items: center !important; gap: 4px !important;" title="Open Settings (Dictionary & AI)">
+        <div class="kiki-hud-dot" title="Click to hide bar"></div>
+        <button type="button" class="kiki-hud-btn kiki-hud-settings" title="Open Settings (Dictionary & AI)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="opacity: 0.95; flex-shrink: 0; vertical-align: -1.5px;"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
           <span>Settings</span>
         </button>
-        <button type="button" class="kiki-hud-btn kiki-hud-sub" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="Toggle Subtitles Visibility">💬 Sub: On</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-cc" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 12px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important; min-width: 140px !important; max-width: 250px !important; text-overflow: ellipsis !important; overflow: hidden !important;" title="Click to select subtitle track">CC: Searching... ▾</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-reload" style="background: rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 4px 10px !important; font-size: 12px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; color: #FFFFFF !important; font-weight: 600 !important; white-space: nowrap !important;" title="Reload Subtitles for Current Video">🔄 Reload</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-close" style="background: rgba(255, 255, 255, 0.1) !important; border-radius: 12px !important; padding: 4px 8px !important; font-size: 11px !important; cursor: pointer !important; border: 1px solid rgba(255, 255, 255, 0.2) !important; color: #A1A1AA !important; font-weight: 600 !important; line-height: 1 !important;" title="Hide Status Bar">✕</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-sub" title="Toggle Subtitles Visibility">💬 Sub: On</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-cc" title="Click to select subtitle track">CC: Searching... ▾</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-reload" title="Reload Subtitles for Current Video">🔄 Reload</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-close" title="Hide Status Bar">✕</button>
       `);
       targetHost.appendChild(hud);
       makeDraggable(hud);
@@ -7173,6 +7196,13 @@ window.KikiAudioEngine = KikiAudioEngine;
 
   function showNativeChrome() {
     document.documentElement.classList.add("kiki-show-chrome");
+    const v = videoEl();
+    if (v) {
+      try {
+        v.dispatchEvent(new Event("seeking"));
+        v.dispatchEvent(new Event("seeked"));
+      } catch {}
+    }
     updateCaptionPosition();
     updateHud();
     toast("Controls Visible");
@@ -8466,6 +8496,19 @@ window.KikiAudioEngine = KikiAudioEngine;
     await loadForVideo();
   }
 
+  let lastTimelineSyncTime = 0;
+  let lastThemeSyncTime = 0;
+  function syncNativeTimeline(v) {
+    if (!v || v.paused) return;
+    const now = Date.now();
+    if (now - lastTimelineSyncTime < 450) return;
+    lastTimelineSyncTime = now;
+    try {
+      v.dispatchEvent(new Event("seeking"));
+      v.dispatchEvent(new Event("seeked"));
+    } catch {}
+  }
+
   function tick() {
     try {
       try { dismissMiniplayer(); } catch {}
@@ -8477,6 +8520,14 @@ window.KikiAudioEngine = KikiAudioEngine;
       try { updateCaptionPosition(); } catch {}
       if (!STATE.enabled) return;
 
+      // Sync theme periodically if auto mode is on
+      if (typeof applyTheme === "function" && (!STATE.theme || STATE.theme === "auto")) {
+        if (Date.now() - lastThemeSyncTime > 1800) {
+          lastThemeSyncTime = Date.now();
+          applyTheme("auto");
+        }
+      }
+
       const curVid = currentVideoId();
       if (curVid && curVid !== STATE.videoId) {
         onNavigate();
@@ -8485,6 +8536,9 @@ window.KikiAudioEngine = KikiAudioEngine;
 
       const v = videoEl();
       if (!v) return;
+
+      // Keep native player timeline, progress bar and current time flowing continuously on iPad/Safari
+      syncNativeTimeline(v);
 
       if ((!STATE.cues || !STATE.cues.length) && STATE.videoId) {
         const isPlaying = v && !v.paused && (v.currentTime > 0 || v.readyState >= 1);

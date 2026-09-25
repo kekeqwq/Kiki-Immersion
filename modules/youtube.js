@@ -553,6 +553,13 @@
 
   function showNativeChrome() {
     document.documentElement.classList.add("kiki-show-chrome");
+    const v = videoEl();
+    if (v) {
+      try {
+        v.dispatchEvent(new Event("seeking"));
+        v.dispatchEvent(new Event("seeked"));
+      } catch {}
+    }
     updateCaptionPosition();
     updateHud();
     toast("Controls Visible");
@@ -1846,6 +1853,19 @@
     await loadForVideo();
   }
 
+  let lastTimelineSyncTime = 0;
+  let lastThemeSyncTime = 0;
+  function syncNativeTimeline(v) {
+    if (!v || v.paused) return;
+    const now = Date.now();
+    if (now - lastTimelineSyncTime < 450) return;
+    lastTimelineSyncTime = now;
+    try {
+      v.dispatchEvent(new Event("seeking"));
+      v.dispatchEvent(new Event("seeked"));
+    } catch {}
+  }
+
   function tick() {
     try {
       try { dismissMiniplayer(); } catch {}
@@ -1857,6 +1877,14 @@
       try { updateCaptionPosition(); } catch {}
       if (!STATE.enabled) return;
 
+      // Sync theme periodically if auto mode is on
+      if (typeof applyTheme === "function" && (!STATE.theme || STATE.theme === "auto")) {
+        if (Date.now() - lastThemeSyncTime > 1800) {
+          lastThemeSyncTime = Date.now();
+          applyTheme("auto");
+        }
+      }
+
       const curVid = currentVideoId();
       if (curVid && curVid !== STATE.videoId) {
         onNavigate();
@@ -1865,6 +1893,9 @@
 
       const v = videoEl();
       if (!v) return;
+
+      // Keep native player timeline, progress bar and current time flowing continuously on iPad/Safari
+      syncNativeTimeline(v);
 
       if ((!STATE.cues || !STATE.cues.length) && STATE.videoId) {
         const isPlaying = v && !v.paused && (v.currentTime > 0 || v.readyState >= 1);
