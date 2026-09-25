@@ -1775,7 +1775,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       while ((hm = hyphenRegex.exec(sentence)) !== null) {
         const fullCompound = hm[0];
         const parts = fullCompound.toLowerCase().split("-");
-        if (parts.includes(termLower) || fullCompound.toLowerCase().includes(termLower)) {
+        if (parts.includes(termLower) || fullCompound.toLowerCase() === termLower) {
           addCandidate(fullCompound, 50);
           addCandidate(fullCompound.replace(/-/g, ""), 49);
           addCandidate(fullCompound.replace(/-/g, " "), 48);
@@ -1795,7 +1795,8 @@ window.KikiAudioEngine = KikiAudioEngine;
         const matchIndices = [];
         for (let i = 0; i < N; i++) {
           const tLow = wordTokens[i].text.toLowerCase();
-          if (tLow === termLower || tLow.includes(termLower) || termLower.includes(tLow)) {
+          // Strictly match the exact clicked word (or hyphen-split parts), never match partial 1-letter substrings
+          if (tLow === termLower || (termLower.includes("-") && termLower.split("-").includes(tLow))) {
             matchIndices.push(i);
           }
         }
