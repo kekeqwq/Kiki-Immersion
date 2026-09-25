@@ -394,7 +394,7 @@
       const dy = Math.abs(t.clientY - touchStartY);
       const dt = Date.now() - touchStartTime;
 
-      if (dx > 45 || dy > 45 || dt > 700) return;
+      if (dx > 55 || dy > 55 || dt > 700) return;
 
       if (e.cancelable) e.preventDefault();
       e.stopImmediatePropagation();
@@ -421,7 +421,7 @@
     e.stopImmediatePropagation();
   }
 
-  const DOUBLE_MS = 380;
+  const DOUBLE_MS = 420;
   let lastTapInputType = "touch";
   let singleTapActionFired = false;
   function handleTap(p, cx, cy, inputType = "touch") {
@@ -451,7 +451,7 @@
     const relY = (cy - r.top) / r.height;
     const now = Date.now();
 
-    const isDouble = (now - lastTapTime < DOUBLE_MS) && (Math.abs(cx - lastTapX) < 100) && (Math.abs(cy - lastTapY) < 100);
+    const isDouble = (now - lastTapTime < DOUBLE_MS) && (Math.abs(cx - lastTapX) < 110) && (Math.abs(cy - lastTapY) < 110);
 
     if (isDouble) {
       clearTimeout(singleTapTimer);
@@ -464,20 +464,15 @@
         playVideoSync();
       }
 
-      // Mouse double-click anywhere toggles webpage fullscreen.
-      // Touch (iPad) double-tap on left seeks -1, right seeks +1, center toggles webpage fullscreen.
-      if (inputType === "mouse") {
-        toggleWebpageFs();
+      // Left 28% seeks -1 (previous line), Right 28% seeks +1 (next line), Center 44% toggles fullscreen
+      if (relX < 0.28) {
+        seekCue(-1);
+        toast("← previous line");
+      } else if (relX > 0.72) {
+        seekCue(1);
+        toast("next line →");
       } else {
-        if (relX < 0.18) {
-          seekCue(-1);
-          toast("← previous line");
-        } else if (relX > 0.82) {
-          seekCue(1);
-          toast("next line →");
-        } else {
-          toggleWebpageFs();
-        }
+        toggleWebpageFs();
       }
       return;
     }
@@ -488,22 +483,20 @@
     singleTapActionFired = false;
     clearTimeout(singleTapTimer);
 
-    // Single click/tap top-left (<= 25% width & <= 28% height): Toggle Kiki Top Bar
-    if (relY < 0.28 && relX < 0.25) {
-      lastTapTime = 0;
-      toggleHud();
-      return;
-    }
-
-    // Single click/tap top-right (>= 75% width & <= 28% height): Toggle Native YouTube Controls
-    if (relY < 0.28 && relX > 0.75) {
-      lastTapTime = 0;
-      toggleNativeChrome();
-      return;
-    }
-
     singleTapTimer = setTimeout(() => {
       singleTapActionFired = true;
+      // Single click/tap top-left (<= 18% width & <= 20% height): Toggle Kiki Top Bar
+      if (relY < 0.20 && relX < 0.18) {
+        toggleHud();
+        return;
+      }
+
+      // Single click/tap top-right (>= 82% width & <= 20% height): Toggle Native YouTube Controls
+      if (relY < 0.20 && relX > 0.82) {
+        toggleNativeChrome();
+        return;
+      }
+
       togglePause();
     }, 280);
   }
@@ -611,14 +604,29 @@
       const curMs = v.currentTime * 1000;
       let target = -1;
       if (dir < 0) {
+        // Seek to previous subtitle
+        let currIdx = -1;
         for (let k = cuesToUse.length - 1; k >= 0; k--) {
-          if (cuesToUse[k].start < curMs - 400) {
-            target = k;
+          if (curMs >= cuesToUse[k].start - 150) {
+            currIdx = k;
             break;
           }
         }
-        if (target === -1) target = 0;
+        if (currIdx === -1) {
+          target = 0;
+        } else {
+          const currCue = cuesToUse[currIdx];
+          // If we are in the silent gap after currCue has finished (> 300ms past its end)
+          // and before the next cue starts, replay currCue itself.
+          // Otherwise, reliably jump to the preceding subtitle (currIdx - 1).
+          if (curMs > currCue.end + 300 && currIdx < cuesToUse.length - 1 && curMs < cuesToUse[currIdx + 1].start) {
+            target = currIdx;
+          } else {
+            target = Math.max(0, currIdx - 1);
+          }
+        }
       } else {
+        // Seek to next subtitle
         for (let k = 0; k < cuesToUse.length; k++) {
           if (cuesToUse[k].start > curMs + 200) {
             target = k;
