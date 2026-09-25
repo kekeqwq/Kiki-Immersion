@@ -1,431 +1,98 @@
 # Kiki Immersion
 
-> *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Frosted Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
+> *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Translucent Liquid Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.3.1-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.1.1-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
-
----
-
-## 📢 Release Overview
-
-**v1.3.1 (Cross-Site Bundle Fix, Safari Context Menu Suppression & Video State Decoupling)**:
-- **Universal Multi-Site Bundle Resolution**:
-  - Fixed an issue where `youtube.js`'s early domain check returned from the bundle's outer IIFE, prematurely terminating execution of `web.js` on non-YouTube websites.
-  - Re-ordered `MODULE_ORDER` to place `web.js` before `youtube.js`, and wrapped `youtube.js` in its own isolated IIFE. Verified fully functional across external domains (Wikipedia, Example.com, etc.).
-- **Safari macOS Native Context Menu Suppression**:
-  - Prevented macOS Safari from opening the native context menu when clicking with `Ctrl` held. Intercepted `contextmenu`, `mousedown`, `pointerdown`, and `click` in the window capture phase with `preventDefault()`.
-- **Decoupled User Video Pause from Web/Comment Lookup**:
-  - Fixed video auto-resuming when closing a lookup card on YouTube comments/descriptions: `closeLookup()` now strictly verifies `wasPausedByKiki = Boolean(STATE.pausedForLookup)`.
-  - If the user manually paused the video before reading comments or web text, dismissing the card keeps the video paused; only Kiki-initiated subtitle lookups will auto-resume playback.
-- **Automatic Style Initialization**:
-  - Auto-injected `#kiki-yomitan-card` and base styles on all non-YouTube websites upon DOM load.
-
-**Loader v1.1.1 (Engine Sync)**:
-- **Instant Cache Upgrade**: Bumped `EXPECTED_CACHE_VERSION` to `1.3.1`.
-
-**v1.3.0 (Global Web Universal Lookup & Domain-Based Modular Engine)**:
-- **Zero-DOM-Mutation Global Word Lookup (`modules/web.js`)**:
-  - Hold the modifier key (`Ctrl` by default, or configurable `Option/Alt` / `Command/Meta`) and click ANY word on ANY webpage to immediately query Yomitan offline dictionaries and contextual AI explanations!
-  - **Zero DOM Mutation & Zero Node Splitting**: Unlike video subtitles that pre-wrap tokens into spans, web pages use WebKit/Blink's native `document.caretRangeFromPoint(clientX, clientY)`. Zero DOM overhead, 0% CPU consumption during regular web browsing.
-  - **Multilingual Intelligence**:
-    - **Japanese / CJK**: Scans candidate prefixes forward (up to 12 chars) with longest-prefix dictionary matching. Intelligent script block (Kanji / Katakana / Hiragana) boundary extraction with particle exclusion (`[をにがのはでともへや]`) for perfect AI fallback.
-    - **English / Latin**: Precise word boundary extraction (`\w+` + hyphens/apostrophes) and phrasal verb candidates.
-  - **Sentence Context Extraction**: Automatically extracts surrounding sentence or paragraph context (bounded by `[.!?。\n\r！？]`), feeding rich context directly to AI explanations and MarginNote pills.
-  - **Smart Viewport-Aware Floating Card**: Automatically positions floating cards right beside the clicked point, with smart top/bottom flipping and viewport bounding.
-- **Domain-Based On-Demand Loader Architecture (`loader.user.js` v1.1.0)**:
-  - Global userscript match (`@match *://*/*`).
-  - **Domain Routing**: YouTube pages load YouTube-specific subtitle & player pipeline (`youtube.js`). Non-YouTube pages completely skip `youtube.js` (no player hooks, no desktop UA cookies, zero interference).
-  - Web lookup modifier key can be customized inside Settings modal (`Ctrl`, `Alt/Option`, `Cmd/Meta`, or `Ctrl or Cmd`).
-
-**Loader v1.1.0 (Global Multi-Domain Support & Cache Invalidation)**:
-- **Universal Match**: Enabled `@match *://*/*` to support universal web page lookup.
-- **Instant Cache Upgrade**: Bumped `EXPECTED_CACHE_VERSION` to `1.3.0`.
-
-**v1.2.9 (Unified Popup Dismissal & Playback Restoration Fix)**:
-- **Clean Popup Dismissal with Guaranteed Playback Resume**:
-  - Solved the race condition where dismissing an open lookup (Yomitan card, AI explanation card, or Settings modal) by clicking on blank space (inside the player or on the page) failed to resume playback or immediately re-paused due to single-click gesture conflicts.
-  - Implemented high-priority capture-phase event interception (`window.addEventListener(..., { capture: true })`) across `pointerdown`, `mousedown`, `pointerup`, `mouseup`, `touchstart`, `touchend`, and `click`.
-  - Added a 600ms gesture grace period and immediate cancellation of Kiki's `singleTapTimer` (`window.__kiki_cancelSingleTap()`), completely preventing YouTube's native player (`#movie_player`) click listeners and Kiki's pause toggle from triggering during dismissal.
-  - Added synchronous `playVideoSync()` with 60ms verification guard to ensure reliable video resumption across desktop mouse clicks and iPad touch taps.
-
-**Loader v1.0.6 (Cache Invalidation & Engine Sync)**:
-- **Instant Cache Upgrade**: Bumped `EXPECTED_CACHE_VERSION` to `1.2.9` to automatically flush legacy cached modules in `localStorage` and ensure immediate pickup of Engine v1.2.9.
-
-**v1.2.8 (Full Transcript Integration & YouTube PoToken Resolution)**:
-- **Breakthrough YouTube PoToken Bypass via Transcript Panel Integration**:
-  - Solved the platform-wide YouTube PoToken requirement (`exp=xpe` returning 0-byte timedtext responses) by integrating YouTube's native authenticated transcript extraction pipeline (`ytd-engagement-panel-searchable-transcript`).
-  - Seamlessly extracts hundreds to thousands of high-precision structured cues with exact millisecond timestamps (`startMs`, `endMs`, formatted text) without any network blocking.
-  - Automatically restores complete subtitle line counts in HUD (e.g., `CC: English (auto) · 120 ▾`) and ultra-responsive line-by-line `A` / `D` seeking.
-- **Silent Background Extraction & Seamless Live-to-Structured Upgrade**:
-  - Displays realtime scraped captions instantaneously upon video start (zero delay, zero freeze).
-  - Background transcript extractor silently resolves complete structured cues in ~500ms and upgrades the display with zero visual interruption.
-- **Early Trusted Types Policy Registration**:
-  - Injected an early `default` Trusted Types policy at `document-start` in `loader.user.js`, completely preventing YouTube's CSP from blocking module execution.
-- **Fixed Self-Heal Infinite Re-looping**:
-  - Removed periodic `loadForVideo(true)` in `tick()` that inadvertently cleared caption state every 8 seconds, ensuring uninterrupted live playback until structured cues arrive.
-
-**Loader v1.0.5 (Trusted Types Compliance & Engine Sync)**:
-- **Early Trusted Types Setup**: Automatically creates a fallback `default` policy at `document-start` to guarantee seamless `Function` and `script` execution across all YouTube pages.
-- **Instant Cache Upgrade**: Bumped `EXPECTED_CACHE_VERSION` to `1.2.8` to automatically sync to Engine v1.2.8.
-
-**v1.2.7 (Zero-Lag Subtitle Engine, Fixed Live/Structured Desync & Instant Fallback)**:
-- **Eliminated Subtitle Disappearance / Freeze**:
-  - Fixed a critical race condition where live-accumulated cues collided with structured subtitle playback loops, causing captions to wipe or lock up after 5 lines.
-  - Strictly separated pre-loaded structured subtitle cues (`STATE.cues`) from live scraped cues (`STATE.liveCues`), ensuring live mode never wipes the display.
-  - Removed premature returns in native caption mutation handlers, guaranteeing continuous, uninterrupted real-time caption scraping.
-- **Immediate Zero-Wait Subtitle Display**:
-  - Subtitles display instantaneously upon video playback start using zero-delay DOM scraping while background loaders and wire sniffers resolve complete tracks.
-  - Automatically and seamlessly upgrades to structured tracks (displaying line count e.g. `CC: Japanese · 142 ▾`) as soon as YouTube's player timedtext request is intercepted.
-- **Universal Keyboard Navigation**:
-  - `A` / `D` seeking now operates seamlessly across both structured tracks and real-time live caption history.
-  - `Space` smoothly toggles play/pause with synchronized state.
-- **Accurate HUD Indicators**:
-  - Fixed HUD state indicators so they accurately distinguish between real-time scraping (`CC: Live (Track) ▾`) and loaded tracks (`CC: Track · Lines ▾`).
-
-**Loader v1.0.4 (Cache Invalidation & Engine Sync)**:
-- **Instant Cache Upgrade**: Bumped `EXPECTED_CACHE_VERSION` to `1.2.7` to automatically flush legacy cached modules in `localStorage` and ensure immediate pickup of Engine v1.2.7.
-
-**v1.2.5 (iPadOS Subtitle Stability, Keyboard Shortcuts & Popup Dismiss Playback)**:
-- **Major iPadOS Subtitle Stability & PoToken Caching**:
-  - Implemented session-level `PoToken` persistence (`sessionStorage.getItem("kiki_pot")`), eliminating cold-start 403 / empty timedtext responses on iPadOS.
-  - Hoisted early network sniffer (`fetch` / `XHR` / `PerformanceObserver`) to the root of the core engine, guaranteeing zero missed timedtext payloads.
-  - Added synchronous `performance.getEntriesByType("resource")` inspection to instantly capture player timedtext URLs and PoTokens.
-  - Prioritized direct `fmt=json3` fetching with early native CC activation, preventing iPadOS from unnecessarily dropping into `CC: Live` mode.
-  - Added seamless self-healing to continuously upgrade live streams to structured subtitle lines as soon as wire tokens or text tracks arrive.
-- **Streamlined Status Bar (HUD)**:
-  - Removed redundant `ℹ️ About` button from the top HUD bar, keeping the interface minimalist and distraction-free (About / Hot-Reload remains fully accessible inside the Settings modal).
-- **Keyboard Shortcuts Navigation**:
-  - Added `A` (previous subtitle line / rewind) and `D` (next subtitle line / advance).
-  - Added `Space` to toggle play/pause smoothly without scrolling the page.
-- **Smart Popup Dismissal with Instant Playback**:
-  - Clicking or tapping outside an active Yomitan lookup card or AI context explanation window now cleanly closes the popup and immediately resumes video playback, without triggering the player's single-tap pause gesture.
-
-**Loader v1.0.2 (Automated Updates & Universal Manager Sync)**:
-- **Native Auto-Update Metadata**: Added `@updateURL` and `@downloadURL` tags matching userscript standards (Safari Userscripts, Tampermonkey, Violentmonkey), enabling one-click update detection and background auto-updating.
-- **Dynamic Engine Version Sync**: Loader now dynamically inspects and records running `__kiki_engine_version` from `core.js` upon hot-reloading, eliminating mismatched version labels.
-
-**Loader v1.0.1 (iPadOS Desktop Redirection Fix)**:
-- **Immediate Desktop Enforcement**: Enforces `PREF` desktop cookies and redirects `m.youtube.com` to `www.youtube.com` right at `document-start` before fetching modules, preventing iPadOS Safari from getting trapped on the mobile web interface during fresh installation.
-- **Root-level Redirection**: Moved redirection logic directly into the controllable local loader script rather than delayed remote modules.
-
-**v1.2.2 (HUD Auto-Hide, Interactive Dismiss & Vector Settings Icon)**:
-- **HUD Auto-Hide & Persistence Fix**: Fixed a bug where background caption updates repeatedly unhid the top bar; now smoothly auto-hides after 6 seconds of inactivity (or 3.5s after pointer leaves).
-- **Multiple Manual Dismiss Controls**: Easily hide the HUD anytime by tapping the top-left video corner, clicking the green status dot `[●]`, or clicking the new `✕` close button on the bar.
-- **Crisp Vector Settings Icon**: Replaced fragile font-dependent gear text glyph with an inline vector SVG icon that renders sharply and consistently across macOS, iPadOS, iOS, Chrome, and Windows.
-- **Track Dropdown Safety**: Automatically keeps the HUD open while the subtitle tracks dropdown menu is being browsed.
-
-**v1.2.1 (Streamlined HUD, Track Dropdown & True Subtitle Fallback)**:
-- **Streamlined HUD Bar**: Refined to 5 essential, high-utility controls: `Settings`, `ℹ️ About`, `💬 Sub: On/Off`, `CC Status (with Dropdown)`, and `🔄 Reload`.
-- **Elongated Subtitle Track Status**: Displays the active track name and loaded line count (e.g., `CC: English · 142 ▾`, `CC: English (auto) · 98 ▾`, `CC: Live ▾`).
-- **Interactive Track Dropdown Menu**: Clicking the CC status button opens a dropdown listing all available official and auto-generated subtitle tracks, allowing instant manual track switching.
-- **Strict Subtitle Priority**: Prioritizes official native audio language tracks, followed by auto-generated captions, with realtime word-by-word subtitles as true fallback.
-- **Centered Toast Notifications**: Re-anchored feedback toasts to the exact center of the screen so they are never obscured by top bars or controls.
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.3.3-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.1.2-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
-## 🚀 Installation Guide
+## 🚀 One-Click Installation
 
-Choose either installation method based on your device and browser:
+Installing Kiki Immersion is fully automated across all modern desktop and mobile browsers via userscript managers:
 
-### Method 1: Remote URL Installation (Recommended for macOS & Desktop Browsers)
-For extensions that support remote URL subscriptions (e.g., macOS Safari Userscripts, Chrome/Edge Tampermonkey, Violentmonkey):
+👉 **[Click Here to Install Kiki Immersion (loader.user.js)](https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/loader.user.js)**
 
-👉 **[Install loader.user.js](https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/loader.user.js)**
+- **Safari (iOS / iPadOS / macOS via Userscripts extension)**:  
+  Tap or open the link above in Safari. The **Userscripts** extension panel will automatically detect the script and prompt an **Install** button. Tap **Install** to finish.
+- **Chrome / Brave / Edge (via Tampermonkey / Violentmonkey)**:  
+  Clicking the link will automatically open Tampermonkey's native installer interface. Click **Install** to finish.
 
-*If your extension does not automatically intercept the link, copy the URL and select "Install from URL" in your extension dashboard.*
+*(Optional Standalone Bundle: If you prefer an entirely offline monolithic userscript without dynamic module fetching from GitHub, you can install [`dist/kiki-immersion.user.js`](https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/dist/kiki-immersion.user.js)).*
 
 ---
 
-### Method 2: Copy-Paste Installation (For iPadOS Userscripts Extension)
-Since iPadOS Userscripts does not support direct remote URL script installation, copy the code below, create a new script in Userscripts, and paste it:
+## 📖 Initial Setup & Dictionary Installation
 
-```javascript
-// ==UserScript==
-// @name         Kiki Immersion
-// @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.0.2
-// @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine & dynamic hot-reload.
-// @author       keke
-// @match        *://*.youtube.com/*
-// @match        *://youtube.com/*
-// @include      *://*.youtube.com/*
-// @include      *://*.youtube.com/*
-// @run-at       document-start
-// @grant        none
-// @inject-into  page
-// @updateURL    https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/loader.user.js
-// @downloadURL  https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/loader.user.js
-// ==/UserScript==
+> [!IMPORTANT]
+> **To start looking up words, you must first install offline Yomitan dictionaries (`.zip` format) into the browser storage.**
 
-(() => {
-  "use strict";
+### 1. YouTube Setup (Primary Platform)
+1. Open **any YouTube video** in your browser.
+2. Click or tap **⚙️ Settings** on the top Kiki HUD bar (or tap any subtitle word, then tap the Settings gear icon in the card header).
+3. Switch to the **📖 Dictionaries** tab.
+4. Drag and drop or browse to import your Yomitan `.zip` dictionary archives (e.g., *JMdict*, *Kenkyusha*, *OALD*, *Cambridge*, *Daijirin*, etc.).
+5. The dictionaries are parsed and stored locally in browser offline storage (IndexedDB) with zero external network requests during lookup.
 
-  const KIKI_LOADER_VERSION = "1.0.2";
-  const MODULES = ["core", "yomitan", "ai", "ui", "youtube"];
-  const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/modules/";
+### 2. Universal Web Reading Setup (LingQ, News, Articles)
+- Kiki Immersion is primarily crafted for **YouTube video immersion**, but also provides full **Universal Web Word Lookup** across all websites.
+- **Per-Domain Storage Isolation**: Because web browsers enforce origin-isolated storage (IndexedDB / localStorage), dictionaries installed on `youtube.com` are sandboxed to YouTube.
+- To use dictionary lookup on any other website (e.g., **LingQ**, Wikipedia, web readers):
+  1. Open your target website.
+  2. Hold the **`Ctrl`** key (or your customized modifier key configured in settings: `Ctrl`, `Alt/Option`, `Cmd/Meta`) and **click ANY word** on the page.
+  3. The Yomitan floating card will appear. Click the **⚙️ Settings** icon in the card header.
+  4. Go to **📖 Dictionaries** and import your dictionary `.zip` files for that site.
+  5. Once imported, simply hold `Ctrl` and click any word to inspect definitions, play pronunciations, or explore AI contextual explanations instantly!
 
-  // -------------------------------------------------------------
-  // HUD Toast Notification (Safe at document-start)
-  // -------------------------------------------------------------
-  function showLoaderHud(text, isError = false) {
-    function mount() {
-      try {
-        let hudToast = document.getElementById("kiki-loader-hud");
-        if (!hudToast) {
-          hudToast = document.createElement("div");
-          hudToast.id = "kiki-loader-hud";
-          hudToast.style.cssText = "position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:2147483647;background:rgba(15,23,42,0.94);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(99,102,241,0.6);border-radius:14px;padding:10px 20px;color:#E0E7FF;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,0.6);display:flex;align-items:center;gap:10px;pointer-events:none;";
-          const target = document.body || document.documentElement;
-          if (target) target.appendChild(hudToast);
-        }
-        if (hudToast) {
-          hudToast.textContent = text;
-          if (isError) hudToast.style.borderColor = "#F87171";
-        }
-        return hudToast;
-      } catch (e) {
-        return null;
-      }
-    }
+---
 
-    if (document.body || document.documentElement) {
-      return mount();
-    } else {
-      document.addEventListener("DOMContentLoaded", mount, { once: true });
-      return null;
-    }
-  }
+## 👆 Touch & Gesture Controls Guide
 
-  function hideLoaderHud(delay = 0) {
-    setTimeout(() => {
-      try {
-        const hud = document.getElementById("kiki-loader-hud");
-        if (hud) hud.remove();
-      } catch (e) {}
-    }, delay);
-  }
+Kiki Immersion features a touch-first design built specifically for iPad, tablet, and touch-screen immersion. The player is divided into responsive touch zones:
 
-  // -------------------------------------------------------------
-  // 1. Force Desktop YouTube & Early Native Lockout
-  // -------------------------------------------------------------
-  try {
-    document.cookie = "PREF=f6=40000000&f5=30000&app=desktop; domain=.youtube.com; path=/; max-age=31536000; Secure; SameSite=Lax";
-  } catch (e) {}
+![Kiki Immersion Touch & Gesture Guide](assets/gesture_guide.jpg)
 
-  const isMobile = location.hostname === 'm.youtube.com' || (location.host && location.host.includes('m.youtube.com'));
-  if (isMobile) {
-    showLoaderHud("⏳ Kiki Immersion: Switching to Desktop YouTube...");
-    const doRedirect = () => {
-      try {
-        const targetUrl = new URL(location.href);
-        targetUrl.hostname = 'www.youtube.com';
-        targetUrl.searchParams.set('app', 'desktop');
-        targetUrl.searchParams.set('persist_app', '1');
-        location.replace(targetUrl.toString());
-      } catch (e) {
-        location.href = "https://www.youtube.com/?app=desktop&persist_app=1";
-      }
-    };
-    doRedirect();
-    if (typeof document !== "undefined" && document.addEventListener) {
-      document.addEventListener("DOMContentLoaded", doRedirect, { once: true });
-    }
-    return;
-  }
+### Gesture Mapping Reference
 
-  try {
-    Object.defineProperty(navigator, 'platform', { get: () => "MacIntel" });
-  } catch (e) {}
+| Screen Area / Gesture | Action | Description |
+| :--- | :--- | :--- |
+| **Subtitle Word Tap** | `Yomitan & AI Lookup` | Tap any word in the subtitle line to instantly open Yomitan definitions, pitch accent, audio pronunciation, and AI context. |
+| **Double Tap (Left 28%)** | `← Previous Subtitle Line` | Instantly jump playback to the start of the previous subtitle line. |
+| **Double Tap (Center 44%)** | `Webpage Fullscreen` | Smoothly toggles seamless webpage fullscreen mode. |
+| **Double Tap (Right 28%)** | `Next Subtitle Line →` | Instantly advance playback to the next subtitle line. |
+| **Single Tap (Top-Left 18%)** | `Toggle Kiki HUD Bar` | Shows or hides the top floating controller bar (Settings, Subtitles, CC Track selector, Reload). |
+| **Single Tap (Top-Right 18%)** | `Toggle Native Controls` | Reveals YouTube's native player controls overlay. |
+| **Single Tap (Center)** | `Play / Pause` | Toggles video playback smoothly with gesture debounce protection. |
+| **Dismiss Lookup Card** | `Tap Outside Card` | Tapping anywhere outside an active dictionary/AI popup immediately dismisses it and cleanly resumes playback. |
 
-  if (document.documentElement) {
-    document.documentElement.classList.add("kiki-lock-chrome");
-  } else {
-    document.addEventListener("DOMContentLoaded", () => {
-      document.documentElement.classList.add("kiki-lock-chrome");
-    }, { once: true });
-  }
-
-  try {
-    window.__kiki_loader_version = KIKI_LOADER_VERSION;
-    localStorage.setItem("kiki_loader_version", KIKI_LOADER_VERSION);
-  } catch (e) {}
-
-  function getCachedModule(name) {
-    try {
-      return localStorage.getItem("kiki_mod_" + name);
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function setCachedModule(name, code) {
-    try {
-      localStorage.setItem("kiki_mod_" + name, code);
-    } catch (e) {}
-  }
-
-  const EXPECTED_CACHE_VERSION = "1.2.5";
-
-  function hasAllCachedModules() {
-    if (localStorage.getItem("kiki_cache_version") !== EXPECTED_CACHE_VERSION) return false;
-    return MODULES.every(m => {
-      const c = getCachedModule(m);
-      return c && c.length > 50;
-    });
-  }
-
-  let kikiPolicy = (typeof window !== "undefined" && window.__kiki_policy) ? window.__kiki_policy : null;
-  function getPolicy() {
-    if (kikiPolicy) return kikiPolicy;
-    const tt = (typeof window !== "undefined" && window.trustedTypes) ||
-               (typeof unsafeWindow !== "undefined" && unsafeWindow.trustedTypes);
-    if (!tt || typeof tt.createPolicy !== "function") return null;
-
-    // 1. Try 'default' policy (auto-resolves strings to TrustedScript/TrustedHTML across all sinks)
-    try {
-      kikiPolicy = tt.createPolicy("default", {
-        createScript: s => s,
-        createHTML: h => h,
-        createScriptURL: u => u
-      });
-      if (typeof window !== "undefined") window.__kiki_policy = kikiPolicy;
-      return kikiPolicy;
-    } catch (e1) {}
-
-    // 2. Try unique policy name to guarantee success without collision
-    const candidateNames = [
-      "kiki-loader-" + Math.random().toString(36).slice(2, 8),
-      "kikiPolicy",
-      "kiki-loader-exec"
-    ];
-    for (const name of candidateNames) {
-      try {
-        kikiPolicy = tt.createPolicy(name, {
-          createScript: s => s,
-          createHTML: h => h,
-          createScriptURL: u => u
-        });
-        if (typeof window !== "undefined") window.__kiki_policy = kikiPolicy;
-        return kikiPolicy;
-      } catch (e2) {}
-    }
-
-    // 3. Fallback to existing defaultPolicy
-    if (tt.defaultPolicy) {
-      kikiPolicy = tt.defaultPolicy;
-      if (typeof window !== "undefined") window.__kiki_policy = kikiPolicy;
-      return kikiPolicy;
-    }
-
-    return null;
-  }
-
-  function executeCachedModules() {
-    try {
-      const fullCode = MODULES.map(m => getCachedModule(m)).join("\n;\n");
-      let scriptSource = fullCode;
-      const p = getPolicy();
-      if (p && typeof p.createScript === "function") {
-        try {
-          scriptSource = p.createScript(fullCode);
-        } catch (e) {}
-      }
-      try {
-        const runner = new Function(scriptSource);
-        runner();
-      } catch (fnErr) {
-        // Fallback: inject inline script element into DOM
-        const scriptEl = document.createElement("script");
-        scriptEl.textContent = scriptSource;
-        (document.head || document.documentElement).appendChild(scriptEl);
-        scriptEl.remove();
-      }
-    } catch (e) {
-      console.error("[Kiki Loader] Module execution error:", e);
-      showLoaderHud("❌ Kiki Loader: Execution error: " + e.message, true);
-      hideLoaderHud(4000);
-    }
-  }
-
-  async function fetchModule(name) {
-    const url = `${GITHUB_RAW_BASE}${name}.js?_t=${Date.now()}`;
-    const resp = await fetch(url, { cache: "no-store" });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status} on ${name}.js`);
-    return await resp.text();
-  }
-
-  async function bootstrapAndFetchAll(isManual = false) {
-    showLoaderHud("⏳ Kiki Immersion: Fetching core modules...");
-
-    try {
-      const results = await Promise.all(MODULES.map(m => fetchModule(m)));
-      results.forEach((code, idx) => {
-        setCachedModule(MODULES[idx], code);
-      });
-      localStorage.setItem("kiki_cache_version", EXPECTED_CACHE_VERSION);
-      localStorage.setItem("kiki_loader_version", KIKI_LOADER_VERSION);
-      localStorage.setItem("kiki_cache_time", new Date().toLocaleString());
-
-      showLoaderHud("✅ Kiki Immersion: Core modules ready!");
-      hideLoaderHud(1200);
-
-      if (isManual) {
-        setTimeout(() => location.reload(), 500);
-      } else {
-        executeCachedModules();
-      }
-    } catch (err) {
-      console.error("[Kiki Loader] Bootstrapping failed:", err);
-      showLoaderHud("❌ Failed to fetch modules: " + err.message, true);
-      hideLoaderHud(4000);
-      throw err;
-    }
-  }
-
-  // Hot-reload API exposed for About modal & dev
-  window.__kiki_reload_modules = bootstrapAndFetchAll;
-
-  // Boot execution
-  if (hasAllCachedModules()) {
-    try {
-      executeCachedModules();
-    } catch (err) {
-      console.error("[Kiki Loader] Execution of cached modules failed, re-fetching...", err);
-      bootstrapAndFetchAll(false);
-    }
-  } else {
-    // First time install or cache cleared: bootstrap from raw GitHub
-    bootstrapAndFetchAll(false);
-  }
-})();
-```
-
-> **Tip**: After installing the Loader, the first time you open any YouTube page, it will automatically fetch and cache all core modules locally. Subsequent visits load with **zero latency** from local storage. To check for updates, simply click the update button in the `ℹ️ About` panel on the player HUD bar!
+### Keyboard Shortcuts (Desktop / Hardware Keyboards)
+- **`A`**: Jump to previous subtitle line.
+- **`D`**: Jump to next subtitle line.
+- **`Space`**: Smooth Play / Pause toggle without page scroll.
+- **`Ctrl + Click`** (on any web text or YouTube comments): Trigger instant Yomitan & AI lookup card.
 
 ---
 
 ## ✨ Features & Highlights
 
-1. **Dual-Core Learning System**
-   - **First-Party Yomitan Dictionary**: Import standard `.zip` format dictionaries (OALD, Cambridge, JMdict, etc.) directly into `youtube.com`'s IndexedDB.
-   - **High-DPI Font Typography**: Explicit pixel sizing (`22px` headwords, `15px` definitions with 1.65 line height), eliminating YouTube's `10px` root rem scaling trap.
-   - **AI Contextual Explanation Engine**:
-     - **MarginNote 4 Style Exploration Pills**: Dynamically provides 2~4 clickable follow-up pills tailored to the video sentence and response.
-     - **Real-Time Reasoning Progress & Auto-Collapse**: Streaming reasoning tokens fold neatly into a purple `✦ Reasoning Complete` status bar.
-     - **Multi-Turn Conversational Chat**: Pinned bottom input bar for continuous inquiries with conversation memory.
-     - **Mode Switcher**: One-click switching between `⚡ Quick Glance`, `📚 Deep Study`, and `⚙️ Custom`.
-     - **Max Tokens Presets**: Friendly presets (`4096` default, `8192`, `2048`, custom) to prevent answer cutoffs.
+1. **Dual-Theme Liquid Glass UI (Dark & Light Modes)**
+   - **Liquid Glass Dark**: Deep translucent obsidian glass with vibrant neon badges and smooth backdrop blur.
+   - **Liquid Glass Light**: Pristine white translucent glass with crisp typography, designed to follow macOS and Windows system color schemes automatically (or manually toggleable in settings).
 
-2. **Rock-Solid Subtitle Pipeline (Strict Non-Live Mode)**
-   - Wire-level `/api/timedtext` interceptor and complete sentence line reconstruction.
+2. **First-Party Offline Yomitan Dictionary & Audio Engine**
+   - High-performance client-side IndexedDB dictionary parser supporting standard Yomitan / Yomichan `.zip` files.
+   - Offline audio pronunciation playback and pitch accent visual graphs.
+   - Multi-word compound matching and automatic Japanese deinflection / English lemmatization.
+
+3. **Contextual AI Explanations & Multi-Turn Chat**
+   - OpenAI-compatible API support (DeepSeek, GPT-4o-mini, Claude, Ollama, etc.).
+   - Automatically injects the clicked word and the exact video subtitle sentence context.
+   - **Interactive Exploration Pills**: MarginNote 4 style one-tap exploration pills tailored to your sentence.
+   - **Multi-Turn Chat**: Follow-up questions with full conversation memory directly inside the lookup card.
+
+4. **Rock-Solid Subtitle Pipeline**
+   - YouTube PoToken bypass via native authenticated Transcript panel extraction.
+   - Automatic subtitle line synchronization and track switching.
    - Multi-word phrase matching and highlight in subtitles.
-
-3. **Touch-First Gesture Engine**
-   - Double-tap center screen (64% area) for rock-solid webpage fullscreen toggling with debounce protection.
-   - Touch left/right 18% zones for instant subtitle cue seeking.
-
-4. **Standalone Bundle (Optional)**
-   - For users who prefer a single monolithic offline script without dynamic loader bootstrapping, download [`dist/kiki-immersion.user.js`](https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/dist/kiki-immersion.user.js).
 
 ---
 
@@ -433,13 +100,16 @@ Since iPadOS Userscripts does not support direct remote URL script installation,
 
 ```text
 Kiki-Immersion/
-├── loader.user.js            # Permanent lightweight loader entrypoint (~100 lines)
-├── modules/                  # Modular source code
-│   ├── core.js               # Core state, storage, helper utilities, styles
+├── loader.user.js            # Universal auto-updating loader script
+├── assets/
+│   └── gesture_guide.jpg     # Touch gesture illustration diagram
+├── modules/                  # Modular engine source code
+│   ├── core.js               # State, theme management, base styles & utilities
 │   ├── yomitan.js            # Yomitan offline IndexedDB dictionary & audio
 │   ├── ai.js                 # AI explanation engine, streaming & exploration pills
 │   ├── ui.js                 # HUD bar, card layout, settings & update modal
-│   └── youtube.js            # YouTube DOM adapter, subtitle capture & gestures
+│   ├── web.js                # Universal non-intrusive web word lookup
+│   └── youtube.js            # YouTube DOM adapter, subtitle sync & touch gestures
 ├── manifest.json             # Module registry and metadata manifest
 ├── scripts/                  # Build and bundling scripts
 │   ├── bundle.py             # Generates dist single-file bundle
@@ -452,4 +122,4 @@ Kiki-Immersion/
 
 ## 📄 License
 
-GPL-3.0 License. Open-source touch-first YouTube immersion player.
+GPL-3.0 License. Open-source touch-first immersion player for YouTube and the modern web.

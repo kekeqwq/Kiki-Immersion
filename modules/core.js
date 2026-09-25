@@ -807,6 +807,29 @@
     }
     #kiki-toast.show { opacity: 1 !important; }
 
+    /* Loader HUD Toast */
+    #kiki-loader-hud {
+      position: fixed !important;
+      top: 16px !important;
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+      z-index: 2147483647 !important;
+      border-radius: 14px !important;
+      padding: 10px 20px !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 10px !important;
+      pointer-events: none !important;
+      background: rgba(15, 23, 42, 0.94) !important;
+      backdrop-filter: blur(16px) !important;
+      -webkit-backdrop-filter: blur(16px) !important;
+      border: 1px solid rgba(99, 102, 241, 0.6) !important;
+      color: #E0E7FF !important;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6) !important;
+    }
+
     /* Floating Draggable Controller HUD */
     #kiki-hud {
       position: fixed !important;
@@ -1147,6 +1170,14 @@
         border: 1px solid rgba(255, 255, 255, 0.95) !important;
         box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
       }
+      html:not([data-kiki-theme="dark"]) #kiki-loader-hud {
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.72) 100%) !important;
+        backdrop-filter: blur(28px) saturate(200%) !important;
+        -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
+        color: #0F172A !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
+      }
       html:not([data-kiki-theme="dark"]) #kiki-hud {
         background: linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.65) 100%) !important;
         backdrop-filter: blur(24px) saturate(200%) !important;
@@ -1372,6 +1403,14 @@
       -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
       color: #0F172A !important;
       border: 1px solid rgba(255, 255, 255, 0.95) !important;
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
+    }
+    html[data-kiki-theme="light"] #kiki-loader-hud {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.72) 100%) !important;
+      backdrop-filter: blur(28px) saturate(200%) !important;
+      -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
+      color: #0F172A !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
       box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
     }
     html[data-kiki-theme="light"] #kiki-hud {

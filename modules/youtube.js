@@ -2044,7 +2044,7 @@
         const hudState = hudEl ? (hudEl.offsetWidth > 0 ? `${hudEl.offsetWidth}x${hudEl.offsetHeight}` : "0px") : "NULL";
         const trkCount = v && v.textTracks ? v.textTracks.length : 0;
         const kikiVer = window.__kiki_engine_version || localStorage.getItem("kiki_cache_version") || "1.2.5";
-        toast(`✦ Kiki v${kikiVer} [HUD:${hudState}|${vState}|TT:${trkCount}]`);
+        console.log(`[Kiki Status] v${kikiVer} [HUD:${hudState}|${vState}|TT:${trkCount}]`);
       }, 700);
       setTimeout(() => {
         ensureHud();

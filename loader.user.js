@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.1.1
+// @version      1.1.2
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine & dynamic hot-reload.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -20,7 +20,7 @@
 (() => {
   "use strict";
 
-  const KIKI_LOADER_VERSION = "1.1.1";
+  const KIKI_LOADER_VERSION = "1.1.2";
   const ALL_MODULES = ["core", "yomitan", "ai", "ui", "youtube", "web"];
   const isYouTube = /(?:^|\.)youtube\.com$/.test(location.hostname);
   const MODULES = isYouTube
@@ -54,18 +54,43 @@
   } catch (e) {}
 
   // -------------------------------------------------------------
-  // HUD Toast Notification (Safe at document-start)
+  // HUD Toast Notification (Safe at document-start, Theme-Aware)
   // -------------------------------------------------------------
+  function isLoaderLight() {
+    try {
+      const themePref = localStorage.getItem("kiki_theme") || "auto";
+      if (themePref === "light") return true;
+      if (themePref === "dark") return false;
+      const docEl = document.documentElement;
+      if (docEl) {
+        if (docEl.getAttribute("data-kiki-theme") === "light") return true;
+        if (docEl.getAttribute("data-kiki-theme") === "dark") return false;
+        if (docEl.hasAttribute("dark") && docEl.getAttribute("dark") !== "false") return false;
+        if (docEl.classList.contains("dark") || docEl.getAttribute("data-theme") === "dark") return false;
+      }
+      return Boolean(window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches);
+    } catch (e) {
+      return false;
+    }
+  }
+
   function showLoaderHud(text, isError = false) {
     function mount() {
       try {
         let hudToast = document.getElementById("kiki-loader-hud");
+        const light = isLoaderLight();
+        const baseStyle = "position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:2147483647;border-radius:14px;padding:10px 20px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;font-weight:600;display:flex;align-items:center;gap:10px;pointer-events:none;transition:opacity 0.2s ease;";
+        const lightStyle = baseStyle + "background:linear-gradient(135deg, rgba(255,255,255,0.88) 0%, rgba(255,255,255,0.72) 100%);backdrop-filter:blur(28px) saturate(200%);-webkit-backdrop-filter:blur(28px) saturate(200%);border:1.5px solid rgba(255,255,255,0.95);color:#0F172A;box-shadow:0 16px 40px rgba(15,23,42,0.18), 0 0 0 1px rgba(0,0,0,0.08), inset 0 1px 1px rgba(255,255,255,1);";
+        const darkStyle = baseStyle + "background:rgba(15,23,42,0.94);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(99,102,241,0.6);color:#E0E7FF;box-shadow:0 10px 30px rgba(0,0,0,0.6);";
+
         if (!hudToast) {
           hudToast = document.createElement("div");
           hudToast.id = "kiki-loader-hud";
-          hudToast.style.cssText = "position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:2147483647;background:rgba(15,23,42,0.94);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(99,102,241,0.6);border-radius:14px;padding:10px 20px;color:#E0E7FF;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,0.6);display:flex;align-items:center;gap:10px;pointer-events:none;";
+          hudToast.style.cssText = light ? lightStyle : darkStyle;
           const target = document.body || document.documentElement;
           if (target) target.appendChild(hudToast);
+        } else {
+          hudToast.style.cssText = light ? lightStyle : darkStyle;
         }
         if (hudToast) {
           hudToast.textContent = text;
