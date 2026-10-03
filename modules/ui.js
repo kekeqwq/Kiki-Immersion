@@ -600,6 +600,7 @@
   // 7. Yomitan Card & Word Lookup
   // -------------------------------------------------------------
   function ensureYomitanCard() {
+    if (typeof applyTheme === "function") applyTheme();
     let card = $("#kiki-yomitan-card");
     if (!card) {
       card = document.createElement("div");
@@ -805,6 +806,7 @@
 
 
   async function showYomitanCard(wordEl, term, coords = null, sentenceOverride = "", contextSource = null, paragraphOverride = "") {
+    if (typeof applyTheme === "function") applyTheme();
     window.showYomitanCard = showYomitanCard;
     STATE.lastLookupOpenTime = Date.now();
     STATE.lookupWord = term;
@@ -1146,6 +1148,7 @@
   }
 
   async function showSettingsModal(initialTab = "dict") {
+    if (typeof applyTheme === "function") applyTheme();
     let backdrop = document.getElementById("kiki-modal-backdrop");
     if (!backdrop) {
       backdrop = document.createElement("div");

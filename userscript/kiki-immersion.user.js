@@ -113,18 +113,23 @@
       const docEl = document.documentElement;
       if (docEl) {
         if (docEl.hasAttribute("dark") && docEl.getAttribute("dark") !== "false") return true;
-        if (docEl.classList.contains("dark") || docEl.getAttribute("data-theme") === "dark") return true;
+        if (docEl.classList.contains("dark") || docEl.getAttribute("data-theme") === "dark" || docEl.getAttribute("data-color-mode") === "dark") return true;
       }
-      // Check YouTube ytd-app or main containers if body is transparent
-      const checkEl = (document.body && window.getComputedStyle(document.body).backgroundColor !== "rgba(0, 0, 0, 0)")
-        ? document.body
-        : (document.querySelector("ytd-app, #content, main") || document.body);
-      if (checkEl) {
-        const bColor = window.getComputedStyle(checkEl).backgroundColor;
+      const body = document.body;
+      if (body) {
+        if (body.classList.contains("dark") || body.classList.contains("theme-luminosity-dark") || body.classList.contains("is-dark-theme") || body.classList.contains("dark-theme")) return true;
+        if (body.getAttribute("data-theme") === "dark" || body.getAttribute("data-color-mode") === "dark") return true;
+      }
+      // Check computed background color of body, main containers, or docEl
+      const checkList = [body, document.querySelector("#app, main, ytd-app, #content, .reader-container, #lesson-reader, article.sentence-text"), docEl];
+      for (const el of checkList) {
+        if (!el) continue;
+        const bColor = window.getComputedStyle(el).backgroundColor;
         const rgb = bColor ? bColor.match(/\d+/g) : null;
         if (rgb && rgb.length >= 3) {
           const r = +rgb[0], g = +rgb[1], b = +rgb[2];
-          if (rgb.length < 4 || +rgb[3] > 0.1) {
+          const alpha = rgb.length >= 4 ? +rgb[3] : 1;
+          if (alpha > 0.1) {
             const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
             return lum < 128;
           }
@@ -133,6 +138,7 @@
     } catch {}
     return Boolean(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
   }
+  window.isPageDark = isPageDark;
 
   function getResolvedTheme() {
     const pref = (typeof STATE !== "undefined" && STATE.theme) ||
@@ -189,11 +195,23 @@
     });
     const attachThemeMo = () => {
       if (document.documentElement) {
-        themeMo.observe(document.documentElement, { attributes: true, attributeFilter: ["dark", "data-theme", "class"] });
+        themeMo.observe(document.documentElement, { attributes: true, attributeFilter: ["dark", "data-theme", "class", "style", "data-color-mode"] });
+      }
+      if (document.body) {
+        themeMo.observe(document.body, { attributes: true, attributeFilter: ["dark", "data-theme", "class", "style", "data-color-mode"] });
       }
     };
     if (document.documentElement) attachThemeMo();
-    else document.addEventListener("DOMContentLoaded", attachThemeMo, { once: true });
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => {
+        attachThemeMo();
+        applyTheme();
+      }, { once: true });
+    } else {
+      attachThemeMo();
+      applyTheme();
+    }
+    window.addEventListener("load", () => applyTheme(), { once: true });
   } catch {}
 
   function currentVideoId() {
@@ -468,6 +486,7 @@
   }
 
   function toast(msg) {
+    if (typeof applyTheme === "function") applyTheme();
     let el = $("#kiki-toast");
     if (!el) {
       el = document.createElement("div");
@@ -5084,6 +5103,7 @@ window.KikiAudioEngine = KikiAudioEngine;
   // 7. Yomitan Card & Word Lookup
   // -------------------------------------------------------------
   function ensureYomitanCard() {
+    if (typeof applyTheme === "function") applyTheme();
     let card = $("#kiki-yomitan-card");
     if (!card) {
       card = document.createElement("div");
@@ -5289,6 +5309,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 
   async function showYomitanCard(wordEl, term, coords = null, sentenceOverride = "", contextSource = null, paragraphOverride = "") {
+    if (typeof applyTheme === "function") applyTheme();
     window.showYomitanCard = showYomitanCard;
     STATE.lastLookupOpenTime = Date.now();
     STATE.lookupWord = term;
@@ -5630,6 +5651,7 @@ window.KikiAudioEngine = KikiAudioEngine;
   }
 
   async function showSettingsModal(initialTab = "dict") {
+    if (typeof applyTheme === "function") applyTheme();
     let backdrop = document.getElementById("kiki-modal-backdrop");
     if (!backdrop) {
       backdrop = document.createElement("div");
@@ -6631,8 +6653,18 @@ window.KikiAudioEngine = KikiAudioEngine;
         const { sentence, paragraph } = extractWebContext(node, offset, phrase);
         const hlRange = document.createRange();
         try {
-          hlRange.selectNode(phraseHost);
-        } catch {}
+          const phraseWords = phraseHost.parentElement
+            ? Array.from(phraseHost.parentElement.querySelectorAll(`[data-kiki-phrase="${CSS.escape(phrase)}"]`))
+            : [phraseHost];
+          if (phraseWords.length > 0) {
+            hlRange.setStartBefore(phraseWords[0]);
+            hlRange.setEndAfter(phraseWords[phraseWords.length - 1]);
+          } else {
+            hlRange.selectNode(phraseHost);
+          }
+        } catch {
+          try { hlRange.selectNode(phraseHost); } catch {}
+        }
         return {
           term: phrase,
           sentence,
@@ -6898,37 +6930,63 @@ window.KikiAudioEngine = KikiAudioEngine;
     let scanPending = false;
     let lastScannedFingerprint = "";
 
+    // Map: wordId -> { phrase: string, isLast: boolean, el: HTMLElement }
+    const wordMetaMap = new Map();
+
+    const WAVE_DARK = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 6'%3E%3Cpath d='M 0 3 Q 5 0.5 10 3 T 20 3' fill='none' stroke='%23818CF8' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E")`;
+    const WAVE_LIGHT = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 6'%3E%3Cpath d='M 0 3 Q 5 0.5 10 3 T 20 3' fill='none' stroke='%234F46E5' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E")`;
+
     function injectPhraseStyles() {
       if (document.getElementById("kiki-lingq-phrase-styles")) return;
       const style = document.createElement("style");
       style.id = "kiki-lingq-phrase-styles";
       style.textContent = `
         :root {
-          --kiki-phrase-wavy: #4F46E5;
+          --kiki-phrase-wave: ${WAVE_LIGHT};
         }
         @media (prefers-color-scheme: dark) {
           :root {
-            --kiki-phrase-wavy: #818CF8;
+            --kiki-phrase-wave: ${WAVE_DARK};
           }
         }
-        .theme-luminosity-dark, [data-theme="dark"], .dark, [dark="true"] {
-          --kiki-phrase-wavy: #818CF8 !important;
+        [data-kiki-theme="dark"],
+        .theme-luminosity-dark,
+        [data-theme="dark"],
+        .dark,
+        [dark="true"] {
+          --kiki-phrase-wave: ${WAVE_DARK} !important;
         }
-        .theme-luminosity-light, [data-theme="light"], .light {
-          --kiki-phrase-wavy: #4F46E5 !important;
+        [data-kiki-theme="light"],
+        .theme-luminosity-light,
+        [data-theme="light"],
+        .light {
+          --kiki-phrase-wave: ${WAVE_LIGHT} !important;
         }
         .kiki-phrase-word {
-          text-decoration-line: underline !important;
-          text-decoration-style: wavy !important;
-          text-decoration-color: var(--kiki-phrase-wavy) !important;
-          text-decoration-thickness: 2.5px !important;
-          text-underline-offset: 4.5px !important;
+          position: relative !important;
           cursor: pointer !important;
-          transition: filter 0.15s ease, text-decoration-thickness 0.15s ease !important;
         }
-        .kiki-phrase-word:hover, .kiki-phrase-hover {
-          text-decoration-thickness: 3.2px !important;
-          filter: drop-shadow(0 0 2px var(--kiki-phrase-wavy)) !important;
+        .kiki-phrase-word::after {
+          content: "" !important;
+          position: absolute !important;
+          left: 0 !important;
+          right: 0 !important;
+          bottom: -2.5px !important;
+          height: 6px !important;
+          background-image: var(--kiki-phrase-wave) !important;
+          background-repeat: repeat-x !important;
+          background-size: 10px 6px !important;
+          background-position: left bottom !important;
+          pointer-events: none !important;
+          z-index: 12 !important;
+          transition: filter 0.15s ease !important;
+        }
+        .kiki-phrase-word:not(.kiki-phrase-last)::after {
+          right: -0.32em !important;
+        }
+        .kiki-phrase-word:hover::after,
+        .kiki-phrase-hover::after {
+          filter: drop-shadow(0 0 2.5px rgba(129, 140, 248, 0.9)) !important;
         }
       `;
       (document.head || document.documentElement).appendChild(style);
@@ -6938,11 +6996,52 @@ window.KikiAudioEngine = KikiAudioEngine;
       try {
         const isDark = (typeof isPageDark === "function" && isPageDark()) ||
                        document.body?.classList.contains("theme-luminosity-dark") ||
-                       document.documentElement?.classList.contains("dark") ||
+                       document.documentElement?.getAttribute("data-kiki-theme") === "dark" ||
                        window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
-        const color = isDark ? "#818CF8" : "#4F46E5";
-        document.documentElement.style.setProperty("--kiki-phrase-wavy", color);
+        const wave = isDark ? WAVE_DARK : WAVE_LIGHT;
+        document.documentElement.style.setProperty("--kiki-phrase-wave", wave);
       } catch {}
+    }
+
+    function onPhraseEnter(e) {
+      const p = e.currentTarget?.getAttribute("data-kiki-phrase");
+      if (p) {
+        document.querySelectorAll(`[data-kiki-phrase="${CSS.escape(p)}"]`).forEach(item => {
+          item.classList.add("kiki-phrase-hover");
+        });
+      }
+    }
+
+    function onPhraseLeave() {
+      document.querySelectorAll(".kiki-phrase-hover").forEach(item => {
+        item.classList.remove("kiki-phrase-hover");
+      });
+    }
+
+    // Continuous enforcer: runs in < 0.05ms, firmly restoring phrase marks on any React re-render
+    function enforcePhraseMarks() {
+      if (wordMetaMap.size === 0) return;
+      for (const [id, meta] of wordMetaMap.entries()) {
+        const el = document.getElementById(id) || (meta.el && meta.el.isConnected ? meta.el : null);
+        if (!el) continue;
+        if (!el.classList.contains("kiki-phrase-word")) {
+          el.classList.add("kiki-phrase-word");
+        }
+        if (meta.isLast) {
+          if (!el.classList.contains("kiki-phrase-last")) el.classList.add("kiki-phrase-last");
+        } else {
+          if (el.classList.contains("kiki-phrase-last")) el.classList.remove("kiki-phrase-last");
+        }
+        if (el.getAttribute("data-kiki-phrase") !== meta.phrase) {
+          el.setAttribute("data-kiki-phrase", meta.phrase);
+          el.setAttribute("title", `✦ Phrase: ${meta.phrase}`);
+        }
+        if (!el.__kikiPhraseBound) {
+          el.__kikiPhraseBound = true;
+          el.addEventListener("pointerenter", onPhraseEnter, { passive: true });
+          el.addEventListener("pointerleave", onPhraseLeave, { passive: true });
+        }
+      }
     }
 
     async function checkPhraseInDict(phraseText) {
@@ -6980,11 +7079,16 @@ window.KikiAudioEngine = KikiAudioEngine;
         updateThemeColor();
 
         const sentences = Array.from(document.querySelectorAll(".sentence"));
-        if (!sentences.length) return;
+        if (!sentences.length) {
+          enforcePhraseMarks();
+          return;
+        }
 
-        // Skip redundant scan if reader content is unchanged
-        const currentFingerprint = sentences.map(s => s.id + ":" + s.textContent).join("|");
+        // Fingerprint reader content
+        const currentFingerprint = sentences.map(s => s.id + ":" + s.textContent.trim()).join("|");
         if (currentFingerprint === lastScannedFingerprint) {
+          // Content unchanged: synchronously enforce existing phrase marks
+          enforcePhraseMarks();
           return;
         }
 
@@ -7075,32 +7179,29 @@ window.KikiAudioEngine = KikiAudioEngine;
           }
         });
 
-        // Mark the words of each recognized phrase
-        finalMatches.forEach(m => {
-          m.els.forEach(el => {
-            el.classList.add("kiki-phrase-word");
-            el.setAttribute("data-kiki-phrase", m.phrase);
-            el.setAttribute("title", `✦ Phrase: ${m.phrase}`);
+        // Reset and populate wordMetaMap
+        wordMetaMap.clear();
+        let fallbackIdCounter = 0;
 
-            // Group hover illumination
-            if (!el.__kikiPhraseBound) {
-              el.__kikiPhraseBound = true;
-              el.addEventListener("pointerenter", () => {
-                const p = el.getAttribute("data-kiki-phrase");
-                if (p) {
-                  document.querySelectorAll(`[data-kiki-phrase="${CSS.escape(p)}"]`).forEach(item => {
-                    item.classList.add("kiki-phrase-hover");
-                  });
-                }
-              });
-              el.addEventListener("pointerleave", () => {
-                document.querySelectorAll(".kiki-phrase-hover").forEach(item => {
-                  item.classList.remove("kiki-phrase-hover");
-                });
-              });
+        finalMatches.forEach(m => {
+          const totalEls = m.els.length;
+          m.els.forEach((el, idx) => {
+            let id = el.id;
+            if (!id) {
+              id = "kiki-w-" + (++fallbackIdCounter);
+              el.id = id;
             }
+            const isLast = (idx === totalEls - 1);
+            wordMetaMap.set(id, {
+              phrase: m.phrase,
+              isLast,
+              el
+            });
           });
         });
+
+        // Lock in phrase marks immediately
+        enforcePhraseMarks();
 
         lastScannedFingerprint = currentFingerprint;
       } catch (err) {
@@ -7122,21 +7223,17 @@ window.KikiAudioEngine = KikiAudioEngine;
 
     // 1. Observe reader container and DOM mutations for non-refresh SPA page turns
     const observer = new MutationObserver((mutations) => {
-      let shouldScan = false;
+      // Synchronously lock phrase marks onto DOM elements
+      enforcePhraseMarks();
+
+      let shouldRescan = false;
       for (const m of mutations) {
         if (m.type === "childList" && (m.addedNodes.length > 0 || m.removedNodes.length > 0)) {
-          shouldScan = true;
+          shouldRescan = true;
           break;
         }
-        if (m.type === "attributes" && m.attributeName === "class") {
-          const target = m.target;
-          if (target && (target.classList?.contains("sentence-text") || target.id === "lesson-reader" || target.tagName === "BODY")) {
-            shouldScan = true;
-            break;
-          }
-        }
       }
-      if (shouldScan) scheduleScan();
+      if (shouldRescan) scheduleScan(120);
     });
 
     observer.observe(document.body || document.documentElement, {

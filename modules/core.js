@@ -56,18 +56,23 @@
       const docEl = document.documentElement;
       if (docEl) {
         if (docEl.hasAttribute("dark") && docEl.getAttribute("dark") !== "false") return true;
-        if (docEl.classList.contains("dark") || docEl.getAttribute("data-theme") === "dark") return true;
+        if (docEl.classList.contains("dark") || docEl.getAttribute("data-theme") === "dark" || docEl.getAttribute("data-color-mode") === "dark") return true;
       }
-      // Check YouTube ytd-app or main containers if body is transparent
-      const checkEl = (document.body && window.getComputedStyle(document.body).backgroundColor !== "rgba(0, 0, 0, 0)")
-        ? document.body
-        : (document.querySelector("ytd-app, #content, main") || document.body);
-      if (checkEl) {
-        const bColor = window.getComputedStyle(checkEl).backgroundColor;
+      const body = document.body;
+      if (body) {
+        if (body.classList.contains("dark") || body.classList.contains("theme-luminosity-dark") || body.classList.contains("is-dark-theme") || body.classList.contains("dark-theme")) return true;
+        if (body.getAttribute("data-theme") === "dark" || body.getAttribute("data-color-mode") === "dark") return true;
+      }
+      // Check computed background color of body, main containers, or docEl
+      const checkList = [body, document.querySelector("#app, main, ytd-app, #content, .reader-container, #lesson-reader, article.sentence-text"), docEl];
+      for (const el of checkList) {
+        if (!el) continue;
+        const bColor = window.getComputedStyle(el).backgroundColor;
         const rgb = bColor ? bColor.match(/\d+/g) : null;
         if (rgb && rgb.length >= 3) {
           const r = +rgb[0], g = +rgb[1], b = +rgb[2];
-          if (rgb.length < 4 || +rgb[3] > 0.1) {
+          const alpha = rgb.length >= 4 ? +rgb[3] : 1;
+          if (alpha > 0.1) {
             const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
             return lum < 128;
           }
@@ -76,6 +81,7 @@
     } catch {}
     return Boolean(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
   }
+  window.isPageDark = isPageDark;
 
   function getResolvedTheme() {
     const pref = (typeof STATE !== "undefined" && STATE.theme) ||
@@ -132,11 +138,23 @@
     });
     const attachThemeMo = () => {
       if (document.documentElement) {
-        themeMo.observe(document.documentElement, { attributes: true, attributeFilter: ["dark", "data-theme", "class"] });
+        themeMo.observe(document.documentElement, { attributes: true, attributeFilter: ["dark", "data-theme", "class", "style", "data-color-mode"] });
+      }
+      if (document.body) {
+        themeMo.observe(document.body, { attributes: true, attributeFilter: ["dark", "data-theme", "class", "style", "data-color-mode"] });
       }
     };
     if (document.documentElement) attachThemeMo();
-    else document.addEventListener("DOMContentLoaded", attachThemeMo, { once: true });
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => {
+        attachThemeMo();
+        applyTheme();
+      }, { once: true });
+    } else {
+      attachThemeMo();
+      applyTheme();
+    }
+    window.addEventListener("load", () => applyTheme(), { once: true });
   } catch {}
 
   function currentVideoId() {
@@ -411,6 +429,7 @@
   }
 
   function toast(msg) {
+    if (typeof applyTheme === "function") applyTheme();
     let el = $("#kiki-toast");
     if (!el) {
       el = document.createElement("div");
