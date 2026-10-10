@@ -2,6 +2,7 @@
 <meta charset="utf-8">
 <title>Kiki Netflix + asbplayer regression tests</title>
 <style>
+  html, body, #player { user-select: none !important; -webkit-user-select: none !important; }
   body { background: #181818; color: white; font: 18px sans-serif; }
   #player { position: fixed; inset: 0; pointer-events: none; }
   video { width: 100%; height: 100%; }
@@ -30,7 +31,8 @@
   window.fetch = async (url, options) => {
     if (String(url).includes('/mock-ai/chat/completions')) {
       window.testRequests.push(JSON.parse(options.body));
-      const body = 'data: ' + JSON.stringify({choices:[{delta:{content:'Fixture explanation.'}}]}) + '\n\ndata: [DONE]\n\n';
+      const body = 'data: ' + JSON.stringify({choices:[{delta:{reasoning_content:'Hidden fixture reasoning.'}}]}) + '\n\n' +
+        'data: ' + JSON.stringify({choices:[{delta:{content:'Fixture **explanation**.'}}]}) + '\n\ndata: [DONE]\n\n';
       return new Response(body, {headers:{'Content-Type':'text/event-stream'}});
     }
     return nativeFetch(url, options);

@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.3.4
+// Version: 1.3.5
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -621,7 +621,9 @@
       card.id = "kiki-yomitan-card";
       // A card inside Netflix's fullscreen player must not bubble UI gestures
       // into the player's playback/keyboard handlers.
-      ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "keydown", "keyup"].forEach(type => {
+      ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "keydown", "keyup", "selectstart", "copy", "cut", "contextmenu"].forEach(type => {
+        // Do not preventDefault: text selection, clipboard shortcuts and the
+        // browser's Copy context menu still need their native default actions.
         card.addEventListener(type, e => e.stopPropagation());
       });
       getPopupHost().appendChild(card);

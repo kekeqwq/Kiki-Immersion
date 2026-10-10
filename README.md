@@ -2,7 +2,7 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Translucent Liquid Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.3.4-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.1.3-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.3.5-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.1.4-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
@@ -95,6 +95,7 @@ Kiki Immersion features a touch-first design built specifically for iPad, tablet
    - Automatically injects the clicked word and the exact video subtitle sentence context.
    - **Interactive Exploration Pills**: MarginNote 4 style one-tap exploration pills tailored to your sentence.
    - **Multi-Turn Chat**: Follow-up questions with full conversation memory directly inside the lookup card.
+   - **Selectable & Copyable Answers**: Drag-select text, use the browser's Copy menu or Ctrl/Cmd+C, or copy each answer with its own button (including a fullscreen-compatible clipboard fallback).
 
 4. **Rock-Solid Subtitle Pipeline**
    - YouTube PoToken bypass via native authenticated Transcript panel extraction.
@@ -142,7 +143,7 @@ python3 scripts/bundle.py
 python3 -m http.server 8766 --bind 127.0.0.1
 ```
 
-Open `http://127.0.0.1:8766/test/netflix-asbplayer.html` in a clean browser profile **without an installed Kiki userscript** (the fixture already loads the bundle). Requests use a local mock SSE response, never a real API key. It checks multi-line/bilingual context, independent gestures, context snapshots and follow-ups, rich text, caret fallback, pause/resume, seek history, and fullscreen class/host transitions. Fullscreen transitions in this fixture are modeled because synthetic clicks do not grant browser fullscreen activation.
+Open `http://127.0.0.1:8766/test/netflix-asbplayer.html` in a clean browser profile **without an installed Kiki userscript** (the fixture already loads the bundle). Requests use a local mock SSE response, never a real API key. It checks multi-line/bilingual context, independent gestures, context snapshots and follow-ups, rich text, caret fallback, pause/resume, seek history, fullscreen class/host transitions, and selection/clipboard behavior under Netflix's root `user-select: none`. Fullscreen transitions in this fixture are modeled because synthetic clicks do not grant browser fullscreen activation.
 
 ---
 

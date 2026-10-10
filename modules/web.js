@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - Web Universal Lookup Module
-// Version: 1.3.4
+// Version: 1.3.5
 // Description: Global modifier-key word lookup for arbitrary web pages
 // =============================================================
 
@@ -540,6 +540,7 @@
       e.stopPropagation();
       e.stopImmediatePropagation();
       const suppressGesture = (ev) => {
+        if (ev.target?.closest?.("#kiki-yomitan-card, #kiki-settings-modal")) return;
         if (ev.cancelable) ev.preventDefault();
         ev.stopPropagation();
         ev.stopImmediatePropagation();
@@ -592,6 +593,9 @@
   }
 
   function suppressIfModifier(e) {
+    // Native right-click Copy must remain available inside our UI, even when
+    // Ctrl is the lookup key or exclusive study mode is enabled.
+    if (e.target?.closest?.("#kiki-yomitan-card, #kiki-settings-modal")) return;
     const mode = getTriggerKey();
     if (mode === "none") {
       if (isStudyMode() && Date.now() - lastTriggerTime < 500) {

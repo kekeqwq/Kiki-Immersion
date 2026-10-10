@@ -1,13 +1,13 @@
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.3.4
+// Version: 1.3.5
 // =============================================================
 
-  window.__kiki_engine_version = "1.3.4";
+  window.__kiki_engine_version = "1.3.5";
   window.__kiki_loader_version = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.5";
   try {
-    localStorage.setItem("kiki_engine_version", "1.3.4");
-    localStorage.setItem("kiki_cache_version", "1.3.4");
+    localStorage.setItem("kiki_engine_version", "1.3.5");
+    localStorage.setItem("kiki_cache_version", "1.3.5");
     localStorage.setItem("kiki_loader_version", window.__kiki_loader_version);
   } catch (e) {}
 
@@ -49,7 +49,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.3.4"
+    engineVersion: "1.3.5"
   };
 
   // -------------------------------------------------------------
@@ -679,6 +679,18 @@
       max-width: min(580px, calc(100vw - 28px)) !important;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
     }
+    /* Netflix/player pages disable selection on the root. Re-enable it on
+       the popup and descendants (Chromium/WebKit inherit the used value). */
+    #kiki-yomitan-card, #kiki-yomitan-card * {
+      user-select: text !important;
+      -webkit-user-select: text !important;
+      -webkit-touch-callout: default !important;
+    }
+    #kiki-yomitan-card button, #kiki-yomitan-card button *,
+    #kiki-yomitan-card select, #kiki-yomitan-card option {
+      user-select: none !important;
+      -webkit-user-select: none !important;
+    }
     #kiki-yomitan-card.show { display: block !important; }
     .kiki-card-header { margin-bottom: 12px; }
     .kiki-card-term-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
@@ -780,6 +792,15 @@
     .kiki-ai-scroll-container {
       color: #F1F5F9 !important;
     }
+    .kiki-ai-copy-row { display: flex; justify-content: flex-end; margin-top: 6px; }
+    .kiki-ai-copy-btn {
+      background: transparent !important; border: 1px solid currentColor !important;
+      border-radius: 6px !important; color: inherit !important; opacity: 0.7;
+      font: inherit !important; font-size: 11px !important; padding: 3px 8px !important;
+      cursor: pointer !important;
+    }
+    .kiki-ai-copy-btn:hover { opacity: 1; }
+    .kiki-ai-copy-btn:disabled { opacity: 0.35; cursor: default !important; }
     .kiki-ai-input-wrap {
       border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
     }

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.3.4
+// @version      1.3.5
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine, and global web lookup.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -57,14 +57,14 @@
 
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.3.4
+// Version: 1.3.5
 // =============================================================
 
-  window.__kiki_engine_version = "1.3.4";
+  window.__kiki_engine_version = "1.3.5";
   window.__kiki_loader_version = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.5";
   try {
-    localStorage.setItem("kiki_engine_version", "1.3.4");
-    localStorage.setItem("kiki_cache_version", "1.3.4");
+    localStorage.setItem("kiki_engine_version", "1.3.5");
+    localStorage.setItem("kiki_cache_version", "1.3.5");
     localStorage.setItem("kiki_loader_version", window.__kiki_loader_version);
   } catch (e) {}
 
@@ -106,7 +106,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.3.4"
+    engineVersion: "1.3.5"
   };
 
   // -------------------------------------------------------------
@@ -736,6 +736,18 @@
       max-width: min(580px, calc(100vw - 28px)) !important;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
     }
+    /* Netflix/player pages disable selection on the root. Re-enable it on
+       the popup and descendants (Chromium/WebKit inherit the used value). */
+    #kiki-yomitan-card, #kiki-yomitan-card * {
+      user-select: text !important;
+      -webkit-user-select: text !important;
+      -webkit-touch-callout: default !important;
+    }
+    #kiki-yomitan-card button, #kiki-yomitan-card button *,
+    #kiki-yomitan-card select, #kiki-yomitan-card option {
+      user-select: none !important;
+      -webkit-user-select: none !important;
+    }
     #kiki-yomitan-card.show { display: block !important; }
     .kiki-card-header { margin-bottom: 12px; }
     .kiki-card-term-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
@@ -837,6 +849,15 @@
     .kiki-ai-scroll-container {
       color: #F1F5F9 !important;
     }
+    .kiki-ai-copy-row { display: flex; justify-content: flex-end; margin-top: 6px; }
+    .kiki-ai-copy-btn {
+      background: transparent !important; border: 1px solid currentColor !important;
+      border-radius: 6px !important; color: inherit !important; opacity: 0.7;
+      font: inherit !important; font-size: 11px !important; padding: 3px 8px !important;
+      cursor: pointer !important;
+    }
+    .kiki-ai-copy-btn:hover { opacity: 1; }
+    .kiki-ai-copy-btn:disabled { opacity: 0.35; cursor: default !important; }
     .kiki-ai-input-wrap {
       border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
     }
@@ -3902,7 +3923,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - AI Contextual Engine & Multi-Turn Chat
-// Version: 1.2.2
+// Version: 1.3.5
 // =============================================================
 
   async function pingAiConnection({ base, key, model }) {
@@ -4089,6 +4110,41 @@ window.KikiAudioEngine = KikiAudioEngine;
     }
   }
 
+
+  async function copyKikiText(text) {
+    if (!text) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+    } catch {}
+    // Clipboard permissions can be denied in player/fullscreen contexts. Keep
+    // the fallback inside the popup, then restore focus and the user's range.
+    const active = document.activeElement;
+    const selection = window.getSelection();
+    const ranges = selection ? Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i).cloneRange()) : [];
+    const field = document.createElement("textarea");
+    field.value = text;
+    field.readOnly = true;
+    field.tabIndex = -1;
+    field.style.cssText = "position: fixed !important; left: -10000px !important; top: 0 !important; opacity: 0 !important; user-select: text !important; -webkit-user-select: text !important;";
+    const host = document.getElementById("kiki-yomitan-card") || document.fullscreenElement || document.body;
+    try {
+      host.appendChild(field);
+      field.select();
+      if (!document.execCommand("copy")) throw new Error("Clipboard access denied");
+    } finally {
+      field.remove();
+      if (active?.isConnected) active.focus({ preventScroll: true });
+      if (selection) {
+        selection.removeAllRanges();
+        for (const range of ranges) {
+          if (range.startContainer.isConnected && range.endContainer.isConnected) selection.addRange(range);
+        }
+      }
+    }
+  }
 
   async function explainWithAiInCard(card, term, sentence) {
     window.explainWithAiInCard = explainWithAiInCard;
@@ -4307,6 +4363,30 @@ window.KikiAudioEngine = KikiAudioEngine;
       const thoughtToggleBtn = turnEl.querySelector(".kiki-ai-thought-toggle-btn");
       const answerEl = turnEl.querySelector(".kiki-ai-answer");
       const initialStatus = turnEl.querySelector(".kiki-ai-initial-status");
+      const copyRow = document.createElement("div");
+      copyRow.className = "kiki-ai-copy-row";
+      const copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.className = "kiki-ai-copy-btn";
+      const copyLabel = isEn ? "Copy" : "复制";
+      copyBtn.textContent = copyLabel;
+      copyBtn.title = isEn ? "Copy this answer" : "复制这条回答";
+      copyBtn.disabled = true;
+      copyRow.appendChild(copyBtn);
+      turnEl.appendChild(copyRow);
+      let copyTimer;
+      copyBtn.addEventListener("click", async e => {
+        e.stopPropagation();
+        clearTimeout(copyTimer);
+        try {
+          await copyKikiText((answerEl.innerText || answerEl.textContent || "").trim());
+          copyBtn.textContent = isEn ? "Copied" : "已复制";
+        } catch {
+          copyBtn.textContent = isEn ? "Copy failed" : "复制失败";
+          toast(isEn ? "Select the answer and press Ctrl/Cmd+C to copy." : "请拖选回答正文后按 Ctrl/Cmd+C 复制。");
+        }
+        copyTimer = setTimeout(() => { copyBtn.textContent = copyLabel; }, 1800);
+      });
 
       let thoughtAutoCollapsed = false;
       let isThoughtCollapsed = false;
@@ -4361,6 +4441,7 @@ window.KikiAudioEngine = KikiAudioEngine;
               if (initialStatus) initialStatus.style.display = "none";
               const parsed = parseContentAndSuggestions(accumulatedContent, isEn, term);
               setHtml(answerEl, renderMarkdownText(parsed.content));
+              copyBtn.disabled = !parsed.content.trim();
               if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
             }
           }
@@ -4384,6 +4465,7 @@ window.KikiAudioEngine = KikiAudioEngine;
               const clean = accumulatedReasoning.replace(/\n+/g, " ").trim();
               const fallbackText = clean.slice(-260).trim();
               setHtml(answerEl, renderMarkdownText(fallbackText));
+              copyBtn.disabled = !fallbackText;
               STATE.aiMessages.push({ role: "assistant", content: fallbackText });
             } else {
               setHtml(answerEl, `<span style="color: #94A3B8;">(Empty response from AI)</span>`);
@@ -4391,6 +4473,7 @@ window.KikiAudioEngine = KikiAudioEngine;
           } else {
             const parsed = parseContentAndSuggestions(accumulatedContent, isEn, term);
             setHtml(answerEl, renderMarkdownText(parsed.content));
+            copyBtn.disabled = !parsed.content.trim();
             STATE.aiMessages.push({ role: "assistant", content: parsed.content });
             renderSuggestions(parsed.suggestions);
           }
@@ -4515,7 +4598,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.3.4
+// Version: 1.3.5
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -5136,7 +5219,9 @@ window.KikiAudioEngine = KikiAudioEngine;
       card.id = "kiki-yomitan-card";
       // A card inside Netflix's fullscreen player must not bubble UI gestures
       // into the player's playback/keyboard handlers.
-      ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "keydown", "keyup"].forEach(type => {
+      ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "keydown", "keyup", "selectstart", "copy", "cut", "contextmenu"].forEach(type => {
+        // Do not preventDefault: text selection, clipboard shortcuts and the
+        // browser's Copy context menu still need their native default actions.
         card.addEventListener(type, e => e.stopPropagation());
       });
       getPopupHost().appendChild(card);
@@ -6465,7 +6550,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - Web Universal Lookup Module
-// Version: 1.3.4
+// Version: 1.3.5
 // Description: Global modifier-key word lookup for arbitrary web pages
 // =============================================================
 
@@ -7005,6 +7090,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       e.stopPropagation();
       e.stopImmediatePropagation();
       const suppressGesture = (ev) => {
+        if (ev.target?.closest?.("#kiki-yomitan-card, #kiki-settings-modal")) return;
         if (ev.cancelable) ev.preventDefault();
         ev.stopPropagation();
         ev.stopImmediatePropagation();
@@ -7057,6 +7143,9 @@ window.KikiAudioEngine = KikiAudioEngine;
   }
 
   function suppressIfModifier(e) {
+    // Native right-click Copy must remain available inside our UI, even when
+    // Ctrl is the lookup key or exclusive study mode is enabled.
+    if (e.target?.closest?.("#kiki-yomitan-card, #kiki-settings-modal")) return;
     const mode = getTriggerKey();
     if (mode === "none") {
       if (isStudyMode() && Date.now() - lastTriggerTime < 500) {

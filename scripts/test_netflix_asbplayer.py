@@ -57,7 +57,7 @@ def main():
                 raise SystemExit("Fixture did not finish. Chrome stderr:\n" + completed.stderr[-2000:])
             for result in parser.results:
                 print(("PASS " if result["passed"] else "FAIL ") + result["label"])
-            if len(parser.results) < 24 or not all(result["passed"] for result in parser.results):
+            if len(parser.results) < 33 or not all(result["passed"] for result in parser.results):
                 raise SystemExit(1)
             print(f"{len(parser.results)} checks passed (mock AI; isolated profile).")
     finally:

@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - AI Contextual Engine & Multi-Turn Chat
-// Version: 1.2.2
+// Version: 1.3.5
 // =============================================================
 
   async function pingAiConnection({ base, key, model }) {
@@ -187,6 +187,41 @@
     }
   }
 
+
+  async function copyKikiText(text) {
+    if (!text) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+    } catch {}
+    // Clipboard permissions can be denied in player/fullscreen contexts. Keep
+    // the fallback inside the popup, then restore focus and the user's range.
+    const active = document.activeElement;
+    const selection = window.getSelection();
+    const ranges = selection ? Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i).cloneRange()) : [];
+    const field = document.createElement("textarea");
+    field.value = text;
+    field.readOnly = true;
+    field.tabIndex = -1;
+    field.style.cssText = "position: fixed !important; left: -10000px !important; top: 0 !important; opacity: 0 !important; user-select: text !important; -webkit-user-select: text !important;";
+    const host = document.getElementById("kiki-yomitan-card") || document.fullscreenElement || document.body;
+    try {
+      host.appendChild(field);
+      field.select();
+      if (!document.execCommand("copy")) throw new Error("Clipboard access denied");
+    } finally {
+      field.remove();
+      if (active?.isConnected) active.focus({ preventScroll: true });
+      if (selection) {
+        selection.removeAllRanges();
+        for (const range of ranges) {
+          if (range.startContainer.isConnected && range.endContainer.isConnected) selection.addRange(range);
+        }
+      }
+    }
+  }
 
   async function explainWithAiInCard(card, term, sentence) {
     window.explainWithAiInCard = explainWithAiInCard;
@@ -405,6 +440,30 @@
       const thoughtToggleBtn = turnEl.querySelector(".kiki-ai-thought-toggle-btn");
       const answerEl = turnEl.querySelector(".kiki-ai-answer");
       const initialStatus = turnEl.querySelector(".kiki-ai-initial-status");
+      const copyRow = document.createElement("div");
+      copyRow.className = "kiki-ai-copy-row";
+      const copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.className = "kiki-ai-copy-btn";
+      const copyLabel = isEn ? "Copy" : "复制";
+      copyBtn.textContent = copyLabel;
+      copyBtn.title = isEn ? "Copy this answer" : "复制这条回答";
+      copyBtn.disabled = true;
+      copyRow.appendChild(copyBtn);
+      turnEl.appendChild(copyRow);
+      let copyTimer;
+      copyBtn.addEventListener("click", async e => {
+        e.stopPropagation();
+        clearTimeout(copyTimer);
+        try {
+          await copyKikiText((answerEl.innerText || answerEl.textContent || "").trim());
+          copyBtn.textContent = isEn ? "Copied" : "已复制";
+        } catch {
+          copyBtn.textContent = isEn ? "Copy failed" : "复制失败";
+          toast(isEn ? "Select the answer and press Ctrl/Cmd+C to copy." : "请拖选回答正文后按 Ctrl/Cmd+C 复制。");
+        }
+        copyTimer = setTimeout(() => { copyBtn.textContent = copyLabel; }, 1800);
+      });
 
       let thoughtAutoCollapsed = false;
       let isThoughtCollapsed = false;
@@ -459,6 +518,7 @@
               if (initialStatus) initialStatus.style.display = "none";
               const parsed = parseContentAndSuggestions(accumulatedContent, isEn, term);
               setHtml(answerEl, renderMarkdownText(parsed.content));
+              copyBtn.disabled = !parsed.content.trim();
               if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
             }
           }
@@ -482,6 +542,7 @@
               const clean = accumulatedReasoning.replace(/\n+/g, " ").trim();
               const fallbackText = clean.slice(-260).trim();
               setHtml(answerEl, renderMarkdownText(fallbackText));
+              copyBtn.disabled = !fallbackText;
               STATE.aiMessages.push({ role: "assistant", content: fallbackText });
             } else {
               setHtml(answerEl, `<span style="color: #94A3B8;">(Empty response from AI)</span>`);
@@ -489,6 +550,7 @@
           } else {
             const parsed = parseContentAndSuggestions(accumulatedContent, isEn, term);
             setHtml(answerEl, renderMarkdownText(parsed.content));
+            copyBtn.disabled = !parsed.content.trim();
             STATE.aiMessages.push({ role: "assistant", content: parsed.content });
             renderSuggestions(parsed.suggestions);
           }

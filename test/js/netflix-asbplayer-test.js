@@ -54,6 +54,34 @@
     check(prompt().includes('-It happened so fast.') && prompt().includes('-Pugsley, emotion equals weakness.'), 'All source subtitle lines sent');
     check(prompt().includes('显露情绪等于软弱') && prompt().includes('[Track 1]'), 'Reference translation sent separately');
     check(!prompt().includes('HIDDEN TRANSCRIPT') && !prompt().includes('Running'), 'No offscreen transcript or page chrome');
+    const answer = card().querySelector('.kiki-ai-answer');
+    check(getComputedStyle(document.body).userSelect === 'none' && getComputedStyle(answer).userSelect === 'text' &&
+      getComputedStyle(answer.querySelector('strong')).webkitUserSelect === 'text', 'Answer and formatted descendants selectable under Netflix root user-select:none');
+    const nativeClipboard = navigator.clipboard;
+    let copied = '';
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { copied = text; } } });
+    card().querySelector('.kiki-ai-copy-btn').click();
+    await wait();
+    check(copied === 'Fixture explanation.', 'Copy button copies rendered answer only, without reasoning, suggestions or Markdown');
+    check(card().querySelector('.kiki-ai-copy-btn').textContent === '已复制' ||
+      card().querySelector('.kiki-ai-copy-btn').textContent === 'Copied', 'Copy button reports success');
+    const range = document.createRange();
+    range.selectNodeContents(answer);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+    const nativeCopy = new ClipboardEvent('copy', { bubbles: true, cancelable: true });
+    const selectStart = new Event('selectstart', { bubbles: true, cancelable: true });
+    const shortcut = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true, cancelable: true });
+    answer.dispatchEvent(nativeCopy);
+    answer.dispatchEvent(selectStart);
+    answer.dispatchEvent(shortcut);
+    check(!nativeCopy.defaultPrevented && !selectStart.defaultPrevented && !shortcut.defaultPrevented &&
+      getSelection().toString() === 'Fixture explanation.', 'Native selection, copy event and Ctrl/Cmd+C defaults preserved');
+    STATE.webLookupKey = 'ctrl';
+    const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, ctrlKey: true });
+    answer.dispatchEvent(menu);
+    check(!menu.defaultPrevented, 'Browser Copy context menu works inside popup even with Ctrl lookup mode');
+    STATE.webLookupKey = 'alt';
     closeLookup();
     check(playCalls === 0 && paused, 'Already-paused video stays paused');
 
@@ -73,6 +101,12 @@
     card().querySelector('.kiki-ai-followup-send').click();
     await wait();
     check(prompt().includes('emotion equals weakness') && prompt().includes('Explain the grammar'), 'Follow-up requests retain the full subtitle snapshot');
+    const turnCopies = card().querySelectorAll('.kiki-ai-copy-btn');
+    check(turnCopies.length === 2 && !turnCopies[1].disabled, 'Each follow-up answer has its own copy button');
+    card().querySelectorAll('.kiki-ai-answer')[1].textContent = 'Second turn answer.';
+    turnCopies[1].click();
+    await wait();
+    check(copied === 'Second turn answer.', 'Follow-up copy does not mix in earlier answers');
     closeLookup();
     check(!paused && playCalls === 1, 'Only Kiki-paused video resumes');
     paused = true;
@@ -98,6 +132,30 @@
     document.getElementById('player').addEventListener('click', onClick);
     card().querySelector('.kiki-toggle-para-btn').click();
     check(playerClicks === 0, 'Popup controls do not toggle player playback');
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Denied'); } } });
+    const nativeExecCommand = document.execCommand;
+    let fallbackHost;
+    document.execCommand = command => {
+      if (command !== 'copy') return false;
+      const field = document.activeElement;
+      copied = field.value;
+      fallbackHost = field.parentElement;
+      return true;
+    };
+    const input = card().querySelector('.kiki-ai-followup-input');
+    input.focus();
+    const fullAnswer = card().querySelector('.kiki-ai-answer');
+    const selected = document.createRange();
+    selected.selectNodeContents(fullAnswer);
+    getSelection().removeAllRanges();
+    getSelection().addRange(selected);
+    card().querySelector('.kiki-ai-copy-btn').click();
+    await wait();
+    check(copied === 'Fixture explanation.' && fallbackHost === card(), 'Permission-denied clipboard fallback is inside fullscreen popup');
+    check(!card().querySelector('textarea') && document.activeElement === input &&
+      getSelection().toString() === 'Fixture explanation.', 'Clipboard fallback restores focus/selection and removes temporary textarea');
+    document.execCommand = nativeExecCommand;
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: nativeClipboard });
     document.getElementById('player').removeEventListener('click', onClick);
     closeLookup();
     delete document.fullscreenElement;
