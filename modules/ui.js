@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.3.3
+// Version: 1.3.4
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -599,14 +599,34 @@
   // -------------------------------------------------------------
   // 7. Yomitan Card & Word Lookup
   // -------------------------------------------------------------
+  function getPopupHost() {
+    return document.fullscreenElement || document.body || document.documentElement;
+  }
+
+  function mountPopupsInFullscreen() {
+    const host = getPopupHost();
+    if (!host) return;
+    ["kiki-yomitan-card", "kiki-modal-backdrop", "kiki-settings-modal"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && el.parentElement !== host) host.appendChild(el);
+    });
+  }
+  document.addEventListener("fullscreenchange", mountPopupsInFullscreen);
+
   function ensureYomitanCard() {
     if (typeof applyTheme === "function") applyTheme();
     let card = $("#kiki-yomitan-card");
     if (!card) {
       card = document.createElement("div");
       card.id = "kiki-yomitan-card";
-      (document.body || document.documentElement).appendChild(card);
+      // A card inside Netflix's fullscreen player must not bubble UI gestures
+      // into the player's playback/keyboard handlers.
+      ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "keydown", "keyup"].forEach(type => {
+        card.addEventListener(type, e => e.stopPropagation());
+      });
+      getPopupHost().appendChild(card);
     }
+    mountPopupsInFullscreen();
     return card;
   }
 
@@ -709,7 +729,7 @@
 
   function getSentenceContext() {
     if (STATE.sentenceContext) return STATE.sentenceContext;
-    if (STATE.contextSource === "web") return "";
+    if (STATE.contextSource === "web" || STATE.contextSource === "asbplayer") return "";
     if (STATE.idx >= 0 && STATE.idx < STATE.cues.length) {
       return (STATE.cues[STATE.idx].text || "").trim();
     }
@@ -726,6 +746,7 @@
   }
 
   function renderNoDefinitionCard(card, term) {
+    const subtitleAi = STATE.contextSource === "asbplayer";
     setHtml(card, `
       <div class="kiki-card-header">
         <div class="kiki-card-term-row" style="justify-content: space-between; align-items: center;">
@@ -737,12 +758,12 @@
         </div>
       </div>
       <div class="kiki-card-empty" style="padding: 10px 4px 6px;">
-        <div style="font-size: 14px; font-weight: 700; margin-bottom: 6px; color: inherit;">No definition found in local dictionary.</div>
+        <div style="font-size: 14px; font-weight: 700; margin-bottom: 6px; color: inherit;">${subtitleAi ? "AI is not configured on this site." : "No definition found in local dictionary."}</div>
         <div style="font-size: 12px; opacity: 0.85; margin-bottom: 14px; line-height: 1.4; color: inherit;">
-          Import an offline dictionary package or configure your AI API key for contextual fallback explanations:
+          ${subtitleAi ? "Configure your AI API key here to explain this word using the complete subtitle context. Your Yomitan shortcut is unchanged." : "Import an offline dictionary package or configure your AI API key for contextual fallback explanations:"}
         </div>
         <div style="display: flex; flex-direction: column; gap: 8px;">
-          <label class="kiki-import-trigger-btn" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #2563EB; color: #FFFFFF; padding: 9px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; user-select: none;">
+          <label class="kiki-import-trigger-btn" style="display: ${subtitleAi ? 'none' : 'inline-flex'}; align-items: center; justify-content: center; gap: 6px; background: #2563EB; color: #FFFFFF; padding: 9px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; user-select: none;">
             <span>📥 Import Yomitan Dictionary (.zip)</span>
             <input type="file" class="kiki-card-file-input" accept=".zip" style="display: none;">
           </label>
@@ -809,6 +830,10 @@
     if (typeof applyTheme === "function") applyTheme();
     window.showYomitanCard = showYomitanCard;
     STATE.lastLookupOpenTime = Date.now();
+    STATE.lookupToken = (STATE.lookupToken || 0) + 1;
+    const lookupToken = STATE.lookupToken;
+    STATE.aiToken = (STATE.aiToken || 0) + 1;
+    abortActiveAi();
     STATE.lookupWord = term;
     STATE.lookupEl = wordEl;
     STATE.sentenceContext = sentenceOverride || "";
@@ -831,8 +856,17 @@
       positionCardAboveSubtitles(card);
     }
 
+    // asbplayer users keep a separate Yomitan gesture. Kiki's gesture opens AI
+    // directly, with the immutable subtitle snapshot captured at pointerdown.
+    if (STATE.contextSource === "asbplayer") {
+      const cfg = getAiConfig();
+      if (cfg.apiKey && cfg.apiKey.trim()) explainWithAiInCard(card, term, getSentenceContext());
+      else renderNoDefinitionCard(card, term);
+      return;
+    }
+
     const results = await lookupWord(term, wordEl, sentenceOverride || STATE.sentenceContext);
-    if (!card.classList.contains("show") || (STATE.lookupWord !== term && !results.some((r) => r.term.toLowerCase() === STATE.lookupWord.toLowerCase()))) return;
+    if (!card.classList.contains("show") || STATE.lookupToken !== lookupToken) return;
 
     if (!results || !results.length) {
       const cfg = getAiConfig();
@@ -1013,6 +1047,10 @@
   window.closeLookup = closeLookup;
   function closeLookup(resume = true) {
     abortActiveAi();
+    STATE.lookupToken = (STATE.lookupToken || 0) + 1;
+    STATE.aiToken = (STATE.aiToken || 0) + 1;
+    const lookupVideo = STATE.lookupVideo;
+    STATE.lookupVideo = null;
     STATE.lookupEl = null;
     STATE.lookupWord = "";
     STATE.sentenceContext = "";
@@ -1031,7 +1069,13 @@
     const wasPausedByKiki = Boolean(STATE.pausedForLookup);
     STATE.pausedForLookup = false;
     if (resume && wasPausedByKiki) {
-      playVideoSync();
+      if (lookupVideo) {
+        if (lookupVideo.isConnected && lookupVideo.paused) {
+          try { lookupVideo.play()?.catch(() => {}); } catch {}
+        }
+      } else {
+        playVideoSync();
+      }
     }
   }
 
@@ -1162,7 +1206,7 @@
       backdrop.addEventListener("mousedown", onBackdrop);
       backdrop.addEventListener("touchstart", onBackdrop);
       backdrop.addEventListener("click", onBackdrop);
-      (document.body || document.documentElement).appendChild(backdrop);
+      getPopupHost().appendChild(backdrop);
     }
     backdrop.classList.add("show");
     backdrop.style.setProperty("display", "block", "important");
@@ -1176,8 +1220,9 @@
       modal.addEventListener("touchstart", stopProp);
       modal.addEventListener("mousedown", stopProp);
       modal.addEventListener("click", stopProp);
-      (document.body || document.documentElement).appendChild(modal);
+      getPopupHost().appendChild(modal);
     }
+    mountPopupsInFullscreen();
 
     modal.classList.add("show");
     modal.style.setProperty("display", "flex", "important");

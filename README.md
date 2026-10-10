@@ -2,7 +2,7 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Translucent Liquid Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.3.3-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.1.2-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.3.4-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.1.3-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
@@ -24,7 +24,7 @@ Installing Kiki Immersion is fully automated across all modern desktop and mobil
 ## 📖 Initial Setup & Dictionary Installation
 
 > [!IMPORTANT]
-> **To start looking up words, you must first install offline Yomitan dictionaries (`.zip` format) into the browser storage.**
+> **For offline dictionary lookup, install Yomitan dictionaries (`.zip` format) into the browser storage. AI-only subtitle lookup requires an AI API configuration, not an imported dictionary.**
 
 ### 1. YouTube Setup (Primary Platform)
 1. Open **any YouTube video** in your browser.
@@ -42,6 +42,13 @@ Installing Kiki Immersion is fully automated across all modern desktop and mobil
   3. The Yomitan floating card will appear. Click the **⚙️ Settings** icon in the card header.
   4. Go to **📖 Dictionaries** and import your dictionary `.zip` files for that site.
   5. Once imported, simply hold `Ctrl` and click any word to inspect definitions, play pronunciations, or explore AI contextual explanations instantly!
+
+### 3. Netflix + asbplayer (AI Subtitle Lookup)
+- Load text subtitles with **asbplayer**. Kiki supports both regular and fullscreen subtitle overlays; Netflix's image-only subtitles are not OCRed.
+- Use your **existing Kiki modifier + click** on a subtitle word to open AI directly. Yomitan's separate shortcut remains unchanged.
+- Configure the AI API key on **netflix.com** via `Alt/Option + K` → AI Configuration (or the card's settings button). Configuration is origin-local; settings on YouTube or app.asbplayer.dev are not automatically shared.
+- AI receives every line of the current source subtitle, the current reference translation tracks, and up to two previous **observed** cues when available. Hidden transcript caches, player controls and ruby annotations are excluded.
+- The context is frozen at lookup time, including for mode changes and follow-up questions. Seeking clears the preceding-cue history. Only playback paused by Kiki is resumed when the card closes.
 
 ---
 
@@ -117,6 +124,25 @@ Kiki-Immersion/
 └── dist/
     └── kiki-immersion.user.js # Standalone monolithic bundle (fully offline)
 ```
+
+---
+
+## 🧪 Netflix/asbplayer Regression Tests
+
+Run the isolated headless Chromium fixture (set `CHROME_BIN` if needed):
+
+```sh
+python3 scripts/test_netflix_asbplayer.py
+```
+
+Or inspect it manually:
+
+```sh
+python3 scripts/bundle.py
+python3 -m http.server 8766 --bind 127.0.0.1
+```
+
+Open `http://127.0.0.1:8766/test/netflix-asbplayer.html` in a clean browser profile **without an installed Kiki userscript** (the fixture already loads the bundle). Requests use a local mock SSE response, never a real API key. It checks multi-line/bilingual context, independent gestures, context snapshots and follow-ups, rich text, caret fallback, pause/resume, seek history, and fullscreen class/host transitions. Fullscreen transitions in this fixture are modeled because synthetic clicks do not grant browser fullscreen activation.
 
 ---
 

@@ -197,7 +197,8 @@
     const cfg = getAiConfig();
     const isEn = cfg.aiLang === "en";
     const curMode = cfg.aiMode || "quick";
-    const isWeb = STATE.contextSource === "web" || !STATE.isYouTube;
+    const isAsbplayer = STATE.contextSource === "asbplayer";
+    const isWeb = !isAsbplayer && (STATE.contextSource === "web" || !STATE.isYouTube);
     const isWholeSentence = !term || (term === sentence && !STATE.lookupWord && !isWeb);
     const wordPlaceholder = isWholeSentence
       ? (isEn ? "entire sentence" : "全句")
@@ -230,7 +231,9 @@
 
     const system = String(tmpl || AI_DEFAULTS[isEn ? "promptEn" : "promptZh"])
       .replaceAll("{{word}}", wordPlaceholder)
-      .replaceAll("{{sentence}}", sentence || "");
+      .replaceAll("{{sentence}}", sentence || "") + (isAsbplayer
+        ? "\nThe context is video dialogue captured from asbplayer. Use the complete current subtitle and any provided previous observed dialogue to interpret the target word. Track numbers denote separate language tracks, not different speakers. Other tracks are reference translations. Do not invent missing dialogue or confuse previous subtitles with the current cue."
+        : "");
 
     let initialUserPrompt = "";
     if (isWeb) {
@@ -241,9 +244,12 @@
         ? (isWholeSentence ? `${contextLabel}: ${sentence}${paraAddition}` : `Word: ${term}\n${contextLabel}: ${sentence}${paraAddition}`)
         : (isWholeSentence ? `${contextLabel}：${sentence}${paraAddition}` : `词：${term}\n${contextLabel}：${sentence}${paraAddition}`);
     } else {
-      initialUserPrompt = isEn
+      const subtitleBackground = isAsbplayer && STATE.paragraphContext
+        ? (isEn ? `\nFull subtitle context:\n${STATE.paragraphContext}` : `\n完整字幕上下文：\n${STATE.paragraphContext}`)
+        : "";
+      initialUserPrompt = (isEn
         ? (isWholeSentence ? `Subtitle: ${sentence}` : `Word: ${term}\nSubtitle: ${sentence}`)
-        : (isWholeSentence ? `字幕：${sentence}` : `词：${term}\n字幕：${sentence}`);
+        : (isWholeSentence ? `字幕：${sentence}` : `词：${term}\n字幕：${sentence}`)) + subtitleBackground;
     }
 
     STATE.aiMessages = [
@@ -255,8 +261,10 @@
       STATE.lookupEl.classList.add("kiki-active");
     }
 
-    const paraContext = isWeb && STATE.paragraphContext && STATE.paragraphContext !== sentence ? STATE.paragraphContext : "";
+    const paraContext = (isWeb || isAsbplayer) && STATE.paragraphContext && STATE.paragraphContext !== sentence ? STATE.paragraphContext : "";
     const hasParagraph = Boolean(paraContext);
+    const contextTitle = isAsbplayer ? "Full Subtitle Context" : "Paragraph Context";
+    const contextButton = isAsbplayer ? "🎬 View Full Subtitle Context" : "📄 View Full Paragraph";
 
     function formatContextHtml(txt, targetWord) {
       if (!txt) return "(no context)";
@@ -297,12 +305,12 @@
         </div>
         ${hasParagraph ? `
           <div class="kiki-ai-para-wrap" style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.15); display: none;">
-            <div style="font-size: 11px; font-weight: 700; color: #94A3B8; margin-bottom: 3px; text-transform: uppercase;">Paragraph Context</div>
-            <div style="font-size: 12.5px; color: #94A3B8; font-style: italic; line-height: 1.4;">${formatContextHtml(paraContext, term)}</div>
+            <div style="font-size: 11px; font-weight: 700; color: #94A3B8; margin-bottom: 3px; text-transform: uppercase;">${contextTitle}</div>
+            <div style="font-size: 12.5px; color: #94A3B8; font-style: italic; line-height: 1.4; white-space: pre-wrap;">${formatContextHtml(paraContext, term)}</div>
           </div>
           <div style="margin-top: 5px; text-align: right;">
             <button type="button" class="kiki-toggle-para-btn" style="background: none; border: none; color: #A5B4FC; font-size: 11px; cursor: pointer; padding: 0; text-decoration: underline;">
-              📄 View Full Paragraph
+              ${contextButton}
             </button>
           </div>
         ` : ''}
@@ -333,7 +341,7 @@
         e.stopPropagation();
         const isHidden = paraWrap.style.display === "none";
         paraWrap.style.display = isHidden ? "block" : "none";
-        toggleParaBtn.textContent = isHidden ? "📄 Hide Paragraph" : "📄 View Full Paragraph";
+        toggleParaBtn.textContent = isHidden ? (isAsbplayer ? "🎬 Hide Subtitle Context" : "📄 Hide Paragraph") : contextButton;
       });
     }
 

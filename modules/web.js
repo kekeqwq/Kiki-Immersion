@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - Web Universal Lookup Module
-// Version: 1.3.3
+// Version: 1.3.4
 // Description: Global modifier-key word lookup for arbitrary web pages
 // =============================================================
 
@@ -91,6 +91,142 @@
     return null;
   }
 
+  // asbplayer uses a different subtitle class in fullscreen. Its offscreen
+  // measurement/transcript cache is never the active subtitle context.
+  const ASB_SUBTITLE_SELECTOR = ".asbplayer-subtitles, .asbplayer-fullscreen-subtitles, .asb-subtitles";
+  const ASB_CONTAINER_SELECTOR = ".asbplayer-subtitles-container-bottom, .asbplayer-subtitles-container-top";
+  const asbCueHistory = new WeakMap();
+
+  function asbSubtitleRoot(node) {
+    const el = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+    const root = el?.closest(ASB_SUBTITLE_SELECTOR);
+    return root && !root.closest(".asbplayer-offscreen, table, [hidden]") ? root : null;
+  }
+
+  function isVisibleAsbSubtitle(el) {
+    if (el.closest(".asbplayer-offscreen, table, [hidden]")) return false;
+    const cs = getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    return cs.display !== "none" && cs.visibility !== "hidden" && cs.opacity !== "0" &&
+      r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+  }
+
+  function asbSubtitleText(el) {
+    // Rich subtitles contain both plain and annotated copies. Ruby readings
+    // and frequency labels are not spoken dialogue; keep only the base text.
+    const plain = el.querySelector(".asbplayer-subtitle-text");
+    const clone = (plain || el).cloneNode(true);
+    clone.querySelectorAll("rt, rp, .asbplayer-subtitle-rich").forEach(n => n.remove());
+    clone.querySelectorAll("br").forEach(n => n.replaceWith("\n"));
+    return (clone.textContent || "").replace(/\r/g, "").replace(/[ \t]+/g, " ").replace(/ *\n */g, "\n").trim();
+  }
+
+  function asbVideoForSubtitle(root) {
+    const center = root.getBoundingClientRect();
+    return Array.from(document.querySelectorAll("video")).filter(v => {
+      const r = v.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && center.left < r.right && center.right > r.left &&
+        center.top < r.bottom && center.bottom > r.top;
+    }).sort((a, b) => {
+      const ar = a.getBoundingClientRect(), br = b.getBoundingClientRect();
+      return br.width * br.height - ar.width * ar.height;
+    })[0] || null;
+  }
+
+  function extractAsbContext(node) {
+    const root = asbSubtitleRoot(node);
+    if (!root) return null;
+    const container = root.closest(ASB_CONTAINER_SELECTOR);
+    const scope = container?.parentElement || root.parentElement;
+    const video = asbVideoForSubtitle(root);
+    const subtitles = Array.from(scope?.querySelectorAll(ASB_SUBTITLE_SELECTOR) || [root])
+      .filter(el => isVisibleAsbSubtitle(el) && (!video || asbVideoForSubtitle(el) === video));
+    if (!subtitles.includes(root)) subtitles.unshift(root);
+    const seen = new Set();
+    const tracks = subtitles.map(el => ({
+      track: el.querySelector("[data-track]")?.getAttribute("data-track") || "?",
+      text: asbSubtitleText(el)
+    })).filter(item => {
+      const key = item.track + ":" + item.text;
+      if (!item.text || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const current = asbSubtitleText(root);
+    const cue = tracks.map(t => `[Track ${t.track}]\n${t.text}`).join("\n\n");
+    let previous = [];
+    if (video) {
+      let history = asbCueHistory.get(video);
+      const time = video.currentTime;
+      // Reset on episode navigation, backward seeks or long gaps.
+      if (!history || history.url !== location.href || time < history.time - 1 || time > history.time + 20) {
+        history = { url: location.href, time, cues: [] };
+      }
+      const last = history.cues[history.cues.length - 1];
+      if (cue && last !== cue) history.cues.push(cue);
+      history.cues = history.cues.slice(-3);
+      history.time = time;
+      asbCueHistory.set(video, history);
+      previous = history.cues.slice(0, -1);
+    }
+    return {
+      // ALL lines of the clicked track, not just the word's DOM token.
+      sentence: current.replace(/\n+/g, " "),
+      paragraph: (previous.length ? "Previous observed subtitles:\n" + previous.join("\n\n") + "\n\n" : "") +
+        "Current subtitles:\n" + cue,
+      video
+    };
+  }
+
+  function asbCaretPoint(e, root) {
+    const caret = getCaretPoint(e.clientX, e.clientY);
+    if (caret?.node?.nodeType === Node.TEXT_NODE && root.contains(caret.node) &&
+        !caret.node.parentElement.closest("rt, rp")) return caret;
+    // A player overlay can intercept native caret hit-testing. Check actual
+    // glyph rectangles, restricted to this subtitle (no page-wide tokenization).
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      if (node.parentElement.closest("rt, rp")) continue;
+      for (let i = 0; i < node.length; i++) {
+        if (/\s/.test(node.textContent[i])) continue;
+        const r = document.createRange();
+        r.setStart(node, i);
+        r.setEnd(node, i + 1);
+        if (Array.from(r.getClientRects()).some(b => b.width > 0 && b.height > 0 &&
+            e.clientX >= b.left && e.clientX <= b.right && e.clientY >= b.top && e.clientY <= b.bottom)) {
+          return { node, offset: i, range: r };
+        }
+      }
+    }
+    return null;
+  }
+
+  function observeAsbSubtitles() {
+    if (!document.body || (!/(?:^|\.)netflix\.com$/.test(location.hostname) &&
+        !location.hostname.includes("asbplayer") && !document.querySelector(ASB_SUBTITLE_SELECTOR))) return;
+    const observer = new MutationObserver(records => {
+      const roots = new Set();
+      for (const record of records) {
+        const root = asbSubtitleRoot(record.target);
+        if (root) roots.add(root);
+        for (const node of record.addedNodes || []) {
+          if (node.nodeType !== Node.ELEMENT_NODE || node.closest(".asbplayer-offscreen")) continue;
+          if (node.matches(ASB_SUBTITLE_SELECTOR)) roots.add(node);
+          node.querySelectorAll(ASB_SUBTITLE_SELECTOR).forEach(el => roots.add(el));
+        }
+      }
+      for (const root of roots) if (isVisibleAsbSubtitle(root)) extractAsbContext(root);
+    });
+    observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+    document.querySelectorAll(ASB_SUBTITLE_SELECTOR).forEach(root => {
+      if (isVisibleAsbSubtitle(root)) extractAsbContext(root);
+    });
+    document.addEventListener("seeking", e => asbCueHistory.delete(e.target), true);
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", observeAsbSubtitles, { once: true });
+  else observeAsbSubtitles();
+
   // -------------------------------------------------------------
   // 3. Multilingual Word & Web Context Extraction (Sentence & Paragraph)
   // -------------------------------------------------------------
@@ -122,40 +258,8 @@
   }
 
   function extractWebContext(node, offset, term) {
-    // 0. Dedicated extractor for asbplayer (app.asbplayer.dev): capture ALL presented subtitle lines
-    try {
-      const isAsb = window.location.hostname.includes("asbplayer") ||
-                    !!(node && node.parentElement && node.parentElement.closest(".asbplayer-subtitles, .asb-subtitles, .asbplayer-token-container"));
-      if (isAsb) {
-        const tokenContainer = node.parentElement?.closest(".asbplayer-token-container");
-        let subTexts = [];
-        if (tokenContainer) {
-          const subs = Array.from(tokenContainer.querySelectorAll(".asbplayer-subtitles, .asb-subtitles"));
-          subTexts = subs.map(s => (s.innerText || s.textContent || "").trim()).filter(Boolean);
-        }
-        if (!subTexts.length) {
-          // Find all subtitle elements currently active in the visible viewport
-          const viewportSubs = Array.from(document.querySelectorAll(".asbplayer-subtitles, .asb-subtitles")).filter(el => {
-            if (el.closest(".asbplayer-offscreen, table, tr, td")) return false;
-            const r = el.getBoundingClientRect();
-            return r.width > 0 && r.height > 0 && r.bottom >= 0 && r.top <= window.innerHeight && r.right >= 0 && r.left <= window.innerWidth;
-          });
-          subTexts = viewportSubs.map(s => (s.innerText || s.textContent || "").trim()).filter(Boolean);
-        }
-        if (!subTexts.length && node.parentElement) {
-          const pSub = node.parentElement.closest(".asbplayer-subtitles, .asb-subtitles");
-          if (pSub) subTexts = [(pSub.innerText || pSub.textContent || "").trim()];
-        }
-        if (subTexts.length) {
-          const rawFull = subTexts.join("\n");
-          const cleanSentence = rawFull.replace(/[\r\n]+/g, " ").trim();
-          return { sentence: cleanSentence, paragraph: rawFull };
-        }
-      }
-    } catch (err) {
-      console.warn("[Kiki] asbplayer context extraction error:", err);
-    }
-
+    const asbContext = extractAsbContext(node);
+    if (asbContext) return asbContext;
     const blockEl = getEnclosingBlock(node);
     let fullText = "";
     let globalOffset = 0;
@@ -396,11 +500,35 @@
     const now = Date.now();
     if (now - lastTriggerTime < 250) return;
 
-    const caret = getCaretPoint(e.clientX, e.clientY);
+    const asbRoot = asbSubtitleRoot(e.target) ||
+      document.elementsFromPoint(e.clientX, e.clientY).map(asbSubtitleRoot).find(Boolean);
+    const caret = asbRoot ? asbCaretPoint(e, asbRoot) : getCaretPoint(e.clientX, e.clientY);
     if (!caret || !caret.node) return;
+
+    // Snapshot before any asynchronous dictionary/CJK resolution or player update.
+    const asbContext = asbRoot ? extractAsbContext(caret.node) : null;
+    if (asbContext) {
+      // Only our configured gesture is intercepted. Yomitan's separate key is untouched.
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+      const suppressPlayerGesture = ev => {
+        if (ev.target?.closest?.("#kiki-yomitan-card, #kiki-settings-modal, #kiki-modal-backdrop")) return;
+        const atOrigin = Math.abs(ev.clientX - e.clientX) < 6 && Math.abs(ev.clientY - e.clientY) < 6;
+        if (asbSubtitleRoot(ev.target) !== asbRoot && !atOrigin) return;
+        if (ev.cancelable) ev.preventDefault();
+        ev.stopPropagation();
+      };
+      const tailEvents = ["mousedown", "pointerup", "mouseup", "click", "contextmenu"];
+      tailEvents.forEach(type => window.addEventListener(type, suppressPlayerGesture, { capture: true }));
+      setTimeout(() => tailEvents.forEach(type => window.removeEventListener(type, suppressPlayerGesture, true)), 600);
+    }
 
     const resolved = await resolveTargetWordAndContext(caret.node, caret.offset);
     if (!resolved || !resolved.term) return;
+    if (asbContext) {
+      resolved.sentence = asbContext.sentence;
+      resolved.paragraph = asbContext.paragraph;
+    }
 
     lastTriggerTime = now;
 
@@ -425,7 +553,7 @@
       // converted to secondary/right-clicks by macOS (e.g. Ctrl+Click) or ignored by reader frameworks.
       // We synthesize a clean primary click on the target element so the native website action
       // (LingQ sidebar, link navigation, button click) executes in sync with dictionary lookup!
-      if (mode !== "none") {
+      if (mode !== "none" && !asbContext) {
         const targetEl = (caret && caret.node)
           ? (caret.node.nodeType === Node.ELEMENT_NODE ? caret.node : caret.node.parentElement)
           : e.target;
@@ -453,7 +581,13 @@
 
     // Show floating Yomitan card with sentence and paragraph context
     if (typeof showYomitanCard === "function") {
-      showYomitanCard(null, resolved.term, { x: e.clientX, y: e.clientY }, resolved.sentence, "web", resolved.paragraph);
+      if (asbContext?.video && !asbContext.video.paused) {
+        STATE.lookupVideo = asbContext.video;
+        STATE.pausedForLookup = true;
+        asbContext.video.pause();
+      }
+      showYomitanCard(null, resolved.term, { x: e.clientX, y: e.clientY }, resolved.sentence,
+        asbContext ? "asbplayer" : "web", resolved.paragraph);
     }
   }
 

@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Kiki Netflix + asbplayer regression tests</title>
+<style>
+  body { background: #181818; color: white; font: 18px sans-serif; }
+  #player { position: fixed; inset: 0; pointer-events: none; }
+  video { width: 100%; height: 100%; }
+  .asbplayer-subtitles-container-bottom { position: fixed; bottom: 50px; left: 20px; z-index: 100; pointer-events: auto; }
+  .asbplayer-subtitles, .asbplayer-fullscreen-subtitles { white-space: pre-wrap; }
+  .asbplayer-offscreen { position: fixed; left: 110vw; top: 110vh; }
+  .asbplayer-subtitle-rich { display: none; }
+  #results { position: relative; z-index: 200; white-space: pre-wrap; pointer-events: none; }
+</style>
+<div id="player"><video></video></div>
+<div class="asbplayer-subtitles-container-bottom">
+  <div class="asbplayer-subtitles"><span data-track="0">-It happened so fast.
+-Pugsley, emotion equals weakness.</span></div>
+  <div class="asbplayer-subtitles"><span data-track="1">-一切发生得太快了
+-普格斯利 显露情绪等于软弱</span></div>
+</div>
+<div class="asbplayer-offscreen"><div class="asbplayer-subtitles">NEVER SEND THE ENTIRE HIDDEN TRANSCRIPT</div></div>
+<pre id="results">Running…</pre>
+<script>
+  // This fixture runs on a separate local origin, never with the user's API key.
+  localStorage.setItem('kiki_web_lookup_key', 'alt');
+  localStorage.setItem('kiki_ai_key', 'fixture-not-a-real-key');
+  localStorage.setItem('kiki_ai_base', location.origin + '/mock-ai');
+  window.testRequests = [];
+  const nativeFetch = window.fetch;
+  window.fetch = async (url, options) => {
+    if (String(url).includes('/mock-ai/chat/completions')) {
+      window.testRequests.push(JSON.parse(options.body));
+      const body = 'data: ' + JSON.stringify({choices:[{delta:{content:'Fixture explanation.'}}]}) + '\n\ndata: [DONE]\n\n';
+      return new Response(body, {headers:{'Content-Type':'text/event-stream'}});
+    }
+    return nativeFetch(url, options);
+  };
+</script>
+<script src="../dist/kiki-immersion.user.js"></script>
+<script src="js/netflix-asbplayer-test.js"></script>
