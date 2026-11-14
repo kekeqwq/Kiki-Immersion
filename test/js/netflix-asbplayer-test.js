@@ -42,6 +42,28 @@
     video.pause = () => { paused = true; };
     video.play = () => { paused = false; playCalls++; return Promise.resolve(); };
 
+    const contextMenu = (options = {}) => {
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, ...options });
+      source().dispatchEvent(event);
+      return event;
+    };
+    for (const mode of ['ctrl', 'alt', 'meta', 'ctrl_or_meta', 'none']) {
+      STATE.webLookupKey = mode;
+      check(!contextMenu().defaultPrevented, 'Plain right-click menu preserved in ' + mode + ' mode');
+    }
+    STATE.webLookupKey = 'ctrl';
+    check(contextMenu({ ctrlKey: true }).defaultPrevented, 'Ctrl-click menu suppressed for Ctrl lookup');
+    const requestCount = testRequests.length;
+    gesture('emotion', { button: 2 });
+    await wait();
+    check(testRequests.length === requestCount, 'Unmodified right-click does not trigger lookup');
+    STATE.webLookupKey = 'none';
+    gesture('emotion', { button: 2 });
+    await wait();
+    check(testRequests.length === requestCount, 'Direct-click mode also ignores secondary clicks');
+    STATE.webLookupKey = 'alt';
+    check(!contextMenu({ ctrlKey: true }).defaultPrevented, 'Ctrl-click remains native when lookup uses Alt');
+
     // Yomitan's gesture must neither trigger AI nor get cancelled by Kiki.
     const other = gesture('emotion', { shiftKey: true });
     await wait();
@@ -50,6 +72,7 @@
     const event = gesture('emotion');
     await wait();
     check(event.defaultPrevented && card().classList.contains('show'), 'Alt gesture opens Kiki AI');
+    check(!contextMenu().defaultPrevented, 'Plain right-click survives active subtitle gesture tail');
     check(STATE.contextSource === 'asbplayer' && !!card().querySelector('.kiki-ai-chat-thread'), 'Direct AI, not dictionary lookup');
     check(prompt().includes('-It happened so fast.') && prompt().includes('-Pugsley, emotion equals weakness.'), 'All source subtitle lines sent');
     check(prompt().includes('显露情绪等于软弱') && prompt().includes('[Track 1]'), 'Reference translation sent separately');
@@ -204,6 +227,16 @@
     await wait();
     check(STATE.sentenceContext.length > 450 && prompt().includes('END_OF_COMPLETE_CUE'), 'Current subtitle is not truncated at the web 450-character limit');
     closeLookup();
+
+    await wait(650);
+    STATE.studyMode = true;
+    gesture('emotion');
+    await wait();
+    check(!contextMenu().defaultPrevented, 'Study-mode pending gesture listener preserves plain right-click');
+    closeLookup();
+    await wait(650);
+    check(!contextMenu().defaultPrevented, 'No lingering study-mode contextmenu interceptor');
+    STATE.studyMode = false;
 
     await wait(650);
     localStorage.removeItem('kiki_ai_key');

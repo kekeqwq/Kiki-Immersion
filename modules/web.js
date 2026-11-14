@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - Web Universal Lookup Module
-// Version: 1.3.5
+// Version: 1.3.6
 // Description: Global modifier-key word lookup for arbitrary web pages
 // =============================================================
 
@@ -482,6 +482,9 @@
   async function onGlobalPointerDown(e) {
     // 0. Performance: early bailout if modifier key is not held (zero overhead)
     if (!isTriggerKeyPressed(e)) return;
+    // macOS may report Ctrl+primary-click as button 2. Preserve that lookup,
+    // but never turn a plain secondary/middle click into a lookup (even in none mode).
+    if (e.button !== 0 && !(e.button === 2 && e.ctrlKey && getTriggerKey() !== "none")) return;
 
     const mode = getTriggerKey();
 
@@ -512,6 +515,7 @@
       if (e.cancelable) e.preventDefault();
       e.stopPropagation();
       const suppressPlayerGesture = ev => {
+        if (ev.button === 2 && (!ev.ctrlKey || !isTriggerKeyPressed(ev))) return;
         if (ev.target?.closest?.("#kiki-yomitan-card, #kiki-settings-modal, #kiki-modal-backdrop")) return;
         const atOrigin = Math.abs(ev.clientX - e.clientX) < 6 && Math.abs(ev.clientY - e.clientY) < 6;
         if (asbSubtitleRoot(ev.target) !== asbRoot && !atOrigin) return;
@@ -540,14 +544,16 @@
       e.stopPropagation();
       e.stopImmediatePropagation();
       const suppressGesture = (ev) => {
+        // A later ordinary right-click is not part of the lookup gesture.
+        if (ev.button === 2 && (!ev.ctrlKey || !isTriggerKeyPressed(ev))) return;
         if (ev.target?.closest?.("#kiki-yomitan-card, #kiki-settings-modal")) return;
         if (ev.cancelable) ev.preventDefault();
         ev.stopPropagation();
         ev.stopImmediatePropagation();
       };
-      window.addEventListener("click", suppressGesture, { capture: true, once: true });
-      window.addEventListener("mouseup", suppressGesture, { capture: true, once: true });
-      window.addEventListener("contextmenu", suppressGesture, { capture: true, once: true });
+      const gestureEvents = ["click", "mouseup", "contextmenu"];
+      gestureEvents.forEach(type => window.addEventListener(type, suppressGesture, { capture: true, once: true }));
+      setTimeout(() => gestureEvents.forEach(type => window.removeEventListener(type, suppressGesture, true)), 600);
     } else {
       // Study Mode OFF (Concurrent Mode, Default):
       // When modifier keys (Ctrl/Alt/Meta) are used, standard primary clicks are often
@@ -596,18 +602,9 @@
     // Native right-click Copy must remain available inside our UI, even when
     // Ctrl is the lookup key or exclusive study mode is enabled.
     if (e.target?.closest?.("#kiki-yomitan-card, #kiki-settings-modal")) return;
-    const mode = getTriggerKey();
-    if (mode === "none") {
-      if (isStudyMode() && Date.now() - lastTriggerTime < 500) {
-        if (e.cancelable) e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      }
-      return;
-    }
-
-    // In modifier mode, suppress native contextmenu when Ctrl is held to avoid Safari's context menu
-    if (e.type === "contextmenu" && (e.ctrlKey || mode === "ctrl")) {
+    // A configured Ctrl mode is not evidence that Ctrl is physically held.
+    // Only suppress macOS Ctrl-click when it is also the configured lookup gesture.
+    if (e.type === "contextmenu" && getTriggerKey() !== "none" && e.ctrlKey && isTriggerKeyPressed(e)) {
       if (e.cancelable) e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
