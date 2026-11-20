@@ -77,6 +77,7 @@
     check(prompt().includes('-It happened so fast.') && prompt().includes('-Pugsley, emotion equals weakness.'), 'All source subtitle lines sent');
     check(prompt().includes('显露情绪等于软弱') && prompt().includes('[Track 1]'), 'Reference translation sent separately');
     check(!prompt().includes('HIDDEN TRANSCRIPT') && !prompt().includes('Running'), 'No offscreen transcript or page chrome');
+    await window.testKikiCatppuccin(check);
     const answer = card().querySelector('.kiki-ai-answer');
     check(getComputedStyle(document.body).userSelect === 'none' && getComputedStyle(answer).userSelect === 'text' &&
       getComputedStyle(answer.querySelector('strong')).webkitUserSelect === 'text', 'Answer and formatted descendants selectable under Netflix root user-select:none');

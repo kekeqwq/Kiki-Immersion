@@ -2,7 +2,7 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Translucent Liquid Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.3.7-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.1.6-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.4.0-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.2.0-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
@@ -81,9 +81,12 @@ Kiki Immersion features a touch-first design built specifically for iPad, tablet
 
 ## ✨ Features & Highlights
 
-1. **Dual-Theme Liquid Glass UI (Dark & Light Modes)**
-   - **Liquid Glass Dark**: Deep translucent obsidian glass with vibrant neon badges and smooth backdrop blur.
-   - **Liquid Glass Light**: Pristine white translucent glass with crisp typography, designed to follow macOS and Windows system color schemes automatically (or manually toggleable in settings).
+1. **Catppuccin UI (Latte & Macchiato)**
+   - **Light: Catppuccin Latte** (`catppuccin_latte`); **Dark: Catppuccin Macchiato** (`catppuccin_macchiato`), using the official palette with Mauve accents.
+   - Shared tokens cover dictionary/AI cards, settings tabs and forms, subtitle overlays and word highlights, HUD, track menus, notifications, loading/progress, and phrase waves. Only Kiki UI is themed; native Netflix/asbplayer/Yomitan interfaces are not recolored.
+   - Settings → Appearance offers Auto (follow page, system fallback), Latte, and Macchiato. Open UI follows theme changes without discarding form drafts.
+   - **Loader users upgrading from 1.1.x must update `loader.user.js` to 1.2.0** so the new shared `theme.js` module is loaded. Standalone users update `dist/kiki-immersion.user.js`.
+   - Palette attribution: [Catppuccin](https://catppuccin.com/palette/), [MIT license](assets/CATPPUCCIN-LICENSE).
 
 2. **First-Party Offline Yomitan Dictionary & Audio Engine**
    - High-performance client-side IndexedDB dictionary parser supporting standard Yomitan / Yomichan `.zip` files.
@@ -113,6 +116,7 @@ Kiki-Immersion/
 ├── assets/
 │   └── gesture_guide.jpg     # Touch gesture illustration diagram
 ├── modules/                  # Modular engine source code
+│   ├── theme.js              # Shared Catppuccin Latte/Macchiato palette & UI styles
 │   ├── core.js               # State, theme management, base styles & utilities
 │   ├── yomitan.js            # Yomitan offline IndexedDB dictionary & audio
 │   ├── ai.js                 # AI explanation engine, streaming & exploration pills
@@ -144,7 +148,7 @@ python3 scripts/bundle.py
 python3 -m http.server 8766 --bind 127.0.0.1
 ```
 
-Open `http://127.0.0.1:8766/test/netflix-asbplayer.html` in a clean browser profile **without an installed Kiki userscript** (the fixture already loads the bundle). Requests use a local mock SSE response, never a real API key. It checks multi-line/bilingual context, independent gestures, context snapshots and follow-ups, rich text, caret fallback, pause/resume, seek history, fullscreen class/host transitions, and selection/clipboard behavior under Netflix's root `user-select: none`. Fullscreen transitions in this fixture are modeled because synthetic clicks do not grant browser fullscreen activation.
+Open `http://127.0.0.1:8766/test/netflix-asbplayer.html` in a clean browser profile **without an installed Kiki userscript** (the fixture already loads the bundle). Requests use a local mock SSE response, never a real API key. It checks multi-line/bilingual context, independent gestures, context snapshots and follow-ups, rich text, caret fallback, pause/resume, seek history, fullscreen class/host transitions, selection/clipboard behavior under Netflix's root `user-select: none`, and computed Latte/Macchiato colors across AI, settings, subtitles, HUD, and feedback. Theme tests also verify host-page isolation and unsaved form preservation. Fullscreen transitions in this fixture are modeled because synthetic clicks do not grant browser fullscreen activation.
 
 ---
 

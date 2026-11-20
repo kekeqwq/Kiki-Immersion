@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - Web Universal Lookup Module
-// Version: 1.3.7
+// Version: 1.4.0
 // Description: Global modifier-key word lookup for arbitrary web pages
 // =============================================================
 
@@ -632,8 +632,8 @@
     // Map: wordId -> { phrase: string, isLast: boolean, el: HTMLElement }
     const wordMetaMap = new Map();
 
-    const WAVE_DARK = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 6'%3E%3Cpath d='M 0 3 Q 5 0.5 10 3 T 20 3' fill='none' stroke='%23818CF8' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E")`;
-    const WAVE_LIGHT = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 6'%3E%3Cpath d='M 0 3 Q 5 0.5 10 3 T 20 3' fill='none' stroke='%234F46E5' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E")`;
+    const WAVE_DARK = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 6'%3E%3Cpath d='M 0 3 Q 5 0.5 10 3 T 20 3' fill='none' stroke='%23c6a0f6' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E")`;
+    const WAVE_LIGHT = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 6'%3E%3Cpath d='M 0 3 Q 5 0.5 10 3 T 20 3' fill='none' stroke='%238839ef' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E")`;
 
     function injectPhraseStyles() {
       if (document.getElementById("kiki-lingq-phrase-styles")) return;
@@ -648,17 +648,10 @@
             --kiki-phrase-wave: ${WAVE_DARK};
           }
         }
-        [data-kiki-theme="dark"],
-        .theme-luminosity-dark,
-        [data-theme="dark"],
-        .dark,
-        [dark="true"] {
+        html[data-kiki-theme="dark"] {
           --kiki-phrase-wave: ${WAVE_DARK} !important;
         }
-        [data-kiki-theme="light"],
-        .theme-luminosity-light,
-        [data-theme="light"],
-        .light {
+        html[data-kiki-theme="light"] {
           --kiki-phrase-wave: ${WAVE_LIGHT} !important;
         }
         .kiki-phrase-word {
@@ -685,7 +678,7 @@
         }
         .kiki-phrase-word:hover::after,
         .kiki-phrase-hover::after {
-          filter: drop-shadow(0 0 2.5px rgba(129, 140, 248, 0.9)) !important;
+          filter: drop-shadow(0 0 2.5px var(--kiki-mauve)) !important;
         }
       `;
       (document.head || document.documentElement).appendChild(style);
@@ -693,10 +686,9 @@
 
     function updateThemeColor() {
       try {
-        const isDark = (typeof isPageDark === "function" && isPageDark()) ||
-                       document.body?.classList.contains("theme-luminosity-dark") ||
-                       document.documentElement?.getAttribute("data-kiki-theme") === "dark" ||
-                       window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+        const isDark = typeof getResolvedTheme === "function"
+          ? getResolvedTheme() === "dark"
+          : document.documentElement?.getAttribute("data-kiki-theme") === "dark";
         const wave = isDark ? WAVE_DARK : WAVE_LIGHT;
         document.documentElement.style.setProperty("--kiki-phrase-wave", wave);
       } catch {}

@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - AI Contextual Engine & Multi-Turn Chat
-// Version: 1.3.5
+// Version: 1.4.0
 // =============================================================
 
   async function pingAiConnection({ base, key, model }) {
@@ -319,13 +319,13 @@
         <div class="kiki-card-term-row" style="justify-content: space-between; align-items: center;">
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <span class="kiki-card-term" style="font-size: 22px !important; font-weight: 800; line-height: 1.2;">${escapeHtml(displayTerm)}</span>
-            <span style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; font-size: 11px; font-weight: 700; padding: 2.5px 8px; border-radius: 6px;">✦ AI Context</span>
+            <span class="kiki-ai-context-badge" style="font-size: 11px; font-weight: 700; padding: 2.5px 8px; border-radius: 6px;">✦ AI Context</span>
             <select class="kiki-card-mode-select">
               <option value="quick" ${curMode === "quick" ? "selected" : ""}>⚡ Quick</option>
               <option value="deep" ${curMode === "deep" ? "selected" : ""}>📚 Deep</option>
               <option value="custom" ${curMode === "custom" ? "selected" : ""}>⚙️ Custom</option>
             </select>
-            <span style="background: rgba(255,255,255,0.08); color: #94A3B8; font-size: 11px; padding: 2px 6px; border-radius: 4px;">${escapeHtml(cfg.apiModel || 'gpt-4o-mini')}</span>
+            <span class="kiki-ai-model-badge" style="font-size: 11px; padding: 2px 6px; border-radius: 4px;">${escapeHtml(cfg.apiModel || 'gpt-4o-mini')}</span>
           </div>
           <div style="display: flex; align-items: center; gap: 4px;">
             <button type="button" class="kiki-card-settings-btn" title="Settings (Dictionaries, AI, Modifiers)">⚙</button>
@@ -416,7 +416,8 @@
         const theme = PILL_THEMES[pIdx % PILL_THEMES.length];
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "kiki-ai-pill-btn";
+        btn.className = "kiki-ai-pill-btn kiki-ai-suggestion";
+        btn.dataset.kikiPill = ["red", "yellow", "green", "mauve"][pIdx % 4];
         btn.style.cssText = `border: 1px solid ${theme.border}; background: ${theme.bg}; color: ${theme.color}; border-radius: 9px; padding: 7px 12px; font-size: 12.5px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.15s; line-height: 1.4; display: flex; align-items: center; justify-content: space-between; user-select: none;`;
         btn.innerHTML = `
           <span>${escapeHtml(pText)}</span>
@@ -559,7 +560,7 @@
         if (token !== STATE.aiToken || !card.classList.contains("show")) return;
         if (curAbort.signal.aborted) return;
         setHtml(answerEl, `
-          <div style="color: #F87171; font-size: 13.5px; line-height: 1.5; padding: 6px 0;">
+          <div class="kiki-ai-error" style="font-size: 13.5px; line-height: 1.5; padding: 6px 0;">
             <div style="font-weight: 700; margin-bottom: 4px;">AI Request Failed</div>
             <div style="opacity: 0.9; margin-bottom: 8px;">${escapeHtml(err.message || String(err))}</div>
             <button type="button" class="kiki-open-ai-settings-btn" style="background: rgba(99, 102, 241, 0.3); color: #C7D2FE; border: 1px solid rgba(165, 180, 252, 0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer;">⚙ Check AI Configuration</button>

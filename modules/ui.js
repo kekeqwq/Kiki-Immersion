@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.3.7
+// Version: 1.4.0
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -1237,18 +1237,12 @@
       const themePref = STATE.theme || localStorage.getItem("kiki_theme") || "auto";
 
       const colors = {
-        cardBg: isLight ? "rgba(0, 0, 0, 0.03)" : "rgba(255, 255, 255, 0.06)",
-        cardBorder: isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.1)",
-        inputBg: isLight ? "rgba(0, 0, 0, 0.04)" : "rgba(0, 0, 0, 0.35)",
-        inputBorder: isLight ? "rgba(0, 0, 0, 0.14)" : "rgba(255, 255, 255, 0.2)",
-        inputText: isLight ? "#0F172A" : "#FFFFFF",
-        textPrimary: isLight ? "#0F172A" : "#FFFFFF",
-        textSecondary: isLight ? "#475569" : "#CBD5E1",
-        textMuted: isLight ? "#64748B" : "#94A3B8",
-        divider: isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.12)",
-        tabInactiveBg: isLight ? "rgba(0, 0, 0, 0.05)" : "rgba(255, 255, 255, 0.08)",
-        tabInactiveText: isLight ? "#475569" : "#FFF",
-        closeBtnText: isLight ? "#64748B" : "#FFF",
+        cardBg: "var(--kiki-soft)", cardBorder: "var(--kiki-border)",
+        inputBg: "var(--kiki-mantle)", inputBorder: "var(--kiki-surface1)",
+        inputText: "var(--kiki-text)", textPrimary: "var(--kiki-text)",
+        textSecondary: "var(--kiki-subtext1)", textMuted: "var(--kiki-subtext0)",
+        divider: "var(--kiki-border)", tabInactiveBg: "var(--kiki-soft)",
+        tabInactiveText: "var(--kiki-subtext1)", closeBtnText: "var(--kiki-subtext0)",
       };
 
       let contentHtml = "";
@@ -1291,12 +1285,12 @@
               <div>
                 <div style="font-size: 12px; font-weight: 700; color: ${colors.textPrimary}; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
                   <span>🎨 Theme / Appearance</span>
-                  <span style="font-size: 11px; color: ${colors.textMuted};">Liquid glass styling</span>
+                  <span style="font-size: 11px; color: ${colors.textMuted};">Catppuccin Latte / Macchiato</span>
                 </div>
                 <select id="kiki-theme-select" style="width: 100%; background: ${colors.inputBg}; color: ${colors.inputText}; border: 1px solid ${colors.inputBorder}; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none;">
-                  <option value="auto" ${themePref === "auto" ? "selected" : ""}>Auto (Follow System)</option>
-                  <option value="dark" ${themePref === "dark" ? "selected" : ""}>Dark (Translucent Liquid Glass)</option>
-                  <option value="light" ${themePref === "light" ? "selected" : ""}>Light (White Translucent Glass)</option>
+                  <option value="auto" ${themePref === "auto" ? "selected" : ""}>Auto (Follow Page / System)</option>
+                  <option value="dark" ${themePref === "dark" ? "selected" : ""}>Catppuccin Macchiato (Dark)</option>
+                  <option value="light" ${themePref === "light" ? "selected" : ""}>Catppuccin Latte (Light)</option>
                 </select>
               </div>
 
@@ -1334,7 +1328,7 @@
         const cacheTime = localStorage.getItem("kiki_cache_time") || "Initial / Local";
         const engineVer = window.__kiki_engine_version || localStorage.getItem("kiki_engine_version") || localStorage.getItem("kiki_cache_version") || "1.3.3";
         const loaderVer = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.5";
-        const modulesList = ["core", "yomitan", "ai", "ui", "youtube", "web"];
+        const modulesList = ["theme", "core", "yomitan", "ai", "ui", "youtube", "web"];
         const modStatus = modulesList.map(m => {
           const has = !!localStorage.getItem("kiki_mod_" + m);
           return `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;color:${colors.textSecondary};border-bottom:1px dashed ${colors.divider};">
@@ -1454,9 +1448,9 @@
       setHtml(modal, `
         <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid ${colors.divider}; padding-bottom: 12px;">
           <div style="display: flex; gap: 6px;">
-            <button type="button" class="kiki-tab-btn" data-tab="dict" style="background: ${activeTab === 'dict' ? '#2563EB' : colors.tabInactiveBg}; color: ${activeTab === 'dict' ? '#FFF' : colors.tabInactiveText}; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">📖 Dictionaries</button>
-            <button type="button" class="kiki-tab-btn" data-tab="ai" style="background: ${activeTab === 'ai' ? '#6366F1' : colors.tabInactiveBg}; color: ${activeTab === 'ai' ? '#FFF' : colors.tabInactiveText}; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">🤖 AI Context</button>
-            <button type="button" class="kiki-tab-btn" data-tab="about" style="background: ${activeTab === 'about' ? '#10B981' : colors.tabInactiveBg}; color: ${activeTab === 'about' ? '#FFF' : colors.tabInactiveText}; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">ℹ️ About & Updates</button>
+            <button type="button" class="kiki-tab-btn" data-tab="dict" aria-selected="${activeTab === 'dict'}" style="background: ${activeTab === 'dict' ? '#2563EB' : colors.tabInactiveBg}; color: ${activeTab === 'dict' ? '#FFF' : colors.tabInactiveText}; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">📖 Dictionaries</button>
+            <button type="button" class="kiki-tab-btn" data-tab="ai" aria-selected="${activeTab === 'ai'}" style="background: ${activeTab === 'ai' ? '#6366F1' : colors.tabInactiveBg}; color: ${activeTab === 'ai' ? '#FFF' : colors.tabInactiveText}; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">🤖 AI Context</button>
+            <button type="button" class="kiki-tab-btn" data-tab="about" aria-selected="${activeTab === 'about'}" style="background: ${activeTab === 'about' ? '#10B981' : colors.tabInactiveBg}; color: ${activeTab === 'about' ? '#FFF' : colors.tabInactiveText}; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">ℹ️ About & Updates</button>
           </div>
           <button type="button" class="kiki-modal-close" style="background: transparent; border: none; color: ${colors.closeBtnText}; font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
         </div>
@@ -1519,7 +1513,7 @@
             if (typeof window.__kiki_reload_modules === "function") {
               await window.__kiki_reload_modules(true);
             } else {
-              const list = ["core", "yomitan", "ai", "ui", "youtube"];
+              const list = ["theme", "core", "yomitan", "ai", "ui", "youtube", "web"];
               const base = "https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/modules/";
               let detectedVer = "1.2.5";
               await Promise.all(list.map(async (m) => {
@@ -1627,7 +1621,7 @@
           themeSelect.addEventListener("change", (e) => {
             const val = e.target.value;
             applyTheme(val);
-            const label = val === "auto" ? "Auto (Follow System)" : (val === "dark" ? "Dark Glass" : "Light Glass");
+            const label = val === "auto" ? "Auto (Follow Page/System)" : (val === "dark" ? "Catppuccin Macchiato" : "Catppuccin Latte");
             toast(`✦ Theme: ${label}`);
             renderModal();
           });
@@ -1762,28 +1756,24 @@
             const model = modal.querySelector("#kiki-ai-model-input")?.value || "";
             if (!key.trim()) {
               pingResult.style.display = "block";
-              pingResult.style.background = "rgba(239, 68, 68, 0.2)";
-              pingResult.style.color = "#FCA5A5";
+              pingResult.dataset.kikiStatus = "error";
               pingResult.textContent = "Please enter an API Key first.";
               return;
             }
             pingBtn.disabled = true;
             pingBtn.textContent = "Pinging...";
             pingResult.style.display = "block";
-            pingResult.style.background = "rgba(255, 255, 255, 0.1)";
-            pingResult.style.color = "#EEE";
+            pingResult.dataset.kikiStatus = "loading";
             pingResult.textContent = "Testing connection to " + (base || "OpenAI") + "...";
 
             try {
               const res = await pingAiConnection({ base, key, model });
               if (res.ok) {
-                pingResult.style.background = "rgba(16, 185, 129, 0.2)";
-                pingResult.style.color = "#6EE7B7";
+                pingResult.dataset.kikiStatus = "success";
                 pingResult.textContent = "✓ Connected successfully! Model is responsive.";
               }
             } catch (err) {
-              pingResult.style.background = "rgba(239, 68, 68, 0.2)";
-              pingResult.style.color = "#FCA5A5";
+              pingResult.dataset.kikiStatus = "error";
               pingResult.textContent = "✗ Connection failed: " + err.message;
             } finally {
               pingBtn.disabled = false;
@@ -1796,7 +1786,7 @@
       }
     }
 
-    renderModal();
+    await renderModal();
   }
   window.showSettingsModal = showSettingsModal;
   window.showDictManagerModal = showSettingsModal;

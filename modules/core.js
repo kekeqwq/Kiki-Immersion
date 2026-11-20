@@ -1,13 +1,13 @@
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.3.7
+// Version: 1.4.0
 // =============================================================
 
-  window.__kiki_engine_version = "1.3.7";
+  window.__kiki_engine_version = "1.4.0";
   window.__kiki_loader_version = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.5";
   try {
-    localStorage.setItem("kiki_engine_version", "1.3.7");
-    localStorage.setItem("kiki_cache_version", "1.3.7");
+    localStorage.setItem("kiki_engine_version", "1.4.0");
+    localStorage.setItem("kiki_cache_version", "1.4.0");
     localStorage.setItem("kiki_loader_version", window.__kiki_loader_version);
   } catch (e) {}
 
@@ -49,7 +49,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.3.7"
+    engineVersion: "1.4.0"
   };
 
   // -------------------------------------------------------------
@@ -106,6 +106,7 @@
     try {
       if (document.documentElement) {
         document.documentElement.setAttribute("data-kiki-theme", resolved);
+        document.documentElement.setAttribute("data-kiki-palette", resolved === "light" ? "catppuccin_latte" : "catppuccin_macchiato");
         document.documentElement.setAttribute("data-kiki-theme-pref", STATE.theme || "auto");
       }
     } catch {}
@@ -1586,7 +1587,7 @@
       if (!document.getElementById('kiki-styles')) {
         const s = document.createElement('style');
         s.id = 'kiki-styles';
-        s.textContent = STYLES;
+        s.textContent = STYLES + (window.KikiTheme?.css || "");
         (document.head || document.documentElement || document.body).appendChild(s);
       }
       const hosts = document.querySelectorAll('ytd-player, ytd-watch-flexy, #player');
@@ -1595,7 +1596,7 @@
           if (h.shadowRoot && !h.shadowRoot.querySelector('#kiki-styles-shadow')) {
             const s = document.createElement('style');
             s.id = 'kiki-styles-shadow';
-            s.textContent = STYLES;
+            s.textContent = STYLES + (window.KikiTheme?.css || "");
             h.shadowRoot.appendChild(s);
           }
         } catch {}
@@ -1867,10 +1868,10 @@ window.KikiStructuredContent = KikiStructuredContent;
     };
   }
 
-  const PILL_THEMES = [
-    { border: "rgba(244, 63, 94, 0.45)", bg: "rgba(244, 63, 94, 0.12)", color: "#FDA4AF", hover: "rgba(244, 63, 94, 0.22)" },
-    { border: "rgba(245, 158, 11, 0.45)", bg: "rgba(245, 158, 11, 0.12)", color: "#FCD34D", hover: "rgba(245, 158, 11, 0.22)" },
-    { border: "rgba(16, 185, 129, 0.45)", bg: "rgba(16, 185, 129, 0.12)", color: "#6EE7B7", hover: "rgba(16, 185, 129, 0.22)" },
-    { border: "rgba(139, 92, 246, 0.45)", bg: "rgba(139, 92, 246, 0.12)", color: "#C4B5FD", hover: "rgba(139, 92, 246, 0.22)" }
-  ];
+  const PILL_THEMES = ["red", "yellow", "green", "mauve"].map(name => ({
+    border: `rgba(var(--kiki-${name}-rgb), 0.45)`,
+    bg: `rgba(var(--kiki-${name}-rgb), 0.12)`,
+    color: `var(--kiki-${name})`,
+    hover: `rgba(var(--kiki-${name}-rgb), 0.22)`
+  }));
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.3.7
+// @version      1.4.0
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine, and global web lookup.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -53,18 +53,217 @@
   }
 
 
+// >>> BEGIN MODULE: theme <<<
+
+// Catppuccin UI tokens shared by every Kiki surface. Official Latte/Macchiato
+// palette: https://catppuccin.com/palette/ (MIT). Never style the host website.
+(() => {
+  "use strict";
+  const palettes = {
+    light: {
+      rosewater: "#dc8a78", flamingo: "#dd7878", pink: "#ea76cb", mauve: "#8839ef",
+      red: "#d20f39", maroon: "#e64553", peach: "#fe640b", yellow: "#df8e1d",
+      green: "#40a02b", teal: "#179299", sky: "#04a5e5", sapphire: "#209fb5",
+      blue: "#1e66f5", lavender: "#7287fd", text: "#4c4f69", subtext1: "#5c5f77",
+      subtext0: "#6c6f85", overlay2: "#7c7f93", overlay1: "#8c8fa1", overlay0: "#9ca0b0",
+      surface2: "#acb0be", surface1: "#bcc0cc", surface0: "#ccd0da",
+      base: "#eff1f5", mantle: "#e6e9ef", crust: "#dce0e8"
+    },
+    dark: {
+      rosewater: "#f4dbd6", flamingo: "#f0c6c6", pink: "#f5bde6", mauve: "#c6a0f6",
+      red: "#ed8796", maroon: "#ee99a0", peach: "#f5a97f", yellow: "#eed49f",
+      green: "#a6da95", teal: "#8bd5ca", sky: "#91d7e3", sapphire: "#7dc4e4",
+      blue: "#8aadf4", lavender: "#b7bdf8", text: "#cad3f5", subtext1: "#b8c0e0",
+      subtext0: "#a5adcb", overlay2: "#939ab7", overlay1: "#8087a2", overlay0: "#6e738d",
+      surface2: "#5b6078", surface1: "#494d64", surface0: "#363a4f",
+      base: "#24273a", mantle: "#1e2030", crust: "#181926"
+    }
+  };
+  const rgb = hex => hex.slice(1).match(/../g).map(n => parseInt(n, 16)).join(", ");
+  function tokens(p, light) {
+    return Object.entries(p).map(([name, value]) => `--kiki-${name}: ${value}; --kiki-${name}-rgb: ${rgb(value)};`).join("\n") + `
+      --kiki-accent: var(--kiki-mauve);
+      --kiki-on-accent: ${light ? "#eff1f5" : "#24273a"};
+      --kiki-panel: rgba(var(--kiki-base-rgb), 0.96);
+      --kiki-panel-raised: rgba(var(--kiki-mantle-rgb), 0.97);
+      --kiki-border: var(--kiki-surface1);
+      --kiki-soft: rgba(var(--kiki-surface0-rgb), 0.55);
+      --kiki-shadow: 0 20px 56px rgba(${light ? "76, 79, 105, 0.20" : "24, 25, 38, 0.55"});
+      --kiki-paper: var(--kiki-base); --kiki-ink: var(--kiki-text);
+      --kiki-phrase-wavy: var(--kiki-mauve);
+    `;
+  }
+  const roots = ":is(#kiki-yomitan-card, #kiki-settings-modal, #kiki-hud, #kiki-track-dropdown, #kiki-toast, #kiki-loader-hud)";
+  const ui = `html[data-kiki-theme] ${roots}`;
+  const card = 'html[data-kiki-theme] #kiki-yomitan-card';
+  const modal = 'html[data-kiki-theme] #kiki-settings-modal';
+  const captions = 'html[data-kiki-theme] #kiki-captions';
+  const css = `
+    :root { ${tokens(palettes.dark, false)} }
+    html[data-kiki-theme="light"] { ${tokens(palettes.light, true)} }
+    ${ui} {
+      color: var(--kiki-text) !important;
+      background: var(--kiki-panel) !important;
+      border-color: var(--kiki-border) !important;
+      box-shadow: var(--kiki-shadow) !important;
+      backdrop-filter: blur(24px) saturate(110%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(110%) !important;
+      color-scheme: dark !important;
+    }
+    html[data-kiki-theme="light"] ${roots} { color-scheme: light !important; }
+    ${ui} * {
+      border-color: var(--kiki-border) !important;
+      text-shadow: none !important;
+    }
+    /* Inline legacy colors also occur in imported dictionary structured
+       content and streamed AI Markdown. Resolve them locally, not on body. */
+    ${ui} :is(div, span, p, strong, b, em, i, li, td, th, label, summary, code, pre) {
+      color: var(--kiki-text) !important;
+    }
+    ${ui} :is(a, a *) { color: var(--kiki-blue) !important; }
+    ${ui} :is(a:hover, a:hover *) { color: var(--kiki-mauve) !important; }
+    ${ui} :is(input, textarea, select, option) {
+      background: var(--kiki-mantle) !important;
+      color: var(--kiki-text) !important;
+      border-color: var(--kiki-surface1) !important;
+      caret-color: var(--kiki-mauve) !important;
+      accent-color: var(--kiki-mauve) !important;
+    }
+    ${ui} :is(input, textarea)::placeholder { color: var(--kiki-subtext0) !important; opacity: 1; }
+    ${ui} :is(input, textarea, select, button, a):focus-visible {
+      outline: 2px solid var(--kiki-mauve) !important;
+      outline-offset: 2px !important;
+    }
+    ${ui} :is(button, button *, .kiki-import-trigger-btn, .kiki-import-trigger-btn *) {
+      color: var(--kiki-text) !important;
+    }
+    ${ui} :is(button, .kiki-import-trigger-btn) {
+      background: var(--kiki-soft) !important;
+      border-color: var(--kiki-border) !important;
+      box-shadow: none !important;
+    }
+    ${ui} :is(button, .kiki-import-trigger-btn):hover {
+      background: var(--kiki-surface0) !important;
+    }
+    ${ui} button:disabled { opacity: 0.45 !important; }
+    ${ui} [data-kiki-status="error"], ${card} .kiki-ai-error, ${card} .kiki-ai-error div {
+      color: var(--kiki-red) !important;
+    }
+    ${ui} [data-kiki-status="success"] { color: var(--kiki-green) !important; }
+    html[data-kiki-theme] #kiki-loader-hud[data-kiki-status="error"] { border-color: var(--kiki-red) !important; }
+    ${ui} :is(code, pre) { background: var(--kiki-mantle) !important; }
+    ${ui} hr { border-color: var(--kiki-surface1) !important; }
+    ${ui} ::selection { background: var(--kiki-lavender) !important; color: var(--kiki-crust) !important; }
+    ${ui} ::-webkit-scrollbar-track { background: transparent !important; }
+    ${ui} ::-webkit-scrollbar-thumb { background: var(--kiki-surface2) !important; }
+    ${ui}::-webkit-scrollbar-thumb { background: var(--kiki-surface2) !important; }
+    ${ui} { scrollbar-color: var(--kiki-surface2) transparent; }
+    ${card} :is(.kiki-card-body, .kiki-ai-scroll-container, .kiki-ai-answer) { color: var(--kiki-text) !important; }
+    ${card} :is(.kiki-card-reading, .kiki-card-empty, .kiki-card-prog-text, .kiki-ai-thought-text) {
+      color: var(--kiki-subtext1) !important;
+    }
+    ${card} :is(.kiki-ai-quote-box, .kiki-ai-thought-box, .kiki-ai-user-bubble) {
+      background: var(--kiki-soft) !important;
+      color: var(--kiki-subtext1) !important;
+      border-color: var(--kiki-mauve) !important;
+    }
+    ${card} :is(.kiki-ai-thought-status, .kiki-ai-thought-status *, .kiki-ai-thought-toggle-btn) {
+      color: var(--kiki-mauve) !important;
+    }
+    ${card} mark, ${card} .kiki-ai-quote-box mark {
+      background: rgba(var(--kiki-mauve-rgb), 0.20) !important;
+      color: var(--kiki-text) !important;
+    }
+    ${card} :is(.kiki-card-ai-switch-btn, .kiki-ai-followup-send),
+    ${modal} :is(#kiki-ai-save-btn, #kiki-hot-reload-btn),
+    ${ui} .kiki-import-trigger-btn {
+      background: var(--kiki-mauve) !important;
+      color: var(--kiki-on-accent) !important;
+      border-color: var(--kiki-mauve) !important;
+    }
+    ${ui} :is(.kiki-card-ai-switch-btn, .kiki-ai-followup-send, .kiki-import-trigger-btn) * {
+      color: var(--kiki-on-accent) !important;
+    }
+    ${card} :is(.kiki-card-settings-btn, .kiki-card-close-btn, .kiki-ai-copy-btn, .kiki-toggle-para-btn),
+    ${modal} .kiki-modal-close { background: transparent !important; color: var(--kiki-subtext1) !important; }
+    ${card} .kiki-toggle-para-btn { color: var(--kiki-blue) !important; }
+    ${card} .kiki-ai-context-badge { background: var(--kiki-mauve) !important; color: var(--kiki-on-accent) !important; }
+    ${card} .kiki-ai-model-badge { background: var(--kiki-soft) !important; color: var(--kiki-subtext0) !important; }
+    ${modal} [style*="var(--kiki-subtext0)"] { color: var(--kiki-subtext0) !important; }
+    ${modal} [style*="var(--kiki-subtext1)"] { color: var(--kiki-subtext1) !important; }
+    ${card} .kiki-card-body [style*="background"] { background: var(--kiki-soft) !important; }
+    ${card} .kiki-badge { background: var(--kiki-soft) !important; }
+    ${card} .kiki-badge-dict { color: var(--kiki-subtext0) !important; }
+    ${card} .kiki-badge-redirect { color: var(--kiki-green) !important; }
+    ${card} .kiki-badge-pos { color: var(--kiki-red) !important; }
+    ${card} .kiki-badge-level { color: var(--kiki-blue) !important; }
+    ${card} .kiki-badge-vocab { color: var(--kiki-mauve) !important; }
+    ${modal} :is(div, span)[style*="background"],
+    ${modal} [data-kiki-surface] { background: var(--kiki-soft) !important; }
+    ${modal} .kiki-tab-btn[aria-selected="true"] {
+      background: var(--kiki-mauve) !important; color: var(--kiki-on-accent) !important;
+    }
+    ${modal} .kiki-del-dict-btn { background: rgba(var(--kiki-red-rgb), 0.15) !important; color: var(--kiki-red) !important; }
+    ${modal} #kiki-ai-ping-result { background: var(--kiki-soft) !important; color: var(--kiki-text) !important; }
+    ${modal} #kiki-ai-ping-result[data-kiki-status="error"] { color: var(--kiki-red) !important; }
+    ${modal} #kiki-ai-ping-result[data-kiki-status="success"] { color: var(--kiki-green) !important; }
+    ${ui} :is(.kiki-modal-prog-fill, .kiki-card-prog-fill) { background: var(--kiki-green) !important; }
+    html[data-kiki-theme] #kiki-modal-backdrop { background: rgba(var(--kiki-crust-rgb), 0.65) !important; }
+    html[data-kiki-theme] #kiki-hud:hover { background: var(--kiki-panel-raised) !important; }
+    html[data-kiki-theme] #kiki-hud .kiki-hud-btn {
+      background: var(--kiki-soft) !important; color: var(--kiki-text) !important; border-color: var(--kiki-border) !important;
+    }
+    html[data-kiki-theme] #kiki-hud .kiki-hud-btn:hover { background: var(--kiki-surface0) !important; }
+    html[data-kiki-theme] #kiki-hud .kiki-hud-dot { background: var(--kiki-green) !important; box-shadow: none !important; }
+    html[data-kiki-theme] #kiki-track-dropdown :is(.kiki-dropdown-header, .kiki-dropdown-tag) { color: var(--kiki-subtext0) !important; }
+    html[data-kiki-theme] #kiki-track-dropdown .kiki-dropdown-item.active {
+      background: rgba(var(--kiki-mauve-rgb), 0.18) !important; color: var(--kiki-mauve) !important;
+    }
+    html[data-kiki-theme] #kiki-track-dropdown .kiki-dropdown-tag { background: var(--kiki-soft) !important; }
+    html[data-kiki-theme] #kiki-track-dropdown .kiki-dropdown-sep { background: var(--kiki-surface1) !important; }
+    ${captions} .kiki-line {
+      background: var(--kiki-panel) !important; color: var(--kiki-text) !important;
+      border-color: var(--kiki-border) !important; box-shadow: var(--kiki-shadow) !important;
+      text-shadow: none !important;
+    }
+    ${captions} .kiki-word { color: var(--kiki-text) !important; text-shadow: none !important; }
+    ${captions} :is(.kiki-word:hover, .kiki-word.kiki-active) {
+      background: rgba(var(--kiki-mauve-rgb), 0.22) !important;
+      color: var(--kiki-text) !important; border-bottom-color: var(--kiki-mauve) !important;
+    }
+    ${captions} .kiki-cap-ai-btn {
+      background: var(--kiki-mauve) !important; border-color: var(--kiki-mauve) !important; box-shadow: none !important;
+    }
+    ${captions} .kiki-cap-ai-btn :is(.kiki-ai-icon, .kiki-ai-text) { color: var(--kiki-on-accent) !important; }
+    ${["red", "yellow", "green", "mauve"].map(name => `${card} [data-kiki-pill="${name}"] { --kiki-pill: var(--kiki-${name}); --kiki-pill-rgb: var(--kiki-${name}-rgb); }`).join("\n")}
+    ${card} .kiki-ai-suggestion {
+      background: rgba(var(--kiki-pill-rgb), 0.12) !important;
+      border-color: rgba(var(--kiki-pill-rgb), 0.45) !important;
+      color: var(--kiki-pill) !important;
+      transition: background-color 0.15s ease !important;
+    }
+    ${card} .kiki-ai-suggestion * { color: var(--kiki-pill) !important; }
+    ${card} .kiki-ai-suggestion:hover { background: rgba(var(--kiki-pill-rgb), 0.22) !important; }
+  `;
+  window.KikiTheme = Object.freeze({ palettes, css });
+})();
+
+
+// >>> END MODULE: theme <<<
+
+
 // >>> BEGIN MODULE: core <<<
 
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.3.7
+// Version: 1.4.0
 // =============================================================
 
-  window.__kiki_engine_version = "1.3.7";
+  window.__kiki_engine_version = "1.4.0";
   window.__kiki_loader_version = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.5";
   try {
-    localStorage.setItem("kiki_engine_version", "1.3.7");
-    localStorage.setItem("kiki_cache_version", "1.3.7");
+    localStorage.setItem("kiki_engine_version", "1.4.0");
+    localStorage.setItem("kiki_cache_version", "1.4.0");
     localStorage.setItem("kiki_loader_version", window.__kiki_loader_version);
   } catch (e) {}
 
@@ -106,7 +305,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.3.7"
+    engineVersion: "1.4.0"
   };
 
   // -------------------------------------------------------------
@@ -163,6 +362,7 @@
     try {
       if (document.documentElement) {
         document.documentElement.setAttribute("data-kiki-theme", resolved);
+        document.documentElement.setAttribute("data-kiki-palette", resolved === "light" ? "catppuccin_latte" : "catppuccin_macchiato");
         document.documentElement.setAttribute("data-kiki-theme-pref", STATE.theme || "auto");
       }
     } catch {}
@@ -1643,7 +1843,7 @@
       if (!document.getElementById('kiki-styles')) {
         const s = document.createElement('style');
         s.id = 'kiki-styles';
-        s.textContent = STYLES;
+        s.textContent = STYLES + (window.KikiTheme?.css || "");
         (document.head || document.documentElement || document.body).appendChild(s);
       }
       const hosts = document.querySelectorAll('ytd-player, ytd-watch-flexy, #player');
@@ -1652,7 +1852,7 @@
           if (h.shadowRoot && !h.shadowRoot.querySelector('#kiki-styles-shadow')) {
             const s = document.createElement('style');
             s.id = 'kiki-styles-shadow';
-            s.textContent = STYLES;
+            s.textContent = STYLES + (window.KikiTheme?.css || "");
             h.shadowRoot.appendChild(s);
           }
         } catch {}
@@ -1924,12 +2124,12 @@ window.KikiStructuredContent = KikiStructuredContent;
     };
   }
 
-  const PILL_THEMES = [
-    { border: "rgba(244, 63, 94, 0.45)", bg: "rgba(244, 63, 94, 0.12)", color: "#FDA4AF", hover: "rgba(244, 63, 94, 0.22)" },
-    { border: "rgba(245, 158, 11, 0.45)", bg: "rgba(245, 158, 11, 0.12)", color: "#FCD34D", hover: "rgba(245, 158, 11, 0.22)" },
-    { border: "rgba(16, 185, 129, 0.45)", bg: "rgba(16, 185, 129, 0.12)", color: "#6EE7B7", hover: "rgba(16, 185, 129, 0.22)" },
-    { border: "rgba(139, 92, 246, 0.45)", bg: "rgba(139, 92, 246, 0.12)", color: "#C4B5FD", hover: "rgba(139, 92, 246, 0.22)" }
-  ];
+  const PILL_THEMES = ["red", "yellow", "green", "mauve"].map(name => ({
+    border: `rgba(var(--kiki-${name}-rgb), 0.45)`,
+    bg: `rgba(var(--kiki-${name}-rgb), 0.12)`,
+    color: `var(--kiki-${name})`,
+    hover: `rgba(var(--kiki-${name}-rgb), 0.22)`
+  }));
 
 
 
@@ -3924,7 +4124,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - AI Contextual Engine & Multi-Turn Chat
-// Version: 1.3.5
+// Version: 1.4.0
 // =============================================================
 
   async function pingAiConnection({ base, key, model }) {
@@ -4243,13 +4443,13 @@ window.KikiAudioEngine = KikiAudioEngine;
         <div class="kiki-card-term-row" style="justify-content: space-between; align-items: center;">
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <span class="kiki-card-term" style="font-size: 22px !important; font-weight: 800; line-height: 1.2;">${escapeHtml(displayTerm)}</span>
-            <span style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; font-size: 11px; font-weight: 700; padding: 2.5px 8px; border-radius: 6px;">✦ AI Context</span>
+            <span class="kiki-ai-context-badge" style="font-size: 11px; font-weight: 700; padding: 2.5px 8px; border-radius: 6px;">✦ AI Context</span>
             <select class="kiki-card-mode-select">
               <option value="quick" ${curMode === "quick" ? "selected" : ""}>⚡ Quick</option>
               <option value="deep" ${curMode === "deep" ? "selected" : ""}>📚 Deep</option>
               <option value="custom" ${curMode === "custom" ? "selected" : ""}>⚙️ Custom</option>
             </select>
-            <span style="background: rgba(255,255,255,0.08); color: #94A3B8; font-size: 11px; padding: 2px 6px; border-radius: 4px;">${escapeHtml(cfg.apiModel || 'gpt-4o-mini')}</span>
+            <span class="kiki-ai-model-badge" style="font-size: 11px; padding: 2px 6px; border-radius: 4px;">${escapeHtml(cfg.apiModel || 'gpt-4o-mini')}</span>
           </div>
           <div style="display: flex; align-items: center; gap: 4px;">
             <button type="button" class="kiki-card-settings-btn" title="Settings (Dictionaries, AI, Modifiers)">⚙</button>
@@ -4340,7 +4540,8 @@ window.KikiAudioEngine = KikiAudioEngine;
         const theme = PILL_THEMES[pIdx % PILL_THEMES.length];
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "kiki-ai-pill-btn";
+        btn.className = "kiki-ai-pill-btn kiki-ai-suggestion";
+        btn.dataset.kikiPill = ["red", "yellow", "green", "mauve"][pIdx % 4];
         btn.style.cssText = `border: 1px solid ${theme.border}; background: ${theme.bg}; color: ${theme.color}; border-radius: 9px; padding: 7px 12px; font-size: 12.5px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.15s; line-height: 1.4; display: flex; align-items: center; justify-content: space-between; user-select: none;`;
         btn.innerHTML = `
           <span>${escapeHtml(pText)}</span>
@@ -4483,7 +4684,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         if (token !== STATE.aiToken || !card.classList.contains("show")) return;
         if (curAbort.signal.aborted) return;
         setHtml(answerEl, `
-          <div style="color: #F87171; font-size: 13.5px; line-height: 1.5; padding: 6px 0;">
+          <div class="kiki-ai-error" style="font-size: 13.5px; line-height: 1.5; padding: 6px 0;">
             <div style="font-weight: 700; margin-bottom: 4px;">AI Request Failed</div>
             <div style="opacity: 0.9; margin-bottom: 8px;">${escapeHtml(err.message || String(err))}</div>
             <button type="button" class="kiki-open-ai-settings-btn" style="background: rgba(99, 102, 241, 0.3); color: #C7D2FE; border: 1px solid rgba(165, 180, 252, 0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer;">⚙ Check AI Configuration</button>
@@ -4599,7 +4800,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.3.7
+// Version: 1.4.0
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -5836,18 +6037,12 @@ window.KikiAudioEngine = KikiAudioEngine;
       const themePref = STATE.theme || localStorage.getItem("kiki_theme") || "auto";
 
       const colors = {
-        cardBg: isLight ? "rgba(0, 0, 0, 0.03)" : "rgba(255, 255, 255, 0.06)",
-        cardBorder: isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.1)",
-        inputBg: isLight ? "rgba(0, 0, 0, 0.04)" : "rgba(0, 0, 0, 0.35)",
-        inputBorder: isLight ? "rgba(0, 0, 0, 0.14)" : "rgba(255, 255, 255, 0.2)",
-        inputText: isLight ? "#0F172A" : "#FFFFFF",
-        textPrimary: isLight ? "#0F172A" : "#FFFFFF",
-        textSecondary: isLight ? "#475569" : "#CBD5E1",
-        textMuted: isLight ? "#64748B" : "#94A3B8",
-        divider: isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.12)",
-        tabInactiveBg: isLight ? "rgba(0, 0, 0, 0.05)" : "rgba(255, 255, 255, 0.08)",
-        tabInactiveText: isLight ? "#475569" : "#FFF",
-        closeBtnText: isLight ? "#64748B" : "#FFF",
+        cardBg: "var(--kiki-soft)", cardBorder: "var(--kiki-border)",
+        inputBg: "var(--kiki-mantle)", inputBorder: "var(--kiki-surface1)",
+        inputText: "var(--kiki-text)", textPrimary: "var(--kiki-text)",
+        textSecondary: "var(--kiki-subtext1)", textMuted: "var(--kiki-subtext0)",
+        divider: "var(--kiki-border)", tabInactiveBg: "var(--kiki-soft)",
+        tabInactiveText: "var(--kiki-subtext1)", closeBtnText: "var(--kiki-subtext0)",
       };
 
       let contentHtml = "";
@@ -5890,12 +6085,12 @@ window.KikiAudioEngine = KikiAudioEngine;
               <div>
                 <div style="font-size: 12px; font-weight: 700; color: ${colors.textPrimary}; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
                   <span>🎨 Theme / Appearance</span>
-                  <span style="font-size: 11px; color: ${colors.textMuted};">Liquid glass styling</span>
+                  <span style="font-size: 11px; color: ${colors.textMuted};">Catppuccin Latte / Macchiato</span>
                 </div>
                 <select id="kiki-theme-select" style="width: 100%; background: ${colors.inputBg}; color: ${colors.inputText}; border: 1px solid ${colors.inputBorder}; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none;">
-                  <option value="auto" ${themePref === "auto" ? "selected" : ""}>Auto (Follow System)</option>
-                  <option value="dark" ${themePref === "dark" ? "selected" : ""}>Dark (Translucent Liquid Glass)</option>
-                  <option value="light" ${themePref === "light" ? "selected" : ""}>Light (White Translucent Glass)</option>
+                  <option value="auto" ${themePref === "auto" ? "selected" : ""}>Auto (Follow Page / System)</option>
+                  <option value="dark" ${themePref === "dark" ? "selected" : ""}>Catppuccin Macchiato (Dark)</option>
+                  <option value="light" ${themePref === "light" ? "selected" : ""}>Catppuccin Latte (Light)</option>
                 </select>
               </div>
 
@@ -5933,7 +6128,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         const cacheTime = localStorage.getItem("kiki_cache_time") || "Initial / Local";
         const engineVer = window.__kiki_engine_version || localStorage.getItem("kiki_engine_version") || localStorage.getItem("kiki_cache_version") || "1.3.3";
         const loaderVer = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.5";
-        const modulesList = ["core", "yomitan", "ai", "ui", "youtube", "web"];
+        const modulesList = ["theme", "core", "yomitan", "ai", "ui", "youtube", "web"];
         const modStatus = modulesList.map(m => {
           const has = !!localStorage.getItem("kiki_mod_" + m);
           return `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;color:${colors.textSecondary};border-bottom:1px dashed ${colors.divider};">
@@ -6053,9 +6248,9 @@ window.KikiAudioEngine = KikiAudioEngine;
       setHtml(modal, `
         <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid ${colors.divider}; padding-bottom: 12px;">
           <div style="display: flex; gap: 6px;">
-            <button type="button" class="kiki-tab-btn" data-tab="dict" style="background: ${activeTab === 'dict' ? '#2563EB' : colors.tabInactiveBg}; color: ${activeTab === 'dict' ? '#FFF' : colors.tabInactiveText}; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">📖 Dictionaries</button>
-            <button type="button" class="kiki-tab-btn" data-tab="ai" style="background: ${activeTab === 'ai' ? '#6366F1' : colors.tabInactiveBg}; color: ${activeTab === 'ai' ? '#FFF' : colors.tabInactiveText}; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">🤖 AI Context</button>
-            <button type="button" class="kiki-tab-btn" data-tab="about" style="background: ${activeTab === 'about' ? '#10B981' : colors.tabInactiveBg}; color: ${activeTab === 'about' ? '#FFF' : colors.tabInactiveText}; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">ℹ️ About & Updates</button>
+            <button type="button" class="kiki-tab-btn" data-tab="dict" aria-selected="${activeTab === 'dict'}" style="background: ${activeTab === 'dict' ? '#2563EB' : colors.tabInactiveBg}; color: ${activeTab === 'dict' ? '#FFF' : colors.tabInactiveText}; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">📖 Dictionaries</button>
+            <button type="button" class="kiki-tab-btn" data-tab="ai" aria-selected="${activeTab === 'ai'}" style="background: ${activeTab === 'ai' ? '#6366F1' : colors.tabInactiveBg}; color: ${activeTab === 'ai' ? '#FFF' : colors.tabInactiveText}; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">🤖 AI Context</button>
+            <button type="button" class="kiki-tab-btn" data-tab="about" aria-selected="${activeTab === 'about'}" style="background: ${activeTab === 'about' ? '#10B981' : colors.tabInactiveBg}; color: ${activeTab === 'about' ? '#FFF' : colors.tabInactiveText}; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s;">ℹ️ About & Updates</button>
           </div>
           <button type="button" class="kiki-modal-close" style="background: transparent; border: none; color: ${colors.closeBtnText}; font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
         </div>
@@ -6118,7 +6313,7 @@ window.KikiAudioEngine = KikiAudioEngine;
             if (typeof window.__kiki_reload_modules === "function") {
               await window.__kiki_reload_modules(true);
             } else {
-              const list = ["core", "yomitan", "ai", "ui", "youtube"];
+              const list = ["theme", "core", "yomitan", "ai", "ui", "youtube", "web"];
               const base = "https://raw.githubusercontent.com/kekeqwq/Kiki-Immersion/main/modules/";
               let detectedVer = "1.2.5";
               await Promise.all(list.map(async (m) => {
@@ -6226,7 +6421,7 @@ window.KikiAudioEngine = KikiAudioEngine;
           themeSelect.addEventListener("change", (e) => {
             const val = e.target.value;
             applyTheme(val);
-            const label = val === "auto" ? "Auto (Follow System)" : (val === "dark" ? "Dark Glass" : "Light Glass");
+            const label = val === "auto" ? "Auto (Follow Page/System)" : (val === "dark" ? "Catppuccin Macchiato" : "Catppuccin Latte");
             toast(`✦ Theme: ${label}`);
             renderModal();
           });
@@ -6361,28 +6556,24 @@ window.KikiAudioEngine = KikiAudioEngine;
             const model = modal.querySelector("#kiki-ai-model-input")?.value || "";
             if (!key.trim()) {
               pingResult.style.display = "block";
-              pingResult.style.background = "rgba(239, 68, 68, 0.2)";
-              pingResult.style.color = "#FCA5A5";
+              pingResult.dataset.kikiStatus = "error";
               pingResult.textContent = "Please enter an API Key first.";
               return;
             }
             pingBtn.disabled = true;
             pingBtn.textContent = "Pinging...";
             pingResult.style.display = "block";
-            pingResult.style.background = "rgba(255, 255, 255, 0.1)";
-            pingResult.style.color = "#EEE";
+            pingResult.dataset.kikiStatus = "loading";
             pingResult.textContent = "Testing connection to " + (base || "OpenAI") + "...";
 
             try {
               const res = await pingAiConnection({ base, key, model });
               if (res.ok) {
-                pingResult.style.background = "rgba(16, 185, 129, 0.2)";
-                pingResult.style.color = "#6EE7B7";
+                pingResult.dataset.kikiStatus = "success";
                 pingResult.textContent = "✓ Connected successfully! Model is responsive.";
               }
             } catch (err) {
-              pingResult.style.background = "rgba(239, 68, 68, 0.2)";
-              pingResult.style.color = "#FCA5A5";
+              pingResult.dataset.kikiStatus = "error";
               pingResult.textContent = "✗ Connection failed: " + err.message;
             } finally {
               pingBtn.disabled = false;
@@ -6395,7 +6586,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       }
     }
 
-    renderModal();
+    await renderModal();
   }
   window.showSettingsModal = showSettingsModal;
   window.showDictManagerModal = showSettingsModal;
@@ -6550,7 +6741,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - Web Universal Lookup Module
-// Version: 1.3.7
+// Version: 1.4.0
 // Description: Global modifier-key word lookup for arbitrary web pages
 // =============================================================
 
@@ -7182,8 +7373,8 @@ window.KikiAudioEngine = KikiAudioEngine;
     // Map: wordId -> { phrase: string, isLast: boolean, el: HTMLElement }
     const wordMetaMap = new Map();
 
-    const WAVE_DARK = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 6'%3E%3Cpath d='M 0 3 Q 5 0.5 10 3 T 20 3' fill='none' stroke='%23818CF8' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E")`;
-    const WAVE_LIGHT = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 6'%3E%3Cpath d='M 0 3 Q 5 0.5 10 3 T 20 3' fill='none' stroke='%234F46E5' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E")`;
+    const WAVE_DARK = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 6'%3E%3Cpath d='M 0 3 Q 5 0.5 10 3 T 20 3' fill='none' stroke='%23c6a0f6' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E")`;
+    const WAVE_LIGHT = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 6'%3E%3Cpath d='M 0 3 Q 5 0.5 10 3 T 20 3' fill='none' stroke='%238839ef' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E")`;
 
     function injectPhraseStyles() {
       if (document.getElementById("kiki-lingq-phrase-styles")) return;
@@ -7198,17 +7389,10 @@ window.KikiAudioEngine = KikiAudioEngine;
             --kiki-phrase-wave: ${WAVE_DARK};
           }
         }
-        [data-kiki-theme="dark"],
-        .theme-luminosity-dark,
-        [data-theme="dark"],
-        .dark,
-        [dark="true"] {
+        html[data-kiki-theme="dark"] {
           --kiki-phrase-wave: ${WAVE_DARK} !important;
         }
-        [data-kiki-theme="light"],
-        .theme-luminosity-light,
-        [data-theme="light"],
-        .light {
+        html[data-kiki-theme="light"] {
           --kiki-phrase-wave: ${WAVE_LIGHT} !important;
         }
         .kiki-phrase-word {
@@ -7235,7 +7419,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
         .kiki-phrase-word:hover::after,
         .kiki-phrase-hover::after {
-          filter: drop-shadow(0 0 2.5px rgba(129, 140, 248, 0.9)) !important;
+          filter: drop-shadow(0 0 2.5px var(--kiki-mauve)) !important;
         }
       `;
       (document.head || document.documentElement).appendChild(style);
@@ -7243,10 +7427,9 @@ window.KikiAudioEngine = KikiAudioEngine;
 
     function updateThemeColor() {
       try {
-        const isDark = (typeof isPageDark === "function" && isPageDark()) ||
-                       document.body?.classList.contains("theme-luminosity-dark") ||
-                       document.documentElement?.getAttribute("data-kiki-theme") === "dark" ||
-                       window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+        const isDark = typeof getResolvedTheme === "function"
+          ? getResolvedTheme() === "dark"
+          : document.documentElement?.getAttribute("data-kiki-theme") === "dark";
         const wave = isDark ? WAVE_DARK : WAVE_LIGHT;
         document.documentElement.style.setProperty("--kiki-phrase-wave", wave);
       } catch {}
