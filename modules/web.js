@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - Web Universal Lookup Module
-// Version: 1.3.6
+// Version: 1.3.7
 // Description: Global modifier-key word lookup for arbitrary web pages
 // =============================================================
 
@@ -341,36 +341,8 @@
   async function resolveTargetWordAndContext(node, offset) {
     if (!node || node.nodeType !== Node.TEXT_NODE) return null;
 
-    // Check if the clicked node is inside an element marked as part of a recognized phrase (e.g. LingQ phrase scan)
-    const phraseHost = node.parentElement?.closest("[data-kiki-phrase]");
-    if (phraseHost) {
-      const phrase = phraseHost.getAttribute("data-kiki-phrase");
-      if (phrase) {
-        const { sentence, paragraph } = extractWebContext(node, offset, phrase);
-        const hlRange = document.createRange();
-        try {
-          const phraseWords = phraseHost.parentElement
-            ? Array.from(phraseHost.parentElement.querySelectorAll(`[data-kiki-phrase="${CSS.escape(phrase)}"]`))
-            : [phraseHost];
-          if (phraseWords.length > 0) {
-            hlRange.setStartBefore(phraseWords[0]);
-            hlRange.setEndAfter(phraseWords[phraseWords.length - 1]);
-          } else {
-            hlRange.selectNode(phraseHost);
-          }
-        } catch {
-          try { hlRange.selectNode(phraseHost); } catch {}
-        }
-        return {
-          term: phrase,
-          sentence,
-          paragraph,
-          isJp: /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/.test(phrase),
-          range: hlRange
-        };
-      }
-    }
-
+    // Phrase marks are discovery hints, not the user's lookup target. Always
+    // resolve the clicked word; lookupWord adds matching phrases separately.
     const text = node.textContent || "";
     if (!text.trim()) return null;
 

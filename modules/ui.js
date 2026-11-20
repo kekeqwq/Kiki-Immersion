@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.3.5
+// Version: 1.3.7
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -880,11 +880,7 @@
       return;
     }
 
-    // If top result is a multi-word phrase, update STATE.lookupWord to match the primary recognized term
-    if (results[0]?.term) {
-      STATE.lookupWord = results[0].term;
-    }
-
+    // Keep STATE.lookupWord as the clicked word even if only a phrase matched.
     renderYomitanDefinitions(card, term, results);
 
     // Auto-play audio pronunciation synchronously on word lookup
@@ -926,7 +922,7 @@
       });
       row.appendChild(audioBtn);
 
-      if (idx === 0) {
+      {
         const aiSwitchBtn = document.createElement("button");
         aiSwitchBtn.type = "button";
         aiSwitchBtn.className = "kiki-card-ai-switch-btn";
@@ -940,10 +936,13 @@
             toast("Please configure your AI API Key first.");
             return;
           }
-          explainWithAiInCard(card, results[0]?.term || originalTerm, getSentenceContext());
+          STATE.lookupWord = res.term || originalTerm;
+          explainWithAiInCard(card, res.term || originalTerm, getSentenceContext());
         });
         row.appendChild(aiSwitchBtn);
+      }
 
+      if (idx === 0) {
         const settingsBtn = document.createElement("button");
         settingsBtn.type = "button";
         settingsBtn.className = "kiki-card-settings-btn";

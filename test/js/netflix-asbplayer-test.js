@@ -239,6 +239,41 @@
     STATE.studyMode = false;
 
     await wait(650);
+    const nativeSearch = localSearch.search;
+    const nativeAudio = localAudio.play;
+    const wordEntry = { term: 'distance', dictId: 'fixture', reading: '', glossary: ['Word definition'], seq: 1 };
+    const phraseEntry = { term: 'keep your distance', dictId: 'fixture', reading: '', glossary: ['Phrase definition'], seq: 2 };
+    const queries = [];
+    localSearch.search = async text => {
+      queries.push(text);
+      const normalized = text.toLowerCase();
+      return normalized === 'distance' ? [wordEntry] : normalized === 'keep your distance' ? [phraseEntry] : [];
+    };
+    localAudio.play = () => {};
+    subtitles.innerHTML = '<div>Keep your <span data-track="0" data-kiki-phrase="keep your distance">distance</span>, Inge.</div>';
+    gesture('distance');
+    await wait();
+    check(queries.includes('distance') && STATE.lookupWord === 'distance', 'Phrase-marked word still queries the clicked single word');
+    check(card().querySelector('.kiki-card-term').textContent === 'distance', 'Clicked word definition is displayed first');
+    const entries = card().querySelectorAll('.kiki-card-entry');
+    check(entries.length === 2 && entries[1].querySelector('.kiki-card-term').textContent === 'keep your distance', 'Recognized phrase remains available as supplementary result');
+    check(entries[0].querySelector('.kiki-card-ai-switch-btn') && entries[1].querySelector('.kiki-card-ai-switch-btn'), 'Word and phrase each have an independent Ask AI button');
+    entries[0].querySelector('.kiki-card-ai-switch-btn').click();
+    await wait();
+    check(STATE.lookupWord === 'distance' && prompt().includes('distance'), 'Word Ask AI keeps the single-word target');
+    closeLookup();
+    await wait(650);
+    gesture('distance');
+    await wait();
+    card().querySelectorAll('.kiki-card-ai-switch-btn')[1].click();
+    await wait();
+    check(STATE.lookupWord === 'keep your distance' && prompt().includes('keep your distance'), 'Phrase Ask AI explicitly targets the phrase');
+    closeLookup();
+    localSearch.search = nativeSearch;
+    localAudio.play = nativeAudio;
+    subtitles.innerHTML = original;
+
+    await wait(650);
     localStorage.removeItem('kiki_ai_key');
     gesture('emotion');
     await wait();

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.3.6
+// @version      1.3.7
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine, and global web lookup.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -57,14 +57,14 @@
 
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.3.6
+// Version: 1.3.7
 // =============================================================
 
-  window.__kiki_engine_version = "1.3.6";
+  window.__kiki_engine_version = "1.3.7";
   window.__kiki_loader_version = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.5";
   try {
-    localStorage.setItem("kiki_engine_version", "1.3.6");
-    localStorage.setItem("kiki_cache_version", "1.3.6");
+    localStorage.setItem("kiki_engine_version", "1.3.7");
+    localStorage.setItem("kiki_cache_version", "1.3.7");
     localStorage.setItem("kiki_loader_version", window.__kiki_loader_version);
   } catch (e) {}
 
@@ -106,7 +106,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.3.6"
+    engineVersion: "1.3.7"
   };
 
   // -------------------------------------------------------------
@@ -3885,7 +3885,8 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
       }
 
-      // Combine results: matched phrases first, then single word definitions
+      // The clicked word is always accessible first; phrase recognition adds
+      // definitions rather than replacing the user's target.
       const combined = [];
       const seenEntryKeys = new Set();
 
@@ -3897,14 +3898,14 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
       };
 
+      for (const item of (singleWordResults || [])) {
+        addEntry(item);
+      }
+
       for (const mp of matchedPhrases) {
         for (const item of mp.results) {
           addEntry(item);
         }
-      }
-
-      for (const item of (singleWordResults || [])) {
-        addEntry(item);
       }
 
       return combined;
@@ -4598,7 +4599,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.3.5
+// Version: 1.3.7
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -5478,11 +5479,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       return;
     }
 
-    // If top result is a multi-word phrase, update STATE.lookupWord to match the primary recognized term
-    if (results[0]?.term) {
-      STATE.lookupWord = results[0].term;
-    }
-
+    // Keep STATE.lookupWord as the clicked word even if only a phrase matched.
     renderYomitanDefinitions(card, term, results);
 
     // Auto-play audio pronunciation synchronously on word lookup
@@ -5524,7 +5521,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       });
       row.appendChild(audioBtn);
 
-      if (idx === 0) {
+      {
         const aiSwitchBtn = document.createElement("button");
         aiSwitchBtn.type = "button";
         aiSwitchBtn.className = "kiki-card-ai-switch-btn";
@@ -5538,10 +5535,13 @@ window.KikiAudioEngine = KikiAudioEngine;
             toast("Please configure your AI API Key first.");
             return;
           }
-          explainWithAiInCard(card, results[0]?.term || originalTerm, getSentenceContext());
+          STATE.lookupWord = res.term || originalTerm;
+          explainWithAiInCard(card, res.term || originalTerm, getSentenceContext());
         });
         row.appendChild(aiSwitchBtn);
+      }
 
+      if (idx === 0) {
         const settingsBtn = document.createElement("button");
         settingsBtn.type = "button";
         settingsBtn.className = "kiki-card-settings-btn";
@@ -6550,7 +6550,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - Web Universal Lookup Module
-// Version: 1.3.6
+// Version: 1.3.7
 // Description: Global modifier-key word lookup for arbitrary web pages
 // =============================================================
 
@@ -6891,36 +6891,8 @@ window.KikiAudioEngine = KikiAudioEngine;
   async function resolveTargetWordAndContext(node, offset) {
     if (!node || node.nodeType !== Node.TEXT_NODE) return null;
 
-    // Check if the clicked node is inside an element marked as part of a recognized phrase (e.g. LingQ phrase scan)
-    const phraseHost = node.parentElement?.closest("[data-kiki-phrase]");
-    if (phraseHost) {
-      const phrase = phraseHost.getAttribute("data-kiki-phrase");
-      if (phrase) {
-        const { sentence, paragraph } = extractWebContext(node, offset, phrase);
-        const hlRange = document.createRange();
-        try {
-          const phraseWords = phraseHost.parentElement
-            ? Array.from(phraseHost.parentElement.querySelectorAll(`[data-kiki-phrase="${CSS.escape(phrase)}"]`))
-            : [phraseHost];
-          if (phraseWords.length > 0) {
-            hlRange.setStartBefore(phraseWords[0]);
-            hlRange.setEndAfter(phraseWords[phraseWords.length - 1]);
-          } else {
-            hlRange.selectNode(phraseHost);
-          }
-        } catch {
-          try { hlRange.selectNode(phraseHost); } catch {}
-        }
-        return {
-          term: phrase,
-          sentence,
-          paragraph,
-          isJp: /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/.test(phrase),
-          range: hlRange
-        };
-      }
-    }
-
+    // Phrase marks are discovery hints, not the user's lookup target. Always
+    // resolve the clicked word; lookupWord adds matching phrases separately.
     const text = node.textContent || "";
     if (!text.trim()) return null;
 

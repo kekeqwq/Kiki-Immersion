@@ -1945,7 +1945,8 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
       }
 
-      // Combine results: matched phrases first, then single word definitions
+      // The clicked word is always accessible first; phrase recognition adds
+      // definitions rather than replacing the user's target.
       const combined = [];
       const seenEntryKeys = new Set();
 
@@ -1957,14 +1958,14 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
       };
 
+      for (const item of (singleWordResults || [])) {
+        addEntry(item);
+      }
+
       for (const mp of matchedPhrases) {
         for (const item of mp.results) {
           addEntry(item);
         }
-      }
-
-      for (const item of (singleWordResults || [])) {
-        addEntry(item);
       }
 
       return combined;
