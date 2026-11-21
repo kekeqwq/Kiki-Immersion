@@ -180,12 +180,45 @@
     ${modal} #kiki-ai-ping-result[data-kiki-status="success"] { color: var(--kiki-green) !important; }
     ${ui} :is(.kiki-modal-prog-fill, .kiki-card-prog-fill) { background: var(--kiki-green) !important; }
     html[data-kiki-theme] #kiki-modal-backdrop { background: rgba(var(--kiki-crust-rgb), 0.65) !important; }
+    html[data-kiki-theme] #kiki-hud {
+      box-sizing: border-box !important; width: max-content !important;
+      min-height: 44px !important; padding: 6px 10px !important; gap: 6px !important;
+      border: 1px solid var(--kiki-border) !important; border-radius: 16px !important;
+      background: rgba(var(--kiki-base-rgb), 0.94) !important;
+      box-shadow: 0 8px 28px rgba(var(--kiki-crust-rgb), 0.25) !important;
+      cursor: default !important; touch-action: manipulation !important;
+      flex-wrap: nowrap !important; justify-content: center !important;
+      transition: opacity 0.2s ease !important;
+    }
     html[data-kiki-theme] #kiki-hud:hover { background: var(--kiki-panel-raised) !important; }
     html[data-kiki-theme] #kiki-hud .kiki-hud-btn {
-      background: var(--kiki-soft) !important; color: var(--kiki-text) !important; border-color: var(--kiki-border) !important;
+      display: inline-flex !important; align-items: center !important; justify-content: center !important; gap: 5px !important;
+      flex: 0 0 auto; min-height: 30px !important; padding: 5px 9px !important;
+      font-size: 12px !important; line-height: 1.25 !important;
+      background: transparent !important; color: var(--kiki-text) !important;
+      border: 1px solid transparent !important; border-radius: 9px !important;
     }
-    html[data-kiki-theme] #kiki-hud .kiki-hud-btn:hover { background: var(--kiki-surface0) !important; }
-    html[data-kiki-theme] #kiki-hud .kiki-hud-dot { background: var(--kiki-green) !important; box-shadow: none !important; }
+    html[data-kiki-theme] #kiki-hud .kiki-hud-btn:hover { background: var(--kiki-soft) !important; }
+    html[data-kiki-theme] #kiki-hud .kiki-hud-sub[data-active="1"] {
+      color: var(--kiki-mauve) !important; background: rgba(var(--kiki-mauve-rgb), 0.12) !important;
+    }
+    html[data-kiki-theme] #kiki-hud .kiki-hud-sub[data-active="0"] { color: var(--kiki-subtext0) !important; }
+    html[data-kiki-theme] #kiki-hud .kiki-hud-cc {
+      display: block !important; flex: 0 1 auto; min-width: 0 !important; max-width: 220px !important;
+    }
+    html[data-kiki-theme] #kiki-hud .kiki-hud-close { min-width: 28px; padding-inline: 6px !important; }
+    html[data-kiki-theme] #kiki-hud[data-compact="true"] .kiki-hud-label { display: none !important; }
+    html[data-kiki-theme] #kiki-hud[data-compact="true"] { gap: 3px !important; padding-inline: 7px !important; }
+    html[data-kiki-theme] #kiki-hud .kiki-hud-dot {
+      width: 6px !important; height: 6px !important; margin-inline: 3px !important;
+      background: var(--kiki-green) !important; box-shadow: none !important;
+    }
+    html[data-kiki-theme] #kiki-toast {
+      box-sizing: border-box !important; border: 1px solid var(--kiki-border) !important;
+      border-radius: 12px !important; font-size: 13px !important; line-height: 1.4 !important;
+      padding: 8px 14px !important; overflow-wrap: anywhere;
+      box-shadow: 0 6px 24px rgba(var(--kiki-crust-rgb), 0.25) !important;
+    }
     html[data-kiki-theme] #kiki-track-dropdown :is(.kiki-dropdown-header, .kiki-dropdown-tag) { color: var(--kiki-subtext0) !important; }
     html[data-kiki-theme] #kiki-track-dropdown .kiki-dropdown-item.active {
       background: rgba(var(--kiki-mauve-rgb), 0.18) !important; color: var(--kiki-mauve) !important;

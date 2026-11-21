@@ -60,6 +60,7 @@ window.testKikiCatppuccin = async function(check) {
     applyTheme('light');
     check(color(card) === rgb(KikiTheme.palettes.light.text), 'Explicit Latte overrides page dark classes');
     document.body.classList.remove('theme-luminosity-dark');
+    await window.testKikiPlayerOverlays(check);
   } finally {
     document.body.classList.remove('theme-luminosity-dark');
     hideSettingsModal();

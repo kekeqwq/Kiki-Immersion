@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.4.3
+// @version      1.4.4
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine, and global web lookup.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -237,12 +237,45 @@
     ${modal} #kiki-ai-ping-result[data-kiki-status="success"] { color: var(--kiki-green) !important; }
     ${ui} :is(.kiki-modal-prog-fill, .kiki-card-prog-fill) { background: var(--kiki-green) !important; }
     html[data-kiki-theme] #kiki-modal-backdrop { background: rgba(var(--kiki-crust-rgb), 0.65) !important; }
+    html[data-kiki-theme] #kiki-hud {
+      box-sizing: border-box !important; width: max-content !important;
+      min-height: 44px !important; padding: 6px 10px !important; gap: 6px !important;
+      border: 1px solid var(--kiki-border) !important; border-radius: 16px !important;
+      background: rgba(var(--kiki-base-rgb), 0.94) !important;
+      box-shadow: 0 8px 28px rgba(var(--kiki-crust-rgb), 0.25) !important;
+      cursor: default !important; touch-action: manipulation !important;
+      flex-wrap: nowrap !important; justify-content: center !important;
+      transition: opacity 0.2s ease !important;
+    }
     html[data-kiki-theme] #kiki-hud:hover { background: var(--kiki-panel-raised) !important; }
     html[data-kiki-theme] #kiki-hud .kiki-hud-btn {
-      background: var(--kiki-soft) !important; color: var(--kiki-text) !important; border-color: var(--kiki-border) !important;
+      display: inline-flex !important; align-items: center !important; justify-content: center !important; gap: 5px !important;
+      flex: 0 0 auto; min-height: 30px !important; padding: 5px 9px !important;
+      font-size: 12px !important; line-height: 1.25 !important;
+      background: transparent !important; color: var(--kiki-text) !important;
+      border: 1px solid transparent !important; border-radius: 9px !important;
     }
-    html[data-kiki-theme] #kiki-hud .kiki-hud-btn:hover { background: var(--kiki-surface0) !important; }
-    html[data-kiki-theme] #kiki-hud .kiki-hud-dot { background: var(--kiki-green) !important; box-shadow: none !important; }
+    html[data-kiki-theme] #kiki-hud .kiki-hud-btn:hover { background: var(--kiki-soft) !important; }
+    html[data-kiki-theme] #kiki-hud .kiki-hud-sub[data-active="1"] {
+      color: var(--kiki-mauve) !important; background: rgba(var(--kiki-mauve-rgb), 0.12) !important;
+    }
+    html[data-kiki-theme] #kiki-hud .kiki-hud-sub[data-active="0"] { color: var(--kiki-subtext0) !important; }
+    html[data-kiki-theme] #kiki-hud .kiki-hud-cc {
+      display: block !important; flex: 0 1 auto; min-width: 0 !important; max-width: 220px !important;
+    }
+    html[data-kiki-theme] #kiki-hud .kiki-hud-close { min-width: 28px; padding-inline: 6px !important; }
+    html[data-kiki-theme] #kiki-hud[data-compact="true"] .kiki-hud-label { display: none !important; }
+    html[data-kiki-theme] #kiki-hud[data-compact="true"] { gap: 3px !important; padding-inline: 7px !important; }
+    html[data-kiki-theme] #kiki-hud .kiki-hud-dot {
+      width: 6px !important; height: 6px !important; margin-inline: 3px !important;
+      background: var(--kiki-green) !important; box-shadow: none !important;
+    }
+    html[data-kiki-theme] #kiki-toast {
+      box-sizing: border-box !important; border: 1px solid var(--kiki-border) !important;
+      border-radius: 12px !important; font-size: 13px !important; line-height: 1.4 !important;
+      padding: 8px 14px !important; overflow-wrap: anywhere;
+      box-shadow: 0 6px 24px rgba(var(--kiki-crust-rgb), 0.25) !important;
+    }
     html[data-kiki-theme] #kiki-track-dropdown :is(.kiki-dropdown-header, .kiki-dropdown-tag) { color: var(--kiki-subtext0) !important; }
     html[data-kiki-theme] #kiki-track-dropdown .kiki-dropdown-item.active {
       background: rgba(var(--kiki-mauve-rgb), 0.18) !important; color: var(--kiki-mauve) !important;
@@ -284,14 +317,14 @@
 
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.4.3
+// Version: 1.4.4
 // =============================================================
 
-  window.__kiki_engine_version = "1.4.3";
+  window.__kiki_engine_version = "1.4.4";
   window.__kiki_loader_version = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.5";
   try {
-    localStorage.setItem("kiki_engine_version", "1.4.3");
-    localStorage.setItem("kiki_cache_version", "1.4.3");
+    localStorage.setItem("kiki_engine_version", "1.4.4");
+    localStorage.setItem("kiki_cache_version", "1.4.4");
     localStorage.setItem("kiki_loader_version", window.__kiki_loader_version);
   } catch (e) {}
 
@@ -333,7 +366,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.4.3"
+    engineVersion: "1.4.4"
   };
 
   // -------------------------------------------------------------
@@ -730,9 +763,11 @@
     if (!el) {
       el = document.createElement("div");
       el.id = "kiki-toast";
-      (document.body || document.documentElement).appendChild(el);
     }
+    const toastHost = document.fullscreenElement || document.body || document.documentElement;
+    if (el.parentElement !== toastHost) toastHost.appendChild(el);
     el.textContent = msg;
+    if (typeof window.positionPlayerOverlays === "function") window.positionPlayerOverlays();
     el.classList.add("show");
     clearTimeout(toast._t);
     toast._t = setTimeout(() => el.classList.remove("show"), 1400);
@@ -1167,7 +1202,7 @@
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6) !important;
     }
 
-    /* Floating Draggable Controller HUD */
+    /* Player-anchored Controller HUD */
     #kiki-hud {
       position: fixed !important;
       top: 64px !important;
@@ -4837,7 +4872,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.4.3
+// Version: 1.4.4
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -5015,7 +5050,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       return null;
     }
 
-    const targetHost = document.body || document.documentElement;
+    const targetHost = document.fullscreenElement || document.body || document.documentElement;
     if (!targetHost) return null;
     let hud = document.getElementById("kiki-hud");
     if (hud) {
@@ -5054,15 +5089,16 @@ window.KikiAudioEngine = KikiAudioEngine;
         <div class="kiki-hud-dot" title="Click to hide bar"></div>
         <button type="button" class="kiki-hud-btn kiki-hud-settings" title="Open Settings (Dictionary & AI)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="opacity: 0.95; flex-shrink: 0; vertical-align: -1.5px;"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-          <span>Settings</span>
+          <span class="kiki-hud-label">Settings</span>
         </button>
-        <button type="button" class="kiki-hud-btn kiki-hud-sub" title="Toggle Subtitles Visibility">💬 Sub: On</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-sub" title="Toggle Subtitles Visibility">CC On</button>
         <button type="button" class="kiki-hud-btn kiki-hud-cc" title="Click to select subtitle track">CC: Searching... ▾</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-reload" title="Reload Subtitles for Current Video">🔄 Reload</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-reload" title="Reload Subtitles for Current Video"><span aria-hidden="true">↻</span><span class="kiki-hud-label">Reload</span></button>
         <button type="button" class="kiki-hud-btn kiki-hud-close" title="Hide Status Bar">✕</button>
       `);
       targetHost.appendChild(hud);
-      makeDraggable(hud);
+      // The bar follows the player instead of drifting in viewport coordinates.
+      positionPlayerOverlays();
 
       const doHide = () => {
         if (typeof hideHud === "function") {
@@ -5138,6 +5174,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       });
     }
 
+    positionPlayerOverlays();
     return hud;
   }
   window.ensureHud = ensureHud;
@@ -5271,16 +5308,13 @@ window.KikiAudioEngine = KikiAudioEngine;
 
     if (subBtn) {
       const on = STATE.subsVisible !== false;
-      const targetText = on ? "💬 Sub: On" : "💬 Sub: Off";
+      const targetText = on ? "CC On" : "CC Off";
       if (subBtn.textContent !== targetText) subBtn.textContent = targetText;
-      const targetBg = on ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.1)";
-      const targetBorder = on ? "rgba(52, 211, 153, 0.4)" : "rgba(255, 255, 255, 0.2)";
-      const targetColor = on ? "#6EE7B7" : "#A1A1AA";
-      if (subBtn.dataset.active !== (on ? "1" : "0")) {
-        subBtn.dataset.active = on ? "1" : "0";
-        subBtn.style.setProperty("background", targetBg, "important");
-        subBtn.style.setProperty("border-color", targetBorder, "important");
-        subBtn.style.setProperty("color", targetColor, "important");
+      subBtn.dataset.active = on ? "1" : "0";
+      subBtn.setAttribute("aria-pressed", String(on));
+      // Legacy inline !important mint colors defeated the Latte/Macchiato CSS.
+      for (const prop of ["background", "border-color", "color"]) {
+        if (subBtn.style.getPropertyValue(prop)) subBtn.style.removeProperty(prop);
       }
     }
 
@@ -5316,7 +5350,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
   function ensureRoot() {
     let root = document.getElementById("kiki-root");
-    const targetHost = document.body || document.documentElement;
+    const targetHost = document.fullscreenElement || document.body || document.documentElement;
     if (!root && targetHost) {
       root = document.createElement("div");
       root.id = "kiki-root";
@@ -5373,7 +5407,67 @@ window.KikiAudioEngine = KikiAudioEngine;
     };
   }
 
+  function positionPlayerOverlays() {
+    if (!STATE.isYouTube && !/(?:^|\.)youtube\.com$/.test(location.hostname)) return;
+    const player = playerEl() || videoEl();
+    if (!player) return;
+    const r = player.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return;
+    const left = Math.max(0, r.left), right = Math.min(window.innerWidth, r.right);
+    const top = Math.max(0, r.top), bottom = Math.min(window.innerHeight, r.bottom);
+    if (right <= left || bottom <= top) return;
+    const width = right - left;
+    const centerX = (left + right) / 2;
+    const hud = document.getElementById("kiki-hud");
+    const fullscreen = Boolean(document.fullscreenElement || STATE.fs);
+    function set(el, prop, value) {
+      if (el.style.getPropertyValue(prop) !== value) el.style.setProperty(prop, value, "important");
+    }
+    if (hud) {
+      hud.dataset.compact = String(width < 520);
+      set(hud, "position", "fixed");
+      set(hud, "left", `${Math.round(centerX)}px`);
+      // Retain the existing fullscreen placement, but normal mode belongs
+      // inside the player rather than above the sidebar/page midpoint.
+      set(hud, "top", `${Math.round(top + (fullscreen ? Math.min(64, Math.max(12, bottom - top - 56)) : 12))}px`);
+      set(hud, "right", "auto"); set(hud, "bottom", "auto");
+      set(hud, "transform", "translateX(-50%)");
+      set(hud, "max-width", `${Math.max(1, Math.floor(width - Math.min(24, width * 0.08)))}px`);
+    }
+    const toast = document.getElementById("kiki-toast");
+    if (toast) {
+      set(toast, "position", "fixed");
+      set(toast, "left", `${Math.round(centerX)}px`);
+      set(toast, "top", `${Math.round((top + bottom) / 2)}px`);
+      set(toast, "right", "auto"); set(toast, "bottom", "auto");
+      set(toast, "transform", "translate(-50%, -50%)");
+      set(toast, "max-width", `${Math.max(1, Math.floor(width - Math.min(32, width * 0.1)))}px`);
+    }
+    if (typeof ResizeObserver !== "undefined" && player !== positionPlayerOverlays._player) {
+      positionPlayerOverlays._observer?.disconnect();
+      const observer = new ResizeObserver(scheduleOverlayPosition);
+      observer.observe(player);
+      positionPlayerOverlays._observer = observer;
+      positionPlayerOverlays._player = player;
+    }
+  }
+  window.positionPlayerOverlays = positionPlayerOverlays;
+  let overlayPositionFrame = 0;
+  function scheduleOverlayPosition() {
+    if (overlayPositionFrame) return;
+    overlayPositionFrame = requestAnimationFrame(() => {
+      overlayPositionFrame = 0;
+      positionPlayerOverlays();
+    });
+  }
+  window.addEventListener("resize", scheduleOverlayPosition, { passive: true });
+  window.addEventListener("scroll", scheduleOverlayPosition, { capture: true, passive: true });
+  document.addEventListener("fullscreenchange", scheduleOverlayPosition);
+  window.visualViewport?.addEventListener("resize", scheduleOverlayPosition, { passive: true });
+  window.visualViewport?.addEventListener("scroll", scheduleOverlayPosition, { passive: true });
+
   function updateCaptionPosition() {
+    positionPlayerOverlays();
     const box = document.getElementById("kiki-captions");
     if (!box) return;
     if (STATE.subsVisible === false) {
@@ -5428,7 +5522,7 @@ window.KikiAudioEngine = KikiAudioEngine;
   function mountPopupsInFullscreen() {
     const host = getPopupHost();
     if (!host) return;
-    ["kiki-yomitan-card", "kiki-modal-backdrop", "kiki-settings-modal"].forEach(id => {
+    ["kiki-yomitan-card", "kiki-modal-backdrop", "kiki-settings-modal", "kiki-hud", "kiki-toast", "kiki-track-dropdown", "kiki-root"].forEach(id => {
       const el = document.getElementById(id);
       if (el && el.parentElement !== host) host.appendChild(el);
     });

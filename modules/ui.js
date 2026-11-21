@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.4.3
+// Version: 1.4.4
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -178,7 +178,7 @@
       return null;
     }
 
-    const targetHost = document.body || document.documentElement;
+    const targetHost = document.fullscreenElement || document.body || document.documentElement;
     if (!targetHost) return null;
     let hud = document.getElementById("kiki-hud");
     if (hud) {
@@ -217,15 +217,16 @@
         <div class="kiki-hud-dot" title="Click to hide bar"></div>
         <button type="button" class="kiki-hud-btn kiki-hud-settings" title="Open Settings (Dictionary & AI)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="opacity: 0.95; flex-shrink: 0; vertical-align: -1.5px;"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-          <span>Settings</span>
+          <span class="kiki-hud-label">Settings</span>
         </button>
-        <button type="button" class="kiki-hud-btn kiki-hud-sub" title="Toggle Subtitles Visibility">💬 Sub: On</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-sub" title="Toggle Subtitles Visibility">CC On</button>
         <button type="button" class="kiki-hud-btn kiki-hud-cc" title="Click to select subtitle track">CC: Searching... ▾</button>
-        <button type="button" class="kiki-hud-btn kiki-hud-reload" title="Reload Subtitles for Current Video">🔄 Reload</button>
+        <button type="button" class="kiki-hud-btn kiki-hud-reload" title="Reload Subtitles for Current Video"><span aria-hidden="true">↻</span><span class="kiki-hud-label">Reload</span></button>
         <button type="button" class="kiki-hud-btn kiki-hud-close" title="Hide Status Bar">✕</button>
       `);
       targetHost.appendChild(hud);
-      makeDraggable(hud);
+      // The bar follows the player instead of drifting in viewport coordinates.
+      positionPlayerOverlays();
 
       const doHide = () => {
         if (typeof hideHud === "function") {
@@ -301,6 +302,7 @@
       });
     }
 
+    positionPlayerOverlays();
     return hud;
   }
   window.ensureHud = ensureHud;
@@ -434,16 +436,13 @@
 
     if (subBtn) {
       const on = STATE.subsVisible !== false;
-      const targetText = on ? "💬 Sub: On" : "💬 Sub: Off";
+      const targetText = on ? "CC On" : "CC Off";
       if (subBtn.textContent !== targetText) subBtn.textContent = targetText;
-      const targetBg = on ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.1)";
-      const targetBorder = on ? "rgba(52, 211, 153, 0.4)" : "rgba(255, 255, 255, 0.2)";
-      const targetColor = on ? "#6EE7B7" : "#A1A1AA";
-      if (subBtn.dataset.active !== (on ? "1" : "0")) {
-        subBtn.dataset.active = on ? "1" : "0";
-        subBtn.style.setProperty("background", targetBg, "important");
-        subBtn.style.setProperty("border-color", targetBorder, "important");
-        subBtn.style.setProperty("color", targetColor, "important");
+      subBtn.dataset.active = on ? "1" : "0";
+      subBtn.setAttribute("aria-pressed", String(on));
+      // Legacy inline !important mint colors defeated the Latte/Macchiato CSS.
+      for (const prop of ["background", "border-color", "color"]) {
+        if (subBtn.style.getPropertyValue(prop)) subBtn.style.removeProperty(prop);
       }
     }
 
@@ -479,7 +478,7 @@
 
   function ensureRoot() {
     let root = document.getElementById("kiki-root");
-    const targetHost = document.body || document.documentElement;
+    const targetHost = document.fullscreenElement || document.body || document.documentElement;
     if (!root && targetHost) {
       root = document.createElement("div");
       root.id = "kiki-root";
@@ -536,7 +535,67 @@
     };
   }
 
+  function positionPlayerOverlays() {
+    if (!STATE.isYouTube && !/(?:^|\.)youtube\.com$/.test(location.hostname)) return;
+    const player = playerEl() || videoEl();
+    if (!player) return;
+    const r = player.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return;
+    const left = Math.max(0, r.left), right = Math.min(window.innerWidth, r.right);
+    const top = Math.max(0, r.top), bottom = Math.min(window.innerHeight, r.bottom);
+    if (right <= left || bottom <= top) return;
+    const width = right - left;
+    const centerX = (left + right) / 2;
+    const hud = document.getElementById("kiki-hud");
+    const fullscreen = Boolean(document.fullscreenElement || STATE.fs);
+    function set(el, prop, value) {
+      if (el.style.getPropertyValue(prop) !== value) el.style.setProperty(prop, value, "important");
+    }
+    if (hud) {
+      hud.dataset.compact = String(width < 520);
+      set(hud, "position", "fixed");
+      set(hud, "left", `${Math.round(centerX)}px`);
+      // Retain the existing fullscreen placement, but normal mode belongs
+      // inside the player rather than above the sidebar/page midpoint.
+      set(hud, "top", `${Math.round(top + (fullscreen ? Math.min(64, Math.max(12, bottom - top - 56)) : 12))}px`);
+      set(hud, "right", "auto"); set(hud, "bottom", "auto");
+      set(hud, "transform", "translateX(-50%)");
+      set(hud, "max-width", `${Math.max(1, Math.floor(width - Math.min(24, width * 0.08)))}px`);
+    }
+    const toast = document.getElementById("kiki-toast");
+    if (toast) {
+      set(toast, "position", "fixed");
+      set(toast, "left", `${Math.round(centerX)}px`);
+      set(toast, "top", `${Math.round((top + bottom) / 2)}px`);
+      set(toast, "right", "auto"); set(toast, "bottom", "auto");
+      set(toast, "transform", "translate(-50%, -50%)");
+      set(toast, "max-width", `${Math.max(1, Math.floor(width - Math.min(32, width * 0.1)))}px`);
+    }
+    if (typeof ResizeObserver !== "undefined" && player !== positionPlayerOverlays._player) {
+      positionPlayerOverlays._observer?.disconnect();
+      const observer = new ResizeObserver(scheduleOverlayPosition);
+      observer.observe(player);
+      positionPlayerOverlays._observer = observer;
+      positionPlayerOverlays._player = player;
+    }
+  }
+  window.positionPlayerOverlays = positionPlayerOverlays;
+  let overlayPositionFrame = 0;
+  function scheduleOverlayPosition() {
+    if (overlayPositionFrame) return;
+    overlayPositionFrame = requestAnimationFrame(() => {
+      overlayPositionFrame = 0;
+      positionPlayerOverlays();
+    });
+  }
+  window.addEventListener("resize", scheduleOverlayPosition, { passive: true });
+  window.addEventListener("scroll", scheduleOverlayPosition, { capture: true, passive: true });
+  document.addEventListener("fullscreenchange", scheduleOverlayPosition);
+  window.visualViewport?.addEventListener("resize", scheduleOverlayPosition, { passive: true });
+  window.visualViewport?.addEventListener("scroll", scheduleOverlayPosition, { passive: true });
+
   function updateCaptionPosition() {
+    positionPlayerOverlays();
     const box = document.getElementById("kiki-captions");
     if (!box) return;
     if (STATE.subsVisible === false) {
@@ -591,7 +650,7 @@
   function mountPopupsInFullscreen() {
     const host = getPopupHost();
     if (!host) return;
-    ["kiki-yomitan-card", "kiki-modal-backdrop", "kiki-settings-modal"].forEach(id => {
+    ["kiki-yomitan-card", "kiki-modal-backdrop", "kiki-settings-modal", "kiki-hud", "kiki-toast", "kiki-track-dropdown", "kiki-root"].forEach(id => {
       const el = document.getElementById(id);
       if (el && el.parentElement !== host) host.appendChild(el);
     });

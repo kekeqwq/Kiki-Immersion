@@ -1,13 +1,13 @@
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.4.3
+// Version: 1.4.4
 // =============================================================
 
-  window.__kiki_engine_version = "1.4.3";
+  window.__kiki_engine_version = "1.4.4";
   window.__kiki_loader_version = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.5";
   try {
-    localStorage.setItem("kiki_engine_version", "1.4.3");
-    localStorage.setItem("kiki_cache_version", "1.4.3");
+    localStorage.setItem("kiki_engine_version", "1.4.4");
+    localStorage.setItem("kiki_cache_version", "1.4.4");
     localStorage.setItem("kiki_loader_version", window.__kiki_loader_version);
   } catch (e) {}
 
@@ -49,7 +49,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.4.3"
+    engineVersion: "1.4.4"
   };
 
   // -------------------------------------------------------------
@@ -446,9 +446,11 @@
     if (!el) {
       el = document.createElement("div");
       el.id = "kiki-toast";
-      (document.body || document.documentElement).appendChild(el);
     }
+    const toastHost = document.fullscreenElement || document.body || document.documentElement;
+    if (el.parentElement !== toastHost) toastHost.appendChild(el);
     el.textContent = msg;
+    if (typeof window.positionPlayerOverlays === "function") window.positionPlayerOverlays();
     el.classList.add("show");
     clearTimeout(toast._t);
     toast._t = setTimeout(() => el.classList.remove("show"), 1400);
@@ -883,7 +885,7 @@
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6) !important;
     }
 
-    /* Floating Draggable Controller HUD */
+    /* Player-anchored Controller HUD */
     #kiki-hud {
       position: fixed !important;
       top: 64px !important;
