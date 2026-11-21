@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.4.4
+// @version      1.4.5
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine, and global web lookup.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -317,14 +317,14 @@
 
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.4.4
+// Version: 1.4.5
 // =============================================================
 
-  window.__kiki_engine_version = "1.4.4";
+  window.__kiki_engine_version = "1.4.5";
   window.__kiki_loader_version = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.5";
   try {
-    localStorage.setItem("kiki_engine_version", "1.4.4");
-    localStorage.setItem("kiki_cache_version", "1.4.4");
+    localStorage.setItem("kiki_engine_version", "1.4.5");
+    localStorage.setItem("kiki_cache_version", "1.4.5");
     localStorage.setItem("kiki_loader_version", window.__kiki_loader_version);
   } catch (e) {}
 
@@ -366,7 +366,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.4.4"
+    engineVersion: "1.4.5"
   };
 
   // -------------------------------------------------------------
@@ -2002,6 +2002,28 @@ class KikiStructuredContent {
                     }
                 }
             }
+        }
+
+        // Dictionary cross-references use ?query=... (sometimes a Yomitan
+        // search URL). Preserve the actual target, not just the visible label.
+        if (elementTag === 'a' && typeof content.href === 'string') {
+            try {
+                const href = content.href.trim();
+                const url = new URL(href, location.href);
+                const internal = href.startsWith('?') || /^(yomichan|yomitan):$/.test(url.protocol);
+                if (internal) {
+                    const query = url.searchParams.get('query');
+                    if (query && query.trim()) {
+                        element.dataset.kikiLookup = query.trim();
+                        element.href = '#kiki-dictionary-lookup';
+                        element.title = content.title || query.trim();
+                    }
+                } else if (url.protocol === 'https:' || url.protocol === 'http:') {
+                    element.href = url.href;
+                    element.target = '_blank';
+                    element.rel = 'noopener noreferrer';
+                }
+            } catch {}
         }
 
         // Set lang
@@ -4872,7 +4894,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.4.4
+// Version: 1.4.5
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -5541,6 +5563,23 @@ window.KikiAudioEngine = KikiAudioEngine;
         // Do not preventDefault: text selection, clipboard shortcuts and the
         // browser's Copy context menu still need their native default actions.
         card.addEventListener(type, e => e.stopPropagation());
+      });
+      card.addEventListener("click", e => {
+        const link = e.target?.closest?.("a[data-kiki-lookup]");
+        if (!link || !card.contains(link)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const term = link.dataset.kikiLookup;
+        if (!term) return;
+        const style = card.style.cssText;
+        // Snapshot before showYomitanCard replaces the card contents/state.
+        const sentence = STATE.sentenceContext || "";
+        const paragraph = STATE.paragraphContext || "";
+        const source = STATE.contextSource || "web";
+        const rect = card.getBoundingClientRect();
+        showYomitanCard(null, term, { x: rect.left + 40, y: rect.top - 18 }, sentence, source, paragraph);
+        card.style.cssText = style;
+        card.scrollTop = 0;
       });
       getPopupHost().appendChild(card);
     }

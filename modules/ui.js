@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.4.4
+// Version: 1.4.5
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -669,6 +669,23 @@
         // Do not preventDefault: text selection, clipboard shortcuts and the
         // browser's Copy context menu still need their native default actions.
         card.addEventListener(type, e => e.stopPropagation());
+      });
+      card.addEventListener("click", e => {
+        const link = e.target?.closest?.("a[data-kiki-lookup]");
+        if (!link || !card.contains(link)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const term = link.dataset.kikiLookup;
+        if (!term) return;
+        const style = card.style.cssText;
+        // Snapshot before showYomitanCard replaces the card contents/state.
+        const sentence = STATE.sentenceContext || "";
+        const paragraph = STATE.paragraphContext || "";
+        const source = STATE.contextSource || "web";
+        const rect = card.getBoundingClientRect();
+        showYomitanCard(null, term, { x: rect.left + 40, y: rect.top - 18 }, sentence, source, paragraph);
+        card.style.cssText = style;
+        card.scrollTop = 0;
       });
       getPopupHost().appendChild(card);
     }
