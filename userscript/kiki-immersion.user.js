@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.4.2
+// @version      1.4.3
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine, and global web lookup.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -284,14 +284,14 @@
 
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.4.2
+// Version: 1.4.3
 // =============================================================
 
-  window.__kiki_engine_version = "1.4.2";
+  window.__kiki_engine_version = "1.4.3";
   window.__kiki_loader_version = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.5";
   try {
-    localStorage.setItem("kiki_engine_version", "1.4.2");
-    localStorage.setItem("kiki_cache_version", "1.4.2");
+    localStorage.setItem("kiki_engine_version", "1.4.3");
+    localStorage.setItem("kiki_cache_version", "1.4.3");
     localStorage.setItem("kiki_loader_version", window.__kiki_loader_version);
   } catch (e) {}
 
@@ -333,7 +333,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.4.2"
+    engineVersion: "1.4.3"
   };
 
   // -------------------------------------------------------------
@@ -477,7 +477,9 @@
     } catch {}
     let urlVid = "";
     try { urlVid = new URL(url, location.href).searchParams.get("v") || ""; } catch {}
-    const cid = urlVid || (typeof currentVideoId === "function" ? currentVideoId() : STATE.videoId);
+    const activeVideoId = typeof currentVideoId === "function" ? currentVideoId() : STATE.videoId;
+    if (!urlVid || urlVid !== activeVideoId) return;
+    const cid = urlVid;
     if (STATE.capturedVideoId && cid && STATE.capturedVideoId !== cid) {
       STATE.capturedLastUrl = "";
       STATE.capturedBody = "";
@@ -494,6 +496,8 @@
       for (let i = entries.length - 1; i >= 0; i--) {
         const name = entries[i].name;
         if (typeof name === "string" && name.includes(TIMEDTEXT_MARK)) {
+          const videoId = new URL(name, location.href).searchParams.get("v");
+          if (!videoId || videoId !== currentVideoId()) continue;
           noteTimedtextUrl(name);
           return name;
         }
@@ -505,6 +509,9 @@
 
   function handleCapturedWire(body, url) {
     if (!body || body.trim().length < 20) return;
+    try {
+      if (new URL(url, location.href).searchParams.get("v") !== currentVideoId()) return;
+    } catch { return; }
     noteTimedtextUrl(url);
     STATE.capturedBody = body;
     STATE.capturedLastUrl = url;
@@ -4830,7 +4837,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.4.2
+// Version: 1.4.3
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -4847,22 +4854,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         if (pr && typeof pr.catch === "function") pr.catch(() => {});
       } catch {}
     }
-    // Safety check after a short frame to make sure video resumed
-    setTimeout(() => {
-      if (STATE.enabled && !STATE.pausedForLookup && (typeof isAnyPopupOpen !== "function" || !isAnyPopupOpen())) {
-        const video = videoEl();
-        if (video && video.paused) {
-          const player = playerEl();
-          if (player && typeof player.playVideo === "function") {
-            try { player.playVideo(); } catch {}
-          }
-          try {
-            const p2 = video.play();
-            if (p2 && typeof p2.catch === "function") p2.catch(() => {});
-          } catch {}
-        }
-      }
-    }, 60);
+    // Never schedule a forced resume: a subsequent user pause must win.
   }
 
   window.pauseVideoSync = pauseVideoSync;
@@ -7811,7 +7803,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - YouTube Adapter & Subtitle Pipeline
-// Version: 1.3.3
+// Version: 1.4.3
 // =============================================================
 
 (() => {
@@ -7828,6 +7820,25 @@ window.KikiAudioEngine = KikiAudioEngine;
   let capturedVideoId = STATE?.capturedVideoId || "";
   let lastPoToken = STATE?.lastPoToken || "";
   let selfFetching = 0;
+  let videoGeneration = 0;
+  let transcriptPanelVideoId = "";
+  let staleNativeCaptionText = "";
+  const staleTrackSignatures = new WeakMap();
+  const trackSignature = track => {
+    const cues = track.cues;
+    const ends = cues?.length ? [cues[0], cues[cues.length - 1]] : [];
+    return JSON.stringify([cues?.length || 0, ...ends.map(c => [c.startTime, c.endTime, getCueText(c)])]);
+  };
+  function nativeVideoMatchesPage() {
+    const p = playerEl();
+    try {
+      const id = p?.getVideoData?.()?.video_id || p?.getPlayerResponse?.()?.videoDetails?.videoId;
+      return !id || id === currentVideoId();
+    } catch { return false; }
+  }
+  const videoSession = () => ({ id: currentVideoId(), generation: videoGeneration });
+  const sessionIsCurrent = session => Boolean(session?.id && session.id === currentVideoId() &&
+    session.generation === videoGeneration && (!STATE.videoId || session.id === STATE.videoId));
 
   function currentVideoId() {
     try {
@@ -7857,7 +7868,8 @@ window.KikiAudioEngine = KikiAudioEngine;
     } catch {}
     let urlVid = "";
     try { urlVid = new URL(url, location.href).searchParams.get("v") || ""; } catch {}
-    const cid = urlVid || currentVideoId();
+    if (!urlVid || urlVid !== currentVideoId()) return;
+    const cid = urlVid;
     if (capturedVideoId && cid && capturedVideoId !== cid) {
       capturedLastUrl = "";
       capturedBody = "";
@@ -7879,7 +7891,8 @@ window.KikiAudioEngine = KikiAudioEngine;
     noteTimedtextUrl(url);
     let urlVid = "";
     try { urlVid = new URL(url, location.href).searchParams.get("v") || ""; } catch {}
-    capturedVideoId = urlVid || currentVideoId();
+    if (!urlVid || urlVid !== currentVideoId()) return;
+    capturedVideoId = urlVid;
     capturedBody = body;
     capturedLastUrl = url;
     if (typeof STATE !== "undefined") {
@@ -8131,6 +8144,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     if (!STATE.enabled) return;
     try { ensureHud(); ensureRoot(); } catch {}
     if (!e.isTrusted) return;
+    if (e.ctrlKey || e.altKey || e.metaKey || (e.type === "pointerdown" && e.button !== 0)) return;
     const p = playerEl();
     if (!p || !p.contains(e.target)) return;
 
@@ -8710,9 +8724,10 @@ window.KikiAudioEngine = KikiAudioEngine;
 
   function extractCuesFromVideo() {
     const v = videoEl();
-    if (!v || !v.textTracks || !v.textTracks.length) return [];
+    if (!v || !v.textTracks || !v.textTracks.length || !nativeVideoMatchesPage()) return [];
     for (let i = 0; i < v.textTracks.length; i++) {
       const track = v.textTracks[i];
+      if (staleTrackSignatures.get(track) === trackSignature(track)) continue;
       if (track.kind === "chapters" || track.kind === "metadata") continue;
       if (track.mode === "disabled") {
         try { track.mode = "showing"; } catch {}
@@ -8736,10 +8751,13 @@ window.KikiAudioEngine = KikiAudioEngine;
     return [];
   }
 
-  function getLiveCaptionText() {
+  function getLiveCaptionText(allowStale = false) {
+    if (!allowStale && !nativeVideoMatchesPage()) return "";
     function sanitize(text) {
       if (!text) return "";
       const cleaned = text.replace(/^\s*>>\s*/, "").replace(/\s*>>\s*/g, " ").trim();
+      if (!allowStale && cleaned === staleNativeCaptionText) return "";
+      if (!allowStale && cleaned) staleNativeCaptionText = "";
       return isDummyCueText(cleaned) ? "" : cleaned;
     }
 
@@ -8748,6 +8766,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     if (v && v.textTracks && v.textTracks.length) {
       for (let i = 0; i < v.textTracks.length; i++) {
         const track = v.textTracks[i];
+        if (!allowStale && staleTrackSignatures.get(track) === trackSignature(track)) continue;
         if (track.mode === "disabled") {
           try { track.mode = "showing"; } catch {}
         }
@@ -8861,11 +8880,13 @@ window.KikiAudioEngine = KikiAudioEngine;
     }
 
     // 1. Check wire sniffer cache even in liveMode to upgrade live -> structured
+    const session = videoSession();
+    if (!sessionIsCurrent(session) || !nativeVideoMatchesPage()) return;
     const curVid = currentVideoId();
     const curBody = capturedBody || STATE.capturedBody || window.__kiki_capturedBody;
     const curVidCaptured = capturedVideoId || STATE.capturedVideoId;
     if (curBody && curBody.trim().length > 20) {
-      if (!curVidCaptured || curVidCaptured === curVid) {
+      if (curVidCaptured === curVid) {
         const cues = parseAny(curBody);
         if (cues && cues.length >= 5) {
           if (STATE.liveMode || !STATE.cues || STATE.cues.length < 5) {
@@ -8897,7 +8918,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       fetchExact(targetUrl, 2500).then((raw) => {
         const cues = parseAny(raw);
         if (cues && cues.length >= 5) {
-          applyLoadedCues(cues, "pot-upgrade", STATE.activeTrack);
+          applyLoadedCues(cues, "pot-upgrade", STATE.activeTrack, session);
         }
       }).catch(() => {});
     }
@@ -8910,7 +8931,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         fetchExact(foundUrl, 2000).then((raw) => {
           const cues = parseAny(raw);
           if (cues && cues.length >= 5) {
-            applyLoadedCues(cues, "wire-url", STATE.activeTrack);
+            applyLoadedCues(cues, "wire-url", STATE.activeTrack, session);
           }
         }).catch(() => {});
       }
@@ -8918,7 +8939,12 @@ window.KikiAudioEngine = KikiAudioEngine;
 
     // 6. Render live caption text immediately without any blocking
     const liveText = getLiveCaptionText();
-    if (liveText && liveText !== lastObservedText) {
+    if (!liveText) {
+      lastObservedText = "";
+      STATE.lastObservedText = "";
+      const box = document.getElementById("kiki-captions");
+      if (box) box.textContent = "";
+    } else if (liveText !== lastObservedText) {
       lastObservedText = liveText;
       STATE.lastObservedText = liveText;
       STATE.liveMode = true;
@@ -9024,7 +9050,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     try {
       const u = new URL(track.baseUrl, location.href);
       const trackVid = u.searchParams.get("v");
-      if (trackVid && vid && trackVid !== vid) return false;
+      if (trackVid !== vid) return false;
     } catch {}
     return true;
   }
@@ -9256,7 +9282,8 @@ window.KikiAudioEngine = KikiAudioEngine;
   }
 
   async function tryLoadTranscriptPanel(vid, track = null) {
-    if (!vid || transcriptFetchInProgress) return false;
+    if (!vid || vid !== currentVideoId() || transcriptFetchInProgress || isLookupOrCardOpen()) return false;
+    const session = videoSession();
     if (STATE.cues && STATE.cues.length >= 5 && !STATE.liveMode) return true;
     if (Date.now() - lastTranscriptAttemptTime < 3000) return false;
     lastTranscriptAttemptTime = Date.now();
@@ -9306,11 +9333,13 @@ window.KikiAudioEngine = KikiAudioEngine;
         return null;
       }
 
-      // Check if already populated
+      // Reused panel text is not proof of ownership after an SPA transition.
       let cues = extractFromPanel();
-      if (cues && cues.length >= 5) {
+      const fingerprint = list => JSON.stringify((list || []).map(c => [c.start, c.text]));
+      const previousFingerprint = fingerprint(cues);
+      if (transcriptPanelVideoId === vid && cues && cues.length >= 5) {
         closeTranscriptPanelSilently();
-        applyLoadedCues(cues, "transcript", track || STATE.activeTrack);
+        applyLoadedCues(cues, "transcript", track || STATE.activeTrack, session);
         return true;
       }
 
@@ -9336,28 +9365,32 @@ window.KikiAudioEngine = KikiAudioEngine;
       // Poll for data to arrive (up to 2.4s)
       for (let i = 0; i < 15; i++) {
         await sleep(160);
-        if (currentVideoId() !== vid) break;
+        if (!sessionIsCurrent(session)) return false;
         cues = extractFromPanel();
-        if (cues && cues.length >= 5) {
+        if (cues && cues.length >= 5 && fingerprint(cues) !== previousFingerprint) {
+          transcriptPanelVideoId = vid;
           closeTranscriptPanelSilently();
-          applyLoadedCues(cues, "transcript", track || STATE.activeTrack);
+          applyLoadedCues(cues, "transcript", track || STATE.activeTrack, session);
           return true;
         }
       }
 
-      closeTranscriptPanelSilently();
+      if (sessionIsCurrent(session)) closeTranscriptPanelSilently();
       return false;
     } catch (err) {
       console.warn("[Kiki transcript panel error]", err);
-      closeTranscriptPanelSilently();
+      if (sessionIsCurrent(session)) closeTranscriptPanelSilently();
       return false;
     } finally {
-      transcriptFetchInProgress = false;
-      cleanupLeakedTranscriptPopups();
+      if (sessionIsCurrent(session)) {
+        transcriptFetchInProgress = false;
+        cleanupLeakedTranscriptPopups();
+      }
     }
   }
 
-  function applyLoadedCues(cues, source, track = null) {
+  function applyLoadedCues(cues, source, track = null, session = videoSession()) {
+    if (!sessionIsCurrent(session)) return;
     if (!cues || cues.length < 5) return;
     if (cues.length <= 8 && cues.some((c) => isDummyCueText(c.text))) {
       return;
@@ -9393,6 +9426,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
   async function selectSubtitleTrack(track) {
     if (!track) return;
+    const session = videoSession();
     STATE.activeTrack = track;
     const trackLabel = track.name?.simpleText || track.languageCode;
     updateHud(`CC: ${trackLabel} ▾`);
@@ -9412,15 +9446,17 @@ window.KikiAudioEngine = KikiAudioEngine;
         }
       }
       if (cues && cues.length >= 5) {
-        applyLoadedCues(cues, track.kind === "asr" ? "auto" : "official", track);
+        applyLoadedCues(cues, track.kind === "asr" ? "auto" : "official", track, session);
         return;
       }
     }
 
+    if (!sessionIsCurrent(session)) return;
     // 2. Try loading structured cues from transcript panel
-    const transcriptOk = await tryLoadTranscriptPanel(currentVideoId(), track);
+    const transcriptOk = await tryLoadTranscriptPanel(session.id, track);
     if (transcriptOk) return;
 
+    if (!sessionIsCurrent(session)) return;
     // 3. Instruct player to switch to this track
     try {
       const p = playerEl();
@@ -9439,6 +9475,7 @@ window.KikiAudioEngine = KikiAudioEngine;
     // 3. Wait up to 1500ms for player network response to be intercepted
     for (let i = 0; i < 8; i++) {
       await sleep(180);
+      if (!sessionIsCurrent(session)) return;
       if (STATE.cues && STATE.cues.length >= 5 && !STATE.liveMode) {
         return;
       }
@@ -9489,6 +9526,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       return;
     }
 
+    const session = videoSession();
     loadingTracks = true;
     STATE.loadingTracks = true;
     STATE.liveFallbackAllowed = true;
@@ -9514,10 +9552,10 @@ window.KikiAudioEngine = KikiAudioEngine;
       // 1. Wire sniffer cache / early captured body
       const cBody = capturedBody || STATE.capturedBody || window.__kiki_capturedBody;
       const cVid = capturedVideoId || STATE.capturedVideoId;
-      if (cBody && (cVid === vid || !cVid) && cBody.trim().length > 20) {
+      if (cBody && cVid === vid && cBody.trim().length > 20) {
         const cues = parseAny(cBody);
         if (cues && cues.length >= 5) {
-          applyLoadedCues(cues, "wire-cache", STATE.activeTrack);
+          applyLoadedCues(cues, "wire-cache", STATE.activeTrack, session);
           return;
         }
       }
@@ -9562,6 +9600,7 @@ window.KikiAudioEngine = KikiAudioEngine;
         } catch {}
       }
 
+      if (!sessionIsCurrent(session)) return;
       let bestTrack = null;
       if (tracks && tracks.length) {
         const vidLang = detectVideoLanguage();
@@ -9594,7 +9633,7 @@ window.KikiAudioEngine = KikiAudioEngine;
             cues = parseAny(raw);
           }
           if (cues && cues.length >= 5) {
-            applyLoadedCues(cues, bestTrack.kind === "asr" ? "auto" : "official", bestTrack);
+            applyLoadedCues(cues, bestTrack.kind === "asr" ? "auto" : "official", bestTrack, session);
             return;
           }
         }
@@ -9602,21 +9641,23 @@ window.KikiAudioEngine = KikiAudioEngine;
         ensureCaptionsActive(null);
       }
 
+      if (!sessionIsCurrent(session)) return;
       // 6. Check if capturedLastUrl from resource timing / sniffer can be fetched directly
       const curLastUrl = capturedLastUrl || STATE.capturedLastUrl;
-      if (curLastUrl && curLastUrl.includes(MARK)) {
+      if (curLastUrl && curLastUrl.includes(MARK) && new URL(curLastUrl, location.href).searchParams.get("v") === vid) {
         let raw = await fetchExact(curLastUrl, 1500);
         let cues = parseAny(raw);
         if (cues && cues.length >= 5) {
-          applyLoadedCues(cues, "wire-url", bestTrack || STATE.activeTrack);
+          applyLoadedCues(cues, "wire-url", bestTrack || STATE.activeTrack, session);
           return;
         }
       }
 
+      if (!sessionIsCurrent(session)) return;
       // 7. Check video textTracks immediately
       const earlyCues = extractCuesFromVideo();
       if (earlyCues && earlyCues.length >= 5) {
-        applyLoadedCues(earlyCues, "video-track", bestTrack || STATE.activeTrack);
+        applyLoadedCues(earlyCues, "video-track", bestTrack || STATE.activeTrack, session);
         return;
       }
 
@@ -9640,6 +9681,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
       // 10. Background self-heal: asynchronously try direct candidates without blocking UI
       setTimeout(() => {
+        if (!sessionIsCurrent(session)) return;
         const directCandidates = [
           `https://www.youtube.com/api/timedtext?v=${vid}&lang=en&fmt=json3`,
           `https://www.youtube.com/api/timedtext?v=${vid}&lang=en&kind=asr&fmt=json3`,
@@ -9651,15 +9693,17 @@ window.KikiAudioEngine = KikiAudioEngine;
           for (const raw of results) {
             const cues = parseAny(raw);
             if (cues && cues.length >= 5) {
-              applyLoadedCues(cues, "direct", bestTrack);
+              applyLoadedCues(cues, "direct", bestTrack, session);
               return;
             }
           }
         }).catch(() => {});
       }, 500);
     } finally {
-      loadingTracks = false;
-      STATE.loadingTracks = false;
+      if (sessionIsCurrent(session)) {
+        loadingTracks = false;
+        STATE.loadingTracks = false;
+      }
     }
   }
   window.reloadSubtitlesForVideo = () => loadForVideo(true);
@@ -9672,31 +9716,35 @@ window.KikiAudioEngine = KikiAudioEngine;
       mini.forEach((m) => {
         if (!currentVideoId()) {
           const v = m.querySelector("video");
-          if (v && !v.paused) v.pause();
+          if (v && v !== videoEl() && !v.paused) v.pause();
         }
-        m.remove();
+        if (!m.contains(videoEl())) m.remove();
       });
     } catch {}
   }
 
-  function tryAutoplay() {
-    const v = videoEl();
-    if (v && v.paused && v.currentTime === 0) {
-      try {
-        const p = v.play();
-        if (p && typeof p.catch === "function") p.catch(() => {});
-      } catch {}
-    }
-  }
-
   async function onNavigate() {
     const id = currentVideoId();
-    if (!id) {
-      updateHud("✦ Kiki (Home)");
-      return;
-    }
-    if (id === STATE.videoId && STATE.cues.length) return;
+    if (id === STATE.videoId) return;
 
+    if (STATE.videoId) {
+      staleNativeCaptionText = getLiveCaptionText(true);
+      const oldVideo = videoEl();
+      for (const track of Array.from(oldVideo?.textTracks || [])) {
+        staleTrackSignatures.set(track, trackSignature(track));
+      }
+    }
+    videoGeneration++;
+    loadingTracks = false;
+    STATE.loadingTracks = false;
+    transcriptPanelVideoId = "";
+    transcriptFetchInProgress = false;
+    capturedBody = capturedLastUrl = capturedVideoId = "";
+    STATE.capturedBody = STATE.capturedLastUrl = STATE.capturedVideoId = "";
+    window.__kiki_capturedBody = window.__kiki_capturedUrl = "";
+    STATE.tracks = [];
+    STATE.activeTrack = null;
+    STATE.liveFallbackAllowed = true;
     STATE.videoId = id;
     STATE.cues = [];
     STATE.liveCues = [];
@@ -9708,31 +9756,26 @@ window.KikiAudioEngine = KikiAudioEngine;
     lastLoadAttemptTime = 0;
     STATE.liveMode = true;
     renderCue(-1);
-    closeLookup();
+    closeLookup(false);
+    const box = document.getElementById("kiki-captions");
+    if (box) box.textContent = "";
+    const session = videoSession();
+    if (!id) {
+      updateHud("✦ Kiki (Home)");
+      return;
+    }
 
     await waitForPlayer();
+    if (!sessionIsCurrent(session)) return;
     ensureHud();
     ensureRoot();
     ensureCaptionObserver();
     bindVideoTrackListeners();
-    tryAutoplay();
     await loadForVideo();
   }
 
-  let lastTimelineSyncTime = 0;
   let lastThemeSyncTime = 0;
   let lastLeakedPopupCleanupTime = 0;
-  function syncNativeTimeline(v) {
-    if (!v || v.paused) return;
-    const now = Date.now();
-    if (now - lastTimelineSyncTime < 450) return;
-    lastTimelineSyncTime = now;
-    try {
-      v.dispatchEvent(new Event("seeking"));
-      v.dispatchEvent(new Event("seeked"));
-    } catch {}
-  }
-
   function tick() {
     try {
       try { dismissMiniplayer(); } catch {}
@@ -9758,7 +9801,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       }
 
       const curVid = currentVideoId();
-      if (curVid && curVid !== STATE.videoId) {
+      if (curVid !== STATE.videoId) {
         onNavigate();
         return;
       }
@@ -9766,8 +9809,8 @@ window.KikiAudioEngine = KikiAudioEngine;
       const v = videoEl();
       if (!v) return;
 
-      // Keep native player timeline, progress bar and current time flowing continuously on iPad/Safari
-      syncNativeTimeline(v);
+      // Native media events belong to the player; fake seeking/seeked events
+      // can put YouTube into a seek/buffering pause while merely reading time.
 
       if ((!STATE.cues || !STATE.cues.length) && STATE.videoId) {
         const isPlaying = v && !v.paused && (v.currentTime > 0 || v.readyState >= 1);
@@ -9804,7 +9847,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       } else {
         suppressNativeCaptions();
         const liveText = getLiveCaptionText();
-        if (liveText && liveText !== lastObservedText) {
+        if (liveText !== lastObservedText) {
           onNativeCaptionsMutated();
         }
       }
@@ -9815,7 +9858,8 @@ window.KikiAudioEngine = KikiAudioEngine;
 
   // Keyboard Shortcuts
   window.addEventListener("keydown", (e) => {
-    if (!STATE.enabled) return;
+    if (!STATE.enabled || !currentVideoId()) return;
+    if (e.target?.closest?.("#kiki-yomitan-card, #kiki-settings-modal, button, select, [role='button']")) return;
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) return;
     const k = e.key;
     if (k === "[" || k === "ArrowLeft" || k === "a" || k === "A") {
@@ -9828,13 +9872,25 @@ window.KikiAudioEngine = KikiAudioEngine;
       e.stopPropagation();
       seekCue(1);
       toast("next line →");
-    } else if (e.code === "Space" || k === " ") {
+    } else if ((e.code === "Space" || k === " ") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const alreadyHandled = e.defaultPrevented;
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation();
+      if (e.repeat || alreadyHandled) return;
+      window.__kiki_cancelSingleTap?.();
       togglePause();
     } else if (e.altKey && (k === "f" || k === "F")) {
       e.preventDefault();
       toggleWebpageFs();
+    }
+  }, true);
+
+  window.addEventListener("keyup", e => {
+    if (!STATE.enabled || !currentVideoId() || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target?.closest?.("input, textarea, select, button, [contenteditable], #kiki-yomitan-card, #kiki-settings-modal")) return;
+    if (e.code === "Space" || e.key === " ") {
+      e.preventDefault();
+      e.stopImmediatePropagation();
     }
   }, true);
 
@@ -9850,7 +9906,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       if (e.target === v) {
         if (!STATE.cues.length && !loadingTracks && !STATE.loadingTracks) {
           lastFailedVideoId = "";
-          setTimeout(() => loadForVideo(true), 200);
+          setTimeout(() => loadForVideo(), 200);
         }
       }
     }, true);

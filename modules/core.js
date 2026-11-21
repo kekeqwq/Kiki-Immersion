@@ -1,13 +1,13 @@
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.4.2
+// Version: 1.4.3
 // =============================================================
 
-  window.__kiki_engine_version = "1.4.2";
+  window.__kiki_engine_version = "1.4.3";
   window.__kiki_loader_version = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.5";
   try {
-    localStorage.setItem("kiki_engine_version", "1.4.2");
-    localStorage.setItem("kiki_cache_version", "1.4.2");
+    localStorage.setItem("kiki_engine_version", "1.4.3");
+    localStorage.setItem("kiki_cache_version", "1.4.3");
     localStorage.setItem("kiki_loader_version", window.__kiki_loader_version);
   } catch (e) {}
 
@@ -49,7 +49,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.4.2"
+    engineVersion: "1.4.3"
   };
 
   // -------------------------------------------------------------
@@ -193,7 +193,9 @@
     } catch {}
     let urlVid = "";
     try { urlVid = new URL(url, location.href).searchParams.get("v") || ""; } catch {}
-    const cid = urlVid || (typeof currentVideoId === "function" ? currentVideoId() : STATE.videoId);
+    const activeVideoId = typeof currentVideoId === "function" ? currentVideoId() : STATE.videoId;
+    if (!urlVid || urlVid !== activeVideoId) return;
+    const cid = urlVid;
     if (STATE.capturedVideoId && cid && STATE.capturedVideoId !== cid) {
       STATE.capturedLastUrl = "";
       STATE.capturedBody = "";
@@ -210,6 +212,8 @@
       for (let i = entries.length - 1; i >= 0; i--) {
         const name = entries[i].name;
         if (typeof name === "string" && name.includes(TIMEDTEXT_MARK)) {
+          const videoId = new URL(name, location.href).searchParams.get("v");
+          if (!videoId || videoId !== currentVideoId()) continue;
           noteTimedtextUrl(name);
           return name;
         }
@@ -221,6 +225,9 @@
 
   function handleCapturedWire(body, url) {
     if (!body || body.trim().length < 20) return;
+    try {
+      if (new URL(url, location.href).searchParams.get("v") !== currentVideoId()) return;
+    } catch { return; }
     noteTimedtextUrl(url);
     STATE.capturedBody = body;
     STATE.capturedLastUrl = url;

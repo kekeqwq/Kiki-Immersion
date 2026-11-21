@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.4.2
+// Version: 1.4.3
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -17,22 +17,7 @@
         if (pr && typeof pr.catch === "function") pr.catch(() => {});
       } catch {}
     }
-    // Safety check after a short frame to make sure video resumed
-    setTimeout(() => {
-      if (STATE.enabled && !STATE.pausedForLookup && (typeof isAnyPopupOpen !== "function" || !isAnyPopupOpen())) {
-        const video = videoEl();
-        if (video && video.paused) {
-          const player = playerEl();
-          if (player && typeof player.playVideo === "function") {
-            try { player.playVideo(); } catch {}
-          }
-          try {
-            const p2 = video.play();
-            if (p2 && typeof p2.catch === "function") p2.catch(() => {});
-          } catch {}
-        }
-      }
-    }, 60);
+    // Never schedule a forced resume: a subsequent user pause must win.
   }
 
   window.pauseVideoSync = pauseVideoSync;

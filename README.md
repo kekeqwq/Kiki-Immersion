@@ -2,7 +2,7 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Translucent Liquid Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.4.2-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.2.2-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.4.3-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.2.3-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
@@ -103,7 +103,9 @@ Kiki Immersion features a touch-first design built specifically for iPad, tablet
 
 4. **Rock-Solid Subtitle Pipeline**
    - YouTube PoToken bypass via native authenticated Transcript panel extraction.
-   - Automatic subtitle line synchronization and track switching.
+   - Automatic subtitle line synchronization and track switching, without synthetic seeking events or delayed forced playback retries.
+   - SPA video switches clear all subtitle/track caches; video-generation checks reject late requests, reused transcript panels and stale native textTracks. Empty live captions clear the displayed line.
+   - Space toggles playback once per press, suppresses duplicate native handling, and leaves editable fields and focused controls alone.
    - Multi-word phrase matching and highlight in subtitles.
 
 ---
@@ -132,6 +134,14 @@ Kiki-Immersion/
 ```
 
 ---
+
+## 🧪 YouTube Playback / Navigation Regression Tests
+
+```sh
+node scripts/test_youtube_regressions.js
+```
+
+Runs production functions in a deterministic VM with mocked player/network state. Checks Space down/up/repeat, delayed-resume removal, media-event safety, video-generation invalidation (including A→B→A), in-flight fetches, transcript panel ownership, native textTracks, empty live captions, and old ResourceTiming/wire responses. These are isolated regressions, not live YouTube playback automation.
 
 ## 🧪 Netflix/asbplayer Regression Tests
 
