@@ -1,8 +1,8 @@
 {
   "name": "Kiki Immersion",
-  "version": "1.4.0",
-  "loaderVersion": "1.2.0",
-  "updated": "2026-11-20",
+  "version": "1.4.1",
+  "loaderVersion": "1.2.1",
+  "updated": "2026-11-21",
   "repository": "https://github.com/kekeqwq/Kiki-Immersion",
   "modules": [
     {

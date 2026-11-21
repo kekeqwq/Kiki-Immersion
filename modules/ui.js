@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.4.0
+// Version: 1.4.1
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -890,10 +890,87 @@
 
   function renderYomitanDefinitions(card, originalTerm, results) {
     card.textContent = "";
-    results.forEach((res, idx) => {
+    const isEn = getAiConfig().aiLang === "en";
+    const toolbar = document.createElement("div");
+    toolbar.className = "kiki-lookup-toolbar";
+    const title = document.createElement("span");
+    title.className = "kiki-lookup-title";
+    title.textContent = originalTerm;
+    toolbar.appendChild(title);
+    const settingsBtn = document.createElement("button");
+    settingsBtn.type = "button";
+    settingsBtn.className = "kiki-card-settings-btn";
+    settingsBtn.title = isEn ? "Settings" : "设置";
+    settingsBtn.setAttribute("aria-label", settingsBtn.title);
+    settingsBtn.textContent = "⚙";
+    settingsBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      showSettingsModal("dict");
+    });
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "kiki-card-close-btn";
+    closeBtn.title = isEn ? "Close" : "关闭";
+    closeBtn.setAttribute("aria-label", closeBtn.title);
+    closeBtn.textContent = "×";
+    closeBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      closeLookup();
+    });
+    toolbar.append(settingsBtn, closeBtn);
+    card.appendChild(toolbar);
+
+    const kindOf = res => res.lookupKind || (/\s/.test(res.term || "") ? "phrase" : "word");
+    const groupBodies = new Map();
+    for (const kind of ["word", "phrase"]) {
+      const entries = results.filter(res => kindOf(res) === kind);
+      if (!entries.length) continue;
+      const section = document.createElement("section");
+      section.className = "kiki-lookup-group";
+      section.dataset.lookupKind = kind;
+      const heading = document.createElement("h3");
+      heading.className = "kiki-lookup-group-heading";
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "kiki-lookup-group-toggle";
+      const label = kind === "word" ? (isEn ? "Word" : "单词") : (isEn ? "Phrases" : "短语");
+      const terms = [...new Set(entries.map(res => res.term))].join(" · ");
+      const summary = document.createElement("span");
+      summary.className = "kiki-lookup-group-label";
+      summary.textContent = `${label} · ${terms}`;
+      const count = document.createElement("span");
+      count.className = "kiki-lookup-group-count";
+      count.textContent = String(entries.length);
+      const arrow = document.createElement("span");
+      arrow.className = "kiki-lookup-group-arrow";
+      arrow.setAttribute("aria-hidden", "true");
+      const body = document.createElement("div");
+      body.className = "kiki-lookup-group-content";
+      body.id = `kiki-lookup-${kind}-content`;
+      toggle.setAttribute("aria-controls", body.id);
+      function updateToggle() {
+        toggle.setAttribute("aria-expanded", String(!body.hidden));
+        toggle.setAttribute("aria-label", `${body.hidden ? (isEn ? "Expand" : "展开") : (isEn ? "Collapse" : "折叠")} ${label}`);
+        toggle.title = toggle.getAttribute("aria-label");
+        arrow.textContent = body.hidden ? "▸" : "▾";
+      }
+      updateToggle();
+      toggle.addEventListener("click", e => {
+        e.stopPropagation();
+        body.hidden = !body.hidden;
+        updateToggle();
+      });
+      toggle.append(arrow, summary, count);
+      heading.appendChild(toggle);
+      section.append(heading, body);
+      card.appendChild(section);
+      groupBodies.set(kind, body);
+    }
+    results.forEach(res => {
+      const groupBody = groupBodies.get(kindOf(res));
       const entryDiv = document.createElement("div");
       entryDiv.className = "kiki-card-entry";
-      if (idx > 0) {
+      if (groupBody.children.length > 0) {
         entryDiv.style.borderTop = "1px solid rgba(255, 255, 255, 0.15)";
         entryDiv.style.marginTop = "14px";
         entryDiv.style.paddingTop = "14px";
@@ -940,31 +1017,6 @@
           explainWithAiInCard(card, res.term || originalTerm, getSentenceContext());
         });
         row.appendChild(aiSwitchBtn);
-      }
-
-      if (idx === 0) {
-        const settingsBtn = document.createElement("button");
-        settingsBtn.type = "button";
-        settingsBtn.className = "kiki-card-settings-btn";
-        settingsBtn.title = "Settings (Dictionaries, AI, Modifiers)";
-        settingsBtn.style.cssText = "margin-left: auto; background: transparent; border: none; font-size: 16px; cursor: pointer; line-height: 1; padding: 0 4px;";
-        settingsBtn.innerHTML = "⚙";
-        settingsBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          showSettingsModal("dict");
-        });
-        row.appendChild(settingsBtn);
-
-        const closeBtn = document.createElement("button");
-        closeBtn.type = "button";
-        closeBtn.className = "kiki-card-close-btn";
-        closeBtn.style.cssText = "margin-left: 2px; background: transparent; border: none; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px;";
-        closeBtn.innerHTML = "&times;";
-        closeBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          closeLookup();
-        });
-        row.appendChild(closeBtn);
       }
 
       if (res.reading && res.reading !== res.term) {
@@ -1041,7 +1093,7 @@
       }
 
       entryDiv.appendChild(body);
-      card.appendChild(entryDiv);
+      groupBody.appendChild(entryDiv);
     });
   }
 

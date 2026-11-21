@@ -2,7 +2,7 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Translucent Liquid Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.4.0-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.2.0-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.4.1-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.2.1-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
@@ -85,14 +85,14 @@ Kiki Immersion features a touch-first design built specifically for iPad, tablet
    - **Light: Catppuccin Latte** (`catppuccin_latte`); **Dark: Catppuccin Macchiato** (`catppuccin_macchiato`), using the official palette with Mauve accents.
    - Shared tokens cover dictionary/AI cards, settings tabs and forms, subtitle overlays and word highlights, HUD, track menus, notifications, loading/progress, and phrase waves. Only Kiki UI is themed; native Netflix/asbplayer/Yomitan interfaces are not recolored.
    - Settings → Appearance offers Auto (follow page, system fallback), Latte, and Macchiato. Open UI follows theme changes without discarding form drafts.
-   - **Loader users upgrading from 1.1.x must update `loader.user.js` to 1.2.0** so the new shared `theme.js` module is loaded. Standalone users update `dist/kiki-immersion.user.js`.
+   - **Loader users upgrading from 1.1.x must update `loader.user.js` to 1.2.0 or newer** so the new shared `theme.js` module is loaded. Standalone users update `dist/kiki-immersion.user.js`.
    - Palette attribution: [Catppuccin](https://catppuccin.com/palette/), [MIT license](assets/CATPPUCCIN-LICENSE).
 
 2. **First-Party Offline Yomitan Dictionary & Audio Engine**
    - High-performance client-side IndexedDB dictionary parser supporting standard Yomitan / Yomichan `.zip` files.
    - Offline audio pronunciation playback and pitch accent visual graphs.
    - Multi-word compound matching and automatic Japanese deinflection / English lemmatization.
-   - Phrase underlines do not replace the clicked word: word definitions appear first, with phrase matches below and independent Ask AI buttons.
+   - Phrase underlines do not replace the clicked word. Results are split into independent **Word** and **Phrases** blocks, each with a header toggle and entry count. Both open by default; collapse either or both without losing definitions. Each entry retains its own audio and Ask AI button, and settings/close controls stay outside the collapsible blocks.
 
 3. **Contextual AI Explanations & Multi-Turn Chat**
    - OpenAI-compatible API support (DeepSeek, GPT-4o-mini, Claude, Ollama, etc.).

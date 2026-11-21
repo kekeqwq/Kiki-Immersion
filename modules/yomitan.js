@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - Yomitan Offline Dictionary & Audio Engine
-// Version: 1.2.2
+// Version: 1.4.1
 // =============================================================
 
   // =============================================================
@@ -1950,21 +1950,23 @@ window.KikiAudioEngine = KikiAudioEngine;
       const combined = [];
       const seenEntryKeys = new Set();
 
-      const addEntry = (item) => {
+      const addEntry = (item, lookupKind) => {
         const key = `${item.dictId}:${item.term.toLowerCase()}:${item.reading}:${item.seq || ''}`;
         if (!seenEntryKeys.has(key)) {
           seenEntryKeys.add(key);
-          combined.push(item);
+          // Carry query provenance: redirected/morphological dictionary terms
+          // cannot be reliably grouped just by counting spaces in their title.
+          combined.push({ ...item, lookupKind });
         }
       };
 
       for (const item of (singleWordResults || [])) {
-        addEntry(item);
+        addEntry(item, /\s/.test(cleanTerm) ? "phrase" : "word");
       }
 
       for (const mp of matchedPhrases) {
         for (const item of mp.results) {
-          addEntry(item);
+          addEntry(item, "phrase");
         }
       }
 

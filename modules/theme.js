@@ -135,6 +135,34 @@
     ${modal} [style*="var(--kiki-subtext0)"] { color: var(--kiki-subtext0) !important; }
     ${modal} [style*="var(--kiki-subtext1)"] { color: var(--kiki-subtext1) !important; }
     ${card} .kiki-card-body [style*="background"] { background: var(--kiki-soft) !important; }
+    ${card} .kiki-lookup-toolbar {
+      position: sticky; top: 0; z-index: 2;
+      display: flex; align-items: center; gap: 8px;
+      background: var(--kiki-panel) !important;
+      padding: 0 0 10px; margin-bottom: 10px;
+      border-bottom: 1px solid var(--kiki-border);
+    }
+    ${card} .kiki-lookup-title {
+      flex: 1; min-width: 0; overflow-wrap: anywhere;
+      font-size: 14px !important; font-weight: 700; color: var(--kiki-subtext1) !important;
+    }
+    ${card} .kiki-lookup-group { margin-bottom: 12px; }
+    ${card} .kiki-lookup-group-heading { margin: 0 !important; padding: 0 !important; font: inherit !important; }
+    ${card} .kiki-lookup-group-toggle {
+      display: flex !important; align-items: center; gap: 8px;
+      width: 100%; padding: 9px 10px !important; margin: 0 !important;
+      border: 1px solid var(--kiki-border) !important; border-radius: 9px;
+      font: inherit !important; font-size: 13px !important; font-weight: 700 !important;
+      text-align: left; cursor: pointer;
+    }
+    ${card} .kiki-lookup-group-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    ${card} .kiki-lookup-group-count {
+      background: var(--kiki-mantle) !important; color: var(--kiki-subtext0) !important;
+      border-radius: 5px; padding: 1px 6px; font-size: 11px !important;
+    }
+    ${card} .kiki-lookup-group-arrow { color: var(--kiki-mauve) !important; }
+    ${card} .kiki-lookup-group-content { padding: 12px 0 2px; }
+    ${card} .kiki-lookup-group-content[hidden] { display: none !important; }
     ${card} .kiki-badge { background: var(--kiki-soft) !important; }
     ${card} .kiki-badge-dict { color: var(--kiki-subtext0) !important; }
     ${card} .kiki-badge-redirect { color: var(--kiki-green) !important; }

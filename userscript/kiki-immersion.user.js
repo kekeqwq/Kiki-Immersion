@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.4.0
+// @version      1.4.1
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine, and global web lookup.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -192,6 +192,34 @@
     ${modal} [style*="var(--kiki-subtext0)"] { color: var(--kiki-subtext0) !important; }
     ${modal} [style*="var(--kiki-subtext1)"] { color: var(--kiki-subtext1) !important; }
     ${card} .kiki-card-body [style*="background"] { background: var(--kiki-soft) !important; }
+    ${card} .kiki-lookup-toolbar {
+      position: sticky; top: 0; z-index: 2;
+      display: flex; align-items: center; gap: 8px;
+      background: var(--kiki-panel) !important;
+      padding: 0 0 10px; margin-bottom: 10px;
+      border-bottom: 1px solid var(--kiki-border);
+    }
+    ${card} .kiki-lookup-title {
+      flex: 1; min-width: 0; overflow-wrap: anywhere;
+      font-size: 14px !important; font-weight: 700; color: var(--kiki-subtext1) !important;
+    }
+    ${card} .kiki-lookup-group { margin-bottom: 12px; }
+    ${card} .kiki-lookup-group-heading { margin: 0 !important; padding: 0 !important; font: inherit !important; }
+    ${card} .kiki-lookup-group-toggle {
+      display: flex !important; align-items: center; gap: 8px;
+      width: 100%; padding: 9px 10px !important; margin: 0 !important;
+      border: 1px solid var(--kiki-border) !important; border-radius: 9px;
+      font: inherit !important; font-size: 13px !important; font-weight: 700 !important;
+      text-align: left; cursor: pointer;
+    }
+    ${card} .kiki-lookup-group-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    ${card} .kiki-lookup-group-count {
+      background: var(--kiki-mantle) !important; color: var(--kiki-subtext0) !important;
+      border-radius: 5px; padding: 1px 6px; font-size: 11px !important;
+    }
+    ${card} .kiki-lookup-group-arrow { color: var(--kiki-mauve) !important; }
+    ${card} .kiki-lookup-group-content { padding: 12px 0 2px; }
+    ${card} .kiki-lookup-group-content[hidden] { display: none !important; }
     ${card} .kiki-badge { background: var(--kiki-soft) !important; }
     ${card} .kiki-badge-dict { color: var(--kiki-subtext0) !important; }
     ${card} .kiki-badge-redirect { color: var(--kiki-green) !important; }
@@ -256,14 +284,14 @@
 
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.4.0
+// Version: 1.4.1
 // =============================================================
 
-  window.__kiki_engine_version = "1.4.0";
+  window.__kiki_engine_version = "1.4.1";
   window.__kiki_loader_version = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.5";
   try {
-    localStorage.setItem("kiki_engine_version", "1.4.0");
-    localStorage.setItem("kiki_cache_version", "1.4.0");
+    localStorage.setItem("kiki_engine_version", "1.4.1");
+    localStorage.setItem("kiki_cache_version", "1.4.1");
     localStorage.setItem("kiki_loader_version", window.__kiki_loader_version);
   } catch (e) {}
 
@@ -305,7 +333,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.4.0"
+    engineVersion: "1.4.1"
   };
 
   // -------------------------------------------------------------
@@ -2140,7 +2168,7 @@ window.KikiStructuredContent = KikiStructuredContent;
 
 // =============================================================
 // Kiki Immersion - Yomitan Offline Dictionary & Audio Engine
-// Version: 1.2.2
+// Version: 1.4.1
 // =============================================================
 
   // =============================================================
@@ -4090,21 +4118,23 @@ window.KikiAudioEngine = KikiAudioEngine;
       const combined = [];
       const seenEntryKeys = new Set();
 
-      const addEntry = (item) => {
+      const addEntry = (item, lookupKind) => {
         const key = `${item.dictId}:${item.term.toLowerCase()}:${item.reading}:${item.seq || ''}`;
         if (!seenEntryKeys.has(key)) {
           seenEntryKeys.add(key);
-          combined.push(item);
+          // Carry query provenance: redirected/morphological dictionary terms
+          // cannot be reliably grouped just by counting spaces in their title.
+          combined.push({ ...item, lookupKind });
         }
       };
 
       for (const item of (singleWordResults || [])) {
-        addEntry(item);
+        addEntry(item, /\s/.test(cleanTerm) ? "phrase" : "word");
       }
 
       for (const mp of matchedPhrases) {
         for (const item of mp.results) {
-          addEntry(item);
+          addEntry(item, "phrase");
         }
       }
 
@@ -4800,7 +4830,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.4.0
+// Version: 1.4.1
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -5690,10 +5720,87 @@ window.KikiAudioEngine = KikiAudioEngine;
 
   function renderYomitanDefinitions(card, originalTerm, results) {
     card.textContent = "";
-    results.forEach((res, idx) => {
+    const isEn = getAiConfig().aiLang === "en";
+    const toolbar = document.createElement("div");
+    toolbar.className = "kiki-lookup-toolbar";
+    const title = document.createElement("span");
+    title.className = "kiki-lookup-title";
+    title.textContent = originalTerm;
+    toolbar.appendChild(title);
+    const settingsBtn = document.createElement("button");
+    settingsBtn.type = "button";
+    settingsBtn.className = "kiki-card-settings-btn";
+    settingsBtn.title = isEn ? "Settings" : "设置";
+    settingsBtn.setAttribute("aria-label", settingsBtn.title);
+    settingsBtn.textContent = "⚙";
+    settingsBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      showSettingsModal("dict");
+    });
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "kiki-card-close-btn";
+    closeBtn.title = isEn ? "Close" : "关闭";
+    closeBtn.setAttribute("aria-label", closeBtn.title);
+    closeBtn.textContent = "×";
+    closeBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      closeLookup();
+    });
+    toolbar.append(settingsBtn, closeBtn);
+    card.appendChild(toolbar);
+
+    const kindOf = res => res.lookupKind || (/\s/.test(res.term || "") ? "phrase" : "word");
+    const groupBodies = new Map();
+    for (const kind of ["word", "phrase"]) {
+      const entries = results.filter(res => kindOf(res) === kind);
+      if (!entries.length) continue;
+      const section = document.createElement("section");
+      section.className = "kiki-lookup-group";
+      section.dataset.lookupKind = kind;
+      const heading = document.createElement("h3");
+      heading.className = "kiki-lookup-group-heading";
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "kiki-lookup-group-toggle";
+      const label = kind === "word" ? (isEn ? "Word" : "单词") : (isEn ? "Phrases" : "短语");
+      const terms = [...new Set(entries.map(res => res.term))].join(" · ");
+      const summary = document.createElement("span");
+      summary.className = "kiki-lookup-group-label";
+      summary.textContent = `${label} · ${terms}`;
+      const count = document.createElement("span");
+      count.className = "kiki-lookup-group-count";
+      count.textContent = String(entries.length);
+      const arrow = document.createElement("span");
+      arrow.className = "kiki-lookup-group-arrow";
+      arrow.setAttribute("aria-hidden", "true");
+      const body = document.createElement("div");
+      body.className = "kiki-lookup-group-content";
+      body.id = `kiki-lookup-${kind}-content`;
+      toggle.setAttribute("aria-controls", body.id);
+      function updateToggle() {
+        toggle.setAttribute("aria-expanded", String(!body.hidden));
+        toggle.setAttribute("aria-label", `${body.hidden ? (isEn ? "Expand" : "展开") : (isEn ? "Collapse" : "折叠")} ${label}`);
+        toggle.title = toggle.getAttribute("aria-label");
+        arrow.textContent = body.hidden ? "▸" : "▾";
+      }
+      updateToggle();
+      toggle.addEventListener("click", e => {
+        e.stopPropagation();
+        body.hidden = !body.hidden;
+        updateToggle();
+      });
+      toggle.append(arrow, summary, count);
+      heading.appendChild(toggle);
+      section.append(heading, body);
+      card.appendChild(section);
+      groupBodies.set(kind, body);
+    }
+    results.forEach(res => {
+      const groupBody = groupBodies.get(kindOf(res));
       const entryDiv = document.createElement("div");
       entryDiv.className = "kiki-card-entry";
-      if (idx > 0) {
+      if (groupBody.children.length > 0) {
         entryDiv.style.borderTop = "1px solid rgba(255, 255, 255, 0.15)";
         entryDiv.style.marginTop = "14px";
         entryDiv.style.paddingTop = "14px";
@@ -5740,31 +5847,6 @@ window.KikiAudioEngine = KikiAudioEngine;
           explainWithAiInCard(card, res.term || originalTerm, getSentenceContext());
         });
         row.appendChild(aiSwitchBtn);
-      }
-
-      if (idx === 0) {
-        const settingsBtn = document.createElement("button");
-        settingsBtn.type = "button";
-        settingsBtn.className = "kiki-card-settings-btn";
-        settingsBtn.title = "Settings (Dictionaries, AI, Modifiers)";
-        settingsBtn.style.cssText = "margin-left: auto; background: transparent; border: none; font-size: 16px; cursor: pointer; line-height: 1; padding: 0 4px;";
-        settingsBtn.innerHTML = "⚙";
-        settingsBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          showSettingsModal("dict");
-        });
-        row.appendChild(settingsBtn);
-
-        const closeBtn = document.createElement("button");
-        closeBtn.type = "button";
-        closeBtn.className = "kiki-card-close-btn";
-        closeBtn.style.cssText = "margin-left: 2px; background: transparent; border: none; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px;";
-        closeBtn.innerHTML = "&times;";
-        closeBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          closeLookup();
-        });
-        row.appendChild(closeBtn);
       }
 
       if (res.reading && res.reading !== res.term) {
@@ -5841,7 +5923,7 @@ window.KikiAudioEngine = KikiAudioEngine;
       }
 
       entryDiv.appendChild(body);
-      card.appendChild(entryDiv);
+      groupBody.appendChild(entryDiv);
     });
   }
 
