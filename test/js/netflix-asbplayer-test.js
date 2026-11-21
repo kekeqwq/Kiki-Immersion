@@ -303,14 +303,16 @@
     localSearch.search = async text => text.toLowerCase() === 'distance' ? [wordEntry] : [];
     gesture('distance');
     await wait();
-    check(card().querySelectorAll('.kiki-lookup-group').length === 1 && !!card().querySelector('[data-lookup-kind="word"]'), 'Word-only lookup has no empty phrase block');
+    check(!card().querySelector('.kiki-lookup-group') && !card().querySelector('.kiki-lookup-toolbar'), 'Word-only dictionary results retain the original ungrouped card despite phrase hints');
+    check(!!card().querySelector('.kiki-card-entry .kiki-card-term-row .kiki-card-settings-btn') &&
+      !!card().querySelector('.kiki-card-entry .kiki-card-term-row .kiki-card-close-btn'), 'Ungrouped card keeps settings and close in the original entry header');
     closeLookup();
     await wait(650);
     localSearch.search = async text => text.toLowerCase() === 'keep your distance' ? [{ ...phraseEntry, term: 'redirected', redirectTo: 'keep your distance' }] : [];
     gesture('distance');
     await wait();
-    check(card().querySelectorAll('.kiki-lookup-group').length === 1 && !!card().querySelector('[data-lookup-kind="phrase"]'), 'Phrase-only lookup has no empty word block');
-    check(card().querySelector('[data-lookup-kind="phrase"] .kiki-card-term').textContent === 'redirected', 'Phrase grouping uses query provenance even when redirected title has no spaces');
+    check(!card().querySelector('.kiki-lookup-group') && !card().querySelector('.kiki-lookup-toolbar'), 'Phrase-only dictionary results also retain the ungrouped card');
+    check(card().querySelector('.kiki-card-term').textContent === 'redirected', 'Phrase-only redirected definition remains accessible without group chrome');
     closeLookup();
     localSearch.search = nativeSearch;
     localAudio.play = nativeAudio;

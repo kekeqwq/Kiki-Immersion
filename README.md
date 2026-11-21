@@ -2,7 +2,7 @@
 
 > *Touch & Mouse YouTube Immersion with Yomitan Dictionary Lookup, Translucent Liquid Glass Subtitles, AI Contextual Engine & Dynamic Hot-Reload.*
 
-![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.4.1-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.2.1-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Safari%20%7C%20Chrome%20%7C%20Edge-blue.svg) ![Release](https://img.shields.io/badge/engine-v1.4.2-emerald.svg) ![Loader](https://img.shields.io/badge/loader-v1.2.2-purple.svg) ![Architecture](https://img.shields.io/badge/architecture-Modular%20%26%20Hot--Reload-purple.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 ---
 
@@ -92,7 +92,7 @@ Kiki Immersion features a touch-first design built specifically for iPad, tablet
    - High-performance client-side IndexedDB dictionary parser supporting standard Yomitan / Yomichan `.zip` files.
    - Offline audio pronunciation playback and pitch accent visual graphs.
    - Multi-word compound matching and automatic Japanese deinflection / English lemmatization.
-   - Phrase underlines do not replace the clicked word. Results are split into independent **Word** and **Phrases** blocks, each with a header toggle and entry count. Both open by default; collapse either or both without losing definitions. Each entry retains its own audio and Ask AI button, and settings/close controls stay outside the collapsible blocks.
+   - Phrase underlines do not replace the clicked word. Only when the dictionary actually returns both word and phrase definitions, results are split into independent **Word** and **Phrases** blocks, each with a header toggle and entry count. Both open by default; collapse either or both without losing definitions. Word-only or phrase-only results retain the original card layout, regardless of nearby text or phrase underline hints. Each entry retains its own audio and Ask AI button, and settings/close controls stay outside the collapsible blocks.
 
 3. **Contextual AI Explanations & Multi-Turn Chat**
    - OpenAI-compatible API support (DeepSeek, GPT-4o-mini, Claude, Ollama, etc.).

@@ -1,6 +1,6 @@
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.4.1
+// Version: 1.4.2
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -891,6 +891,10 @@
   function renderYomitanDefinitions(card, originalTerm, results) {
     card.textContent = "";
     const isEn = getAiConfig().aiLang === "en";
+    const kindOf = res => res.lookupKind || (/\s/.test(res.term || "") ? "phrase" : "word");
+    // Only real dictionary matches in BOTH categories justify grouped UI.
+    // Nearby words or phrase underline hints alone do not enable it.
+    const grouped = results.some(res => kindOf(res) === "word") && results.some(res => kindOf(res) === "phrase");
     const toolbar = document.createElement("div");
     toolbar.className = "kiki-lookup-toolbar";
     const title = document.createElement("span");
@@ -917,12 +921,13 @@
       e.stopPropagation();
       closeLookup();
     });
-    toolbar.append(settingsBtn, closeBtn);
-    card.appendChild(toolbar);
+    if (grouped) {
+      toolbar.append(settingsBtn, closeBtn);
+      card.appendChild(toolbar);
+    }
 
-    const kindOf = res => res.lookupKind || (/\s/.test(res.term || "") ? "phrase" : "word");
     const groupBodies = new Map();
-    for (const kind of ["word", "phrase"]) {
+    for (const kind of grouped ? ["word", "phrase"] : []) {
       const entries = results.filter(res => kindOf(res) === kind);
       if (!entries.length) continue;
       const section = document.createElement("section");
@@ -966,8 +971,8 @@
       card.appendChild(section);
       groupBodies.set(kind, body);
     }
-    results.forEach(res => {
-      const groupBody = groupBodies.get(kindOf(res));
+    results.forEach((res, idx) => {
+      const groupBody = grouped ? groupBodies.get(kindOf(res)) : card;
       const entryDiv = document.createElement("div");
       entryDiv.className = "kiki-card-entry";
       if (groupBody.children.length > 0) {
@@ -1017,6 +1022,11 @@
           explainWithAiInCard(card, res.term || originalTerm, getSentenceContext());
         });
         row.appendChild(aiSwitchBtn);
+      }
+
+      if (!grouped && idx === 0) {
+        settingsBtn.style.marginLeft = "auto";
+        row.append(settingsBtn, closeBtn);
       }
 
       if (res.reading && res.reading !== res.term) {

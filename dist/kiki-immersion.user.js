@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kiki Immersion
 // @namespace    https://github.com/kekeqwq/Kiki-Immersion
-// @version      1.4.1
+// @version      1.4.2
 // @description  Bilingual and interactive Japanese/English subtitles with Yomitan word lookup, offline dict caching, AI contextual engine, and global web lookup.
 // @author       keke
 // @match        *://*.youtube.com/*
@@ -284,14 +284,14 @@
 
 // =============================================================
 // Kiki Immersion - Core Module (State, Config, Styles, Utilities)
-// Version: 1.4.1
+// Version: 1.4.2
 // =============================================================
 
-  window.__kiki_engine_version = "1.4.1";
+  window.__kiki_engine_version = "1.4.2";
   window.__kiki_loader_version = window.__kiki_loader_version || localStorage.getItem("kiki_loader_version") || "1.0.5";
   try {
-    localStorage.setItem("kiki_engine_version", "1.4.1");
-    localStorage.setItem("kiki_cache_version", "1.4.1");
+    localStorage.setItem("kiki_engine_version", "1.4.2");
+    localStorage.setItem("kiki_cache_version", "1.4.2");
     localStorage.setItem("kiki_loader_version", window.__kiki_loader_version);
   } catch (e) {}
 
@@ -333,7 +333,7 @@
     capturedLastUrl: window.__kiki_capturedUrl || "",
     capturedBody: window.__kiki_capturedBody || "",
     capturedVideoId: "",
-    engineVersion: "1.4.1"
+    engineVersion: "1.4.2"
   };
 
   // -------------------------------------------------------------
@@ -4830,7 +4830,7 @@ window.KikiAudioEngine = KikiAudioEngine;
 
 // =============================================================
 // Kiki Immersion - UI Module (Cards, HUD Bar, Subtitles Overlay, Settings Modal)
-// Version: 1.4.1
+// Version: 1.4.2
 // =============================================================
 
   window.playVideoSync = playVideoSync;
@@ -5721,6 +5721,10 @@ window.KikiAudioEngine = KikiAudioEngine;
   function renderYomitanDefinitions(card, originalTerm, results) {
     card.textContent = "";
     const isEn = getAiConfig().aiLang === "en";
+    const kindOf = res => res.lookupKind || (/\s/.test(res.term || "") ? "phrase" : "word");
+    // Only real dictionary matches in BOTH categories justify grouped UI.
+    // Nearby words or phrase underline hints alone do not enable it.
+    const grouped = results.some(res => kindOf(res) === "word") && results.some(res => kindOf(res) === "phrase");
     const toolbar = document.createElement("div");
     toolbar.className = "kiki-lookup-toolbar";
     const title = document.createElement("span");
@@ -5747,12 +5751,13 @@ window.KikiAudioEngine = KikiAudioEngine;
       e.stopPropagation();
       closeLookup();
     });
-    toolbar.append(settingsBtn, closeBtn);
-    card.appendChild(toolbar);
+    if (grouped) {
+      toolbar.append(settingsBtn, closeBtn);
+      card.appendChild(toolbar);
+    }
 
-    const kindOf = res => res.lookupKind || (/\s/.test(res.term || "") ? "phrase" : "word");
     const groupBodies = new Map();
-    for (const kind of ["word", "phrase"]) {
+    for (const kind of grouped ? ["word", "phrase"] : []) {
       const entries = results.filter(res => kindOf(res) === kind);
       if (!entries.length) continue;
       const section = document.createElement("section");
@@ -5796,8 +5801,8 @@ window.KikiAudioEngine = KikiAudioEngine;
       card.appendChild(section);
       groupBodies.set(kind, body);
     }
-    results.forEach(res => {
-      const groupBody = groupBodies.get(kindOf(res));
+    results.forEach((res, idx) => {
+      const groupBody = grouped ? groupBodies.get(kindOf(res)) : card;
       const entryDiv = document.createElement("div");
       entryDiv.className = "kiki-card-entry";
       if (groupBody.children.length > 0) {
@@ -5847,6 +5852,11 @@ window.KikiAudioEngine = KikiAudioEngine;
           explainWithAiInCard(card, res.term || originalTerm, getSentenceContext());
         });
         row.appendChild(aiSwitchBtn);
+      }
+
+      if (!grouped && idx === 0) {
+        settingsBtn.style.marginLeft = "auto";
+        row.append(settingsBtn, closeBtn);
       }
 
       if (res.reading && res.reading !== res.term) {
